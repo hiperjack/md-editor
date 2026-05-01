@@ -41,6 +41,45 @@ pub fn set_lang(app: AppHandle, lang: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn open_external_url(url: String) -> Result<(), String> {
+    // 既定ブラウザで開く対象は http/https のみに限定する。
+    // file:/javascript:/その他スキームは拒否（任意コマンド実行回避）。
+    let lower = url.to_ascii_lowercase();
+    if !(lower.starts_with("http://") || lower.starts_with("https://")) {
+        return Err(format!("unsupported url scheme: {}", url));
+    }
+    // URL に制御文字や改行が含まれていたら拒否。
+    if url.chars().any(|c| c.is_control()) {
+        return Err("url contains control characters".to_string());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // `start` は cmd.exe の組み込みコマンドのため、cmd 経由で起動する。
+        // 第1引数の "" はウィンドウタイトル（URL を誤ってタイトルとして消費させない）。
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .spawn()
+            .map_err(|e| format!("spawn start: {}", e))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("spawn open: {}", e))?;
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("spawn xdg-open: {}", e))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub fn frontend_ready(app: AppHandle) -> Result<(), String> {
     {
         let state: State<FrontendReady> = app.state();

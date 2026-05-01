@@ -36,6 +36,7 @@ pub fn run() {
             commands::add_recent_file,
             commands::set_recent_visible,
             commands::set_lang,
+            commands::open_external_url,
         ])
         .setup(|app| {
             // 最近開いたファイルをロードしてstateへ

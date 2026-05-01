@@ -44,6 +44,42 @@ async function bootstrap(): Promise<void> {
   setLang(settings.getEffectiveLang());
   settings.subscribe(() => setLang(settings.getEffectiveLang()));
 
+  // 外部URL (http/https) のアンカークリックを既定ブラウザで開く。
+  // 対象:
+  //   - Milkdown link preview ポップアップ内の URL (target="_blank" のアンカー)
+  //   - エディタ本文のリンクマーク <a> は Ctrl/Meta+クリック時のみ開く
+  //     (素クリックはカーソル移動の標準挙動を温存)
+  // Tauri の WebView2 は target="_blank" を OS 既定ブラウザに転送しないので、
+  // ここで捕捉して open_external_url コマンド経由で開く。
+  const openExternal = (url: string) => {
+    if (isTauriContext()) {
+      void invoke("open_external_url", { url }).catch((err) =>
+        console.warn("open_external_url failed:", err),
+      );
+    } else {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  };
+  document.addEventListener(
+    "click",
+    (e) => {
+      const target = e.target as Element | null;
+      if (!target) return;
+      const anchor = target.closest("a") as HTMLAnchorElement | null;
+      if (!anchor) return;
+      const href = anchor.getAttribute("href") ?? "";
+      if (!/^https?:\/\//i.test(href)) return;
+      const inPreview =
+        anchor.closest(".milkdown-link-preview, .link-preview") !== null;
+      const modified = e.ctrlKey || e.metaKey;
+      if (!inPreview && !modified) return;
+      e.preventDefault();
+      e.stopPropagation();
+      openExternal(href);
+    },
+    { capture: true },
+  );
+
   // Ctrl+ホイール で文字サイズ変更（WebView2の標準ズームを抑止するためcapture+非passive）
   document.addEventListener(
     "wheel",
