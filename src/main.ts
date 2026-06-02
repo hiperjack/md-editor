@@ -8,6 +8,7 @@ import { createToolbar, makeToolbarActions } from "./toolbar";
 import { setupTitle } from "./title";
 import { setupShortcuts } from "./shortcuts";
 import { createFindReplace } from "./find-replace";
+import { createOutlinePanel } from "./outline";
 import {
   closeTab,
   newTab,
@@ -94,15 +95,48 @@ async function bootstrap(): Promise<void> {
     { passive: false, capture: true },
   );
 
-  // Ctrl+= / Ctrl+- / Ctrl+0 のブラウザ標準ズームも抑止（メニュー側で処理）
+  // WebView2 標準のキー動作を抑止する。
+  // アプリ未提供／実害のあるブラウザ既定動作（再読み込み・印刷・ズーム）を潰す。
   document.addEventListener(
     "keydown",
     (e) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      if (e.key === "+" || e.key === "=" || e.key === "-" || e.key === "0") {
-        // メニューaccelerator経由で処理されるはずなので、ここでは
-        // ブラウザのデフォルトズーム動作だけを抑止する
+      const mod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+
+      // 再読み込み（Ctrl+R / Ctrl+Shift+R / F5 / Shift+F5）。
+      // リロードするとタブ状態がメモリごとリセットされ、未保存内容が
+      // 無警告で失われる（onCloseRequested も発火しない）ため抑止する。
+      if (key === "f5" || (mod && key === "r")) {
         e.preventDefault();
+        return;
+      }
+
+      // F12: DevTools の代わりに「名前を付けて保存」に割り当てる。
+      if (key === "f12") {
+        e.preventDefault();
+        fileActions.file_save_as?.();
+        return;
+      }
+
+      if (!mod) return;
+
+      // ブラウザ標準ズーム（メニュー accelerator 側で処理するため既定だけ抑止）
+      if (e.key === "+" || e.key === "=" || e.key === "-" || e.key === "0") {
+        e.preventDefault();
+        return;
+      }
+
+      // Ctrl+Shift+I: DevTools(inspect) を抑止。
+      if (e.shiftKey && key === "i") {
+        e.preventDefault();
+        return;
+      }
+
+      // Ctrl+P: md 本文のみを印刷する（@media print で本文以外を非表示）。
+      if (key === "p") {
+        e.preventDefault();
+        window.print();
+        return;
       }
     },
     { capture: true },
@@ -110,6 +144,7 @@ async function bootstrap(): Promise<void> {
 
   const editor = createEditorHost(editorHostEl);
   const find = createFindReplace(editor);
+  const outline = createOutlinePanel(editor);
 
   store.addTab();
   const initial = store.getActive();
@@ -122,7 +157,10 @@ async function bootstrap(): Promise<void> {
       prevActiveId = cur;
       const t = store.getActive();
       if (t) {
-        void editor.show(t).then(() => find.refresh());
+        void editor.show(t).then(() => {
+          find.refresh();
+          outline.refresh();
+        });
       }
     }
   });
@@ -161,11 +199,20 @@ async function bootstrap(): Promise<void> {
     view_zoom_out: () => settings.changeFontSize(-1),
     view_zoom_reset: () => settings.resetFontSize(),
     view_font: () => void openFontSettings(),
+    view_outline: () => settings.toggleOutline(),
   };
 
   // ツールバー（ファイル系・表示系もボタンに含めるためmergeしてから渡す）
   const fmtActions = makeToolbarActions(editor);
   createToolbar(toolbarEl, { ...fileActions, ...viewActions, ...fmtActions });
+
+  // アウトライン表示トグルボタンの active 状態を設定に同期（ツールバー生成後）。
+  const syncOutlineButton = () => {
+    const btn = toolbarEl.querySelector('[data-action="view_outline"]');
+    btn?.classList.toggle("is-active", settings.get().showOutline);
+  };
+  syncOutlineButton();
+  settings.subscribe(syncOutlineButton);
 
   setupTitle();
   setupShortcuts(editor, fileActions, find);

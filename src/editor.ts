@@ -72,11 +72,14 @@ export type EditorHost = {
   runOnActive: (fn: (editor: Editor) => void) => void;
   /** アクティブタブの ProseMirror View を取得（検索/置換用）。無ければ null。 */
   getActiveView: () => EditorView | null;
+  /** いずれかのタブの内容が変わったら通知（アウトライン等の再構築用）。 */
+  onContentChange: (fn: (tabId: string) => void) => () => void;
 };
 
 export function createEditorHost(root: HTMLElement): EditorHost {
   const editors = new Map<string, EditorEntry>();
   const pendingEditors = new Map<string, Promise<EditorEntry>>();
+  const contentListeners = new Set<(tabId: string) => void>();
 
   // 非アクティブなペインを退避させる隠しコンテナ。
   // 同じスクロールコンテナの兄弟として並べておくと、WebView2が複数の
@@ -585,6 +588,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       listener.markdownUpdated((_ctx, markdown) => {
         const isDirty = markdown !== entry.baseline;
         store.setDirty(tab.id, isDirty);
+        for (const fn of contentListeners) fn(tab.id);
       });
     });
 
@@ -692,6 +696,11 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         return null;
       }
       return view;
+    },
+
+    onContentChange(fn) {
+      contentListeners.add(fn);
+      return () => contentListeners.delete(fn);
     },
   };
 }

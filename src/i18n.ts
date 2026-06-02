@@ -85,7 +85,11 @@ const DICT: Record<Lang, Record<string, string>> = {
     "tb.image": "画像",
     "tb.hr": "区切り線",
     "tb.settings": "設定",
+    "tb.outline": "アウトライン (Ctrl+Shift+O)",
     "settings.button.preview": "プレビュー",
+    // アウトラインパネル
+    "outline.empty": "見出しがありません",
+    "outline.untitled": "(無題の見出し)",
     // 検索・置換バー
     "find.placeholder": "検索",
     "find.replacePlaceholder": "置換後の文字列",
@@ -174,7 +178,10 @@ const DICT: Record<Lang, Record<string, string>> = {
     "tb.image": "Image",
     "tb.hr": "Horizontal rule",
     "tb.settings": "Settings",
+    "tb.outline": "Outline (Ctrl+Shift+O)",
     "settings.button.preview": "Preview",
+    "outline.empty": "No headings",
+    "outline.untitled": "(untitled heading)",
     "find.placeholder": "Find",
     "find.replacePlaceholder": "Replace with",
     "find.next": "Next (Enter)",

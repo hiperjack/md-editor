@@ -59,11 +59,16 @@ const ICONS: Record<string, string> = {
   image:
     "M3 5h18a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM8.5 11A1.5 1.5 0 1 1 7 9.5 1.5 1.5 0 0 1 8.5 11zM21 15l-5-5L5 21",
   hr: "M5 12h14",
+  panel_left:
+    "M3 3h18a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM9 3v18",
   settings:
     "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z",
 };
 
 const BUTTONS: ButtonSpec[] = [
+  // 左端: アウトラインパネル（左サイドバー）の表示トグル。パネルの真上に配置。
+  { key: "view_outline", icon: ICONS.panel_left, titleKey: "tb.outline" },
+  { key: "sep", icon: "", titleKey: "" },
   { key: "file_new", icon: ICONS.file_new, titleKey: "tb.file_new" },
   { key: "file_open", icon: ICONS.file_open, titleKey: "tb.file_open" },
   { key: "file_save", icon: ICONS.file_save, titleKey: "tb.file_save" },

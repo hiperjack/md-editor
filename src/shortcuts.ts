@@ -1,4 +1,5 @@
 import { store } from "./store";
+import { settings } from "./settings";
 import type { EditorHost } from "./editor";
 import type { FindReplaceController } from "./find-replace";
 
@@ -75,6 +76,12 @@ export function setupShortcuts(
         if (k === "s") {
           e.preventDefault();
           fileActions.file_save_as?.();
+          return;
+        }
+        // アウトラインパネルの表示トグル
+        if (k === "o") {
+          e.preventDefault();
+          settings.toggleOutline();
           return;
         }
         return;

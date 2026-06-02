@@ -57,6 +57,8 @@ export type Settings = {
   codeFontColor: string;
   fontSize: number;
   showRecent: boolean;
+  /** 左の見出しアウトラインパネルを表示するか。 */
+  showOutline: boolean;
   lang: LangSetting;
   theme: Theme;
 };
@@ -67,6 +69,7 @@ const DEFAULT_SETTINGS: Settings = {
   codeFontColor: "",
   fontSize: 15,
   showRecent: true,
+  showOutline: false,
   lang: "system",
   theme: "system",
 };
@@ -101,6 +104,10 @@ function loadFromStorage(): Settings {
         typeof parsed.showRecent === "boolean"
           ? parsed.showRecent
           : DEFAULT_SETTINGS.showRecent,
+      showOutline:
+        typeof parsed.showOutline === "boolean"
+          ? parsed.showOutline
+          : DEFAULT_SETTINGS.showOutline,
       lang:
         parsed.lang === "ja" ||
         parsed.lang === "en" ||
@@ -231,6 +238,17 @@ export const settings = {
     current = { ...current, showRecent: v };
     saveToStorage(current);
     notify();
+  },
+
+  setShowOutline(v: boolean): void {
+    if (v === current.showOutline) return;
+    current = { ...current, showOutline: v };
+    saveToStorage(current);
+    notify();
+  },
+
+  toggleOutline(): void {
+    settings.setShowOutline(!current.showOutline);
   },
 
   setLang(v: LangSetting): void {

@@ -236,6 +236,13 @@ body {
   background: var(--bg-2);
 }
 
+/* トグル系ボタンのON状態（アウトライン表示など） */
+.toolbar-btn.is-active {
+  background: var(--bg-3);
+  color: var(--accent);
+  border-color: var(--border);
+}
+
 .toolbar-sep {
   display: inline-block;
   width: 1px;
@@ -251,9 +258,77 @@ body {
   min-width: 0;
 }
 
+/* ── Editor region (outline panel + editor host) ─ */
+#editor-region {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── Outline panel (left sidebar) ─────────────── */
+#outline-panel {
+  flex: 0 0 250px;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--bg-1);
+  border-right: 1px solid var(--border);
+  display: none; /* 既定は非表示。is-visible で表示。 */
+}
+
+#outline-panel.is-visible {
+  display: block;
+}
+
+.outline-list {
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+}
+
+.outline-item {
+  padding: 3px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg-1);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.outline-item:hover {
+  background: var(--tab-hover-bg);
+  color: var(--fg-0);
+}
+
+/* スクロール連動で現在地の見出しをハイライト */
+.outline-item.is-current {
+  color: var(--accent);
+  background: var(--bg-2);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* 見出しレベルに応じたインデント */
+.outline-level-1 { padding-left: 12px; font-weight: 600; }
+.outline-level-2 { padding-left: 26px; }
+.outline-level-3 { padding-left: 40px; }
+.outline-level-4 { padding-left: 54px; }
+.outline-level-5 { padding-left: 68px; }
+.outline-level-6 { padding-left: 82px; }
+
+.outline-empty {
+  padding: 12px;
+  font-size: 12px;
+  color: var(--fg-2);
+}
+
 /* ── Editor host (single pane) ───────────────── */
 #editor-host {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   position: relative;
   overflow: hidden;
@@ -823,4 +898,44 @@ body {
 
 .search-match-active {
   background: rgba(255, 196, 0, 0.55);
+}
+
+/* ===== 印刷（Ctrl+P）: md 本文のみを印刷する ===== */
+@media print {
+  /* タブ・ツールバー・アウトライン・検索・退避ペイン・行番号を隠す */
+  #tabbar,
+  #toolbar,
+  #outline-panel,
+  #find-root,
+  #modal-root,
+  #editor-pane-park,
+  .line-gutter {
+    display: none !important;
+  }
+
+  html,
+  body,
+  #app,
+  #editor-region,
+  #editor-host {
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+    background: #fff !important;
+  }
+
+  /* スクロールでクリップされている本文ペインを全文フローさせる */
+  .editor-pane {
+    position: static !important;
+    inset: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* ダークテーマの淡色文字は紙では読めないため黒に統一 */
+  .ProseMirror,
+  .ProseMirror * {
+    color: #000 !important;
+    background: transparent !important;
+  }
 }
