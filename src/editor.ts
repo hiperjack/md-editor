@@ -23,6 +23,7 @@ import { store, type Tab } from "./store";
 import { attachLineNumbers } from "./line-numbers";
 import { attachImageResolver } from "./image-resolver";
 import { editImageNodeAtPos, isImageNode } from "./image-edit";
+import { searchPlugin } from "./search-plugin";
 
 /**
  * Smart Enter: Obsidian Live Preview に近い挙動にする。
@@ -69,6 +70,8 @@ export type EditorHost = {
   focus: () => void;
   /** アクティブタブのMilkdown Editorに対して操作を実行（toolbar/menu連携用）。 */
   runOnActive: (fn: (editor: Editor) => void) => void;
+  /** アクティブタブの ProseMirror View を取得（検索/置換用）。無ければ null。 */
+  getActiveView: () => EditorView | null;
 };
 
 export function createEditorHost(root: HTMLElement): EditorHost {
@@ -411,6 +414,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
 
     crepe.editor.config((ctx) => {
       ctx.update(prosePluginsCtx, (plugins) => [
+        searchPlugin,
         gapClickPlugin,
         imageDoubleClickPlugin,
         imageWheelResizePlugin,
@@ -671,6 +675,23 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       } catch (e) {
         console.error("runOnActive failed:", e);
       }
+    },
+
+    getActiveView() {
+      const id = store.getActive()?.id;
+      if (!id) return null;
+      const entry = editors.get(id);
+      if (!entry) return null;
+      let view: EditorView | null = null;
+      try {
+        entry.crepe.editor.action((ctx) => {
+          view = ctx.get(editorViewCtx) as EditorView;
+        });
+      } catch (e) {
+        console.warn("getActiveView failed:", e);
+        return null;
+      }
+      return view;
     },
   };
 }

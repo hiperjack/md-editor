@@ -1,5 +1,6 @@
 import { store } from "./store";
 import type { EditorHost } from "./editor";
+import type { FindReplaceController } from "./find-replace";
 
 function isModifier(e: KeyboardEvent): boolean {
   return e.ctrlKey || e.metaKey;
@@ -29,6 +30,7 @@ function tabIdAt(oneBasedIndex: number): string | null {
 export function setupShortcuts(
   editor: EditorHost,
   fileActions: Record<string, () => void>,
+  find: FindReplaceController,
 ): void {
   window.addEventListener(
     "keydown",
@@ -55,8 +57,20 @@ export function setupShortcuts(
         return;
       }
 
-      // ファイル操作（メニュー accelerator が届かないケース対策）
+      // 検索・置換（WebView2 標準のページ内検索を抑止して独自バーを開く）
       const k = e.key.toLowerCase();
+      if (!e.shiftKey && k === "f") {
+        e.preventDefault();
+        find.openFind();
+        return;
+      }
+      if (!e.shiftKey && k === "h") {
+        e.preventDefault();
+        find.openReplace();
+        return;
+      }
+
+      // ファイル操作（メニュー accelerator が届かないケース対策）
       if (e.shiftKey) {
         if (k === "s") {
           e.preventDefault();

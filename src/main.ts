@@ -7,6 +7,7 @@ import { createTabBar } from "./tabs";
 import { createToolbar, makeToolbarActions } from "./toolbar";
 import { setupTitle } from "./title";
 import { setupShortcuts } from "./shortcuts";
+import { createFindReplace } from "./find-replace";
 import {
   closeTab,
   newTab,
@@ -108,6 +109,7 @@ async function bootstrap(): Promise<void> {
   );
 
   const editor = createEditorHost(editorHostEl);
+  const find = createFindReplace(editor);
 
   store.addTab();
   const initial = store.getActive();
@@ -119,7 +121,9 @@ async function bootstrap(): Promise<void> {
     if (cur !== prevActiveId) {
       prevActiveId = cur;
       const t = store.getActive();
-      if (t) void editor.show(t);
+      if (t) {
+        void editor.show(t).then(() => find.refresh());
+      }
     }
   });
 
@@ -164,7 +168,7 @@ async function bootstrap(): Promise<void> {
   createToolbar(toolbarEl, { ...fileActions, ...viewActions, ...fmtActions });
 
   setupTitle();
-  setupShortcuts(editor, fileActions);
+  setupShortcuts(editor, fileActions, find);
 
   if (isTauriContext()) {
     // 設定で「最近使ったファイル表示」のオンオフをRustに反映
