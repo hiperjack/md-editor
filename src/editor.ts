@@ -12,7 +12,10 @@ import { Plugin } from "@milkdown/kit/prose/state";
 import { GapCursor } from "@milkdown/kit/prose/gapcursor";
 import { exitCode, lift } from "@milkdown/kit/prose/commands";
 import type { EditorView } from "@milkdown/kit/prose/view";
-import { insertHardbreakCommand } from "@milkdown/preset-commonmark";
+import {
+  insertHardbreakCommand,
+  remarkPreserveEmptyLinePlugin,
+} from "@milkdown/preset-commonmark";
 import { keymap as cmKeymap } from "@codemirror/view";
 import { Prec } from "@codemirror/state";
 import remarkBreaks from "remark-breaks";
@@ -20,6 +23,7 @@ import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame-dark.css";
 
 import { store, type Tab } from "./store";
+import { remarkBlankLines } from "./blank-lines";
 import { attachLineNumbers } from "./line-numbers";
 import { attachImageResolver } from "./image-resolver";
 import { editImageNodeAtPos, isImageNode } from "./image-edit";
@@ -476,6 +480,9 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       ctx.update(remarkPluginsCtx, (plugins) => [
         ...plugins,
         { plugin: remarkBreaks, options: {} },
+        // 空行を空段落ノードへ実体化し、往復で空行を保持する。
+        // remarkBreaks の後に置く (ブロック間 position は影響を受けない)。
+        { plugin: remarkBlankLines, options: {} },
       ]);
       ctx.update(remarkStringifyOptionsCtx, (opts) => ({
         ...opts,
@@ -486,6 +493,22 @@ export function createEditorHost(root: HTMLElement): EditorHost {
           ...opts.handlers,
           // hardbreak は \\\n でなく単一 \n で出力
           break: () => "\n",
+          /*
+            テキストノードのエスケープ抑止。
+            remark-stringify は既定で markdown 特殊文字をエスケープし、
+            `[`→`\[`、`]`→`\]`、`_`→`\_` になる。これにより
+            ウィキリンク `[[FY26_AIマネタイズ_…]]` が壊れて保存されるため、
+            既定の safe 処理後にこれらのエスケープのみ元へ戻す。
+            text ハンドラを通らない code / inlineCode (verbatim) には影響しない。
+          */
+          text: ((node: unknown, _parent: unknown, state: unknown, info: unknown) => {
+            const n = node as { value?: string };
+            const s = state as {
+              safe: (value: string, info: unknown) => string;
+            };
+            const value = s.safe(n.value ?? "", info);
+            return value.replace(/\\([[\]_])/g, "$1");
+          }) as never,
           /*
             画像の出力ハンドラ。
             image-block (= paragraph 内に image 単独で含まれるパターン) の
@@ -528,32 +551,37 @@ export function createEditorHost(root: HTMLElement): EditorHost {
             return `![${safeAlt}](${url}${titlePart})`;
           }) as never,
         },
-        // ブロック間の連結を制御 (Obsidian Live Preview 風)
-        //   - hr / code block: 前後に空行 (1)
-        //   - heading が片方: 空行なし (0)。連続見出しや見出し直後の本文を密に。
-        //   - paragraph ↔ paragraph: 空行 (1) を維持。段落区切りの視認性。
-        //   - その他: 空行なし (0)
+        /*
+          ブロック間は原則「単一 \n 区切り (空行 0)」にする。
+          空行は remarkBlankLines が空段落ノードとして実体化しているため、
+          空行本数は空段落の個数で決まり、join 側で自動挿入しない。これで
+          ソース markdown と保存結果が空行まで含めて 1:1 で往復する。
+
+          保険として、間に空段落が無く直接隣接する危険な組み合わせ
+          (連続 code block 同士、table↔table) のみ空行 (1) を強制し、
+          再パースでの取り違えを防ぐ。正常な markdown はこれらの周囲に
+          空行を持ち空段落として実体化されるため、通常は 0 で足りる。
+        */
         join: [
           (left, right) => {
-            // 常に空行: hr (thematic break) の前後、table の前後、
-            // 連続する code block 同士、blockquote の直後。
-            // 段落間 (paragraph→paragraph) は空行で区切る。
-            // それ以外 (heading↔他、paragraph→code 等) は隣接 (空行なし)。
-            const types = [left.type, right.type];
-            if (types.includes("thematicBreak")) return 1;
-            if (types.includes("table")) return 1;
             if (left.type === "code" && right.type === "code") return 1;
-            if (left.type === "blockquote") return 1;
-            if (left.type === "paragraph" && right.type === "paragraph")
-              return 1;
+            if (left.type === "table" && right.type === "table") return 1;
             return 0;
           },
-          ...(opts.join ?? []),
         ],
       }));
     });
 
     await crepe.create();
+
+    // Milkdown 既定の「空行保持」プラグインを外す。
+    // これを有効のままにすると、空段落 (= 空行) が保存時に `<br />` という
+    // リテラル HTML として出力されてしまう (preset-commonmark の paragraph
+    // シリアライザが shouldPreserveEmptyLine 時に <br /> を挿入するため)。
+    // 外すと空段落は空文字ブロックとしてシリアライズされ、join=0 と相まって
+    // 「空段落 1 個 = 空行 1 行」でソースと厳密に往復する。空行の実体化は
+    // remarkBlankLines が担う。
+    await crepe.editor.remove(remarkPreserveEmptyLinePlugin);
 
     // CodeMirror keymap closure 用に PM view 参照を取得
     crepe.editor.action((ctx) => {

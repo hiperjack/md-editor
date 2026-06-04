@@ -150,7 +150,16 @@ function collectEntries(
     const line = ctx.srcLines[ctx.srcIdx];
 
     if (line.trim() === "") {
-      pushBlankLineEntry(out, ctx, offset);
+      // 空行は remarkBlankLines が実体化した空段落 DOM ブロックに 1:1 で紐付ける。
+      // 連続空行も各々が空段落を持つため、正しい位置・本数で番号が並ぶ。
+      const block = ctx.blocks[ctx.domIdx];
+      if (block && isBlankParagraphBlock(block)) {
+        pushAt(out, block, ctx.srcIdx + 1, offset);
+        ctx.domIdx++;
+      } else {
+        // 対応する空段落が無い場合は従来の gap 推定にフォールバック。
+        pushBlankLineEntry(out, ctx, offset);
+      }
       ctx.srcIdx++;
       continue;
     }
@@ -343,7 +352,15 @@ function flattenTopLevel(pm: HTMLElement): HTMLElement[] {
     const tag = el.tagName.toLowerCase();
 
     if (BLOCK_LIKE.has(tag)) {
-      if (HEADING_OR_P.has(tag) && isEmptyTextBlock(el)) return;
+      // 空段落は「空行」を表すノードなので 1 ブロックとして数える
+      // (remarkBlankLines が実体化したもの)。空見出しのみ従来通り除外する。
+      if (
+        tag !== "p" &&
+        HEADING_OR_P.has(tag) &&
+        isEmptyTextBlock(el)
+      ) {
+        return;
+      }
       out.push(el);
       return;
     }
@@ -362,6 +379,20 @@ function isEmptyTextBlock(el: HTMLElement): boolean {
   const text = (el.textContent ?? "").replace(/​/g, "").trim();
   if (text !== "") return false;
   if (el.querySelector("br, img")) return false;
+  return true;
+}
+
+/**
+ * 空行を表す空段落ブロックか判定する。
+ * ProseMirror は空段落をカーソル保持用の <br class="ProseMirror-trailingBreak">
+ * 付きで描画することがあるため、isEmptyTextBlock (br があると false) ではなく
+ * 「テキストも画像も無い <p>」を空段落とみなす。
+ */
+function isBlankParagraphBlock(el: HTMLElement): boolean {
+  if (el.tagName.toLowerCase() !== "p") return false;
+  const text = (el.textContent ?? "").replace(/​/g, "").trim();
+  if (text !== "") return false;
+  if (el.querySelector("img")) return false;
   return true;
 }
 

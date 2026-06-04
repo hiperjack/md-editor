@@ -423,12 +423,12 @@ body {
   font-size: 1em;
   line-height: 1.5;
   /*
-    ソース上の空行 (\n\n) を「通常文字 1 行ぶん」の高さで描画するため、
-    上下 margin を line-height (1.5em) に合わせる。
-    margin collapsing で隣接段落間のギャップが 1.5em = 1 行高さになる。
+    縦の間隔は「実体化された空行 (空段落)」だけで表現する方針のため、段落自身の
+    上下 margin は持たせない。空行 1 個 = 1 行高さ (line-height 1.5 = 24px) となり、
+    ハードブレーク (段落内改行) の行送りと一致する。
   */
-  margin: 1.5em 0;
-  /* Crepe reset.css の `padding: 4px 0` を打ち消す（margin で間隔は確保済み） */
+  margin: 0;
+  /* Crepe reset.css の `padding: 4px 0` を打ち消す */
   padding: 0;
 }
 
@@ -449,7 +449,7 @@ body {
 
 #editor-host .milkdown .ProseMirror ul,
 #editor-host .milkdown .ProseMirror ol {
-  margin: 0.5em 0;
+  margin: 0;
   padding-left: 2em;
 }
 
@@ -491,13 +491,13 @@ body {
   line-height: 1.5;
 }
 /*
-  コードブロックとテーブルの上下 margin を本文と揃える (1.5em)。
-  Crepe 既定は code 4px、table 0 と狭く、前後の空行が「1 行分の高さ」に
-  ならず番号がブロック端と被って見える。本文段落と同じ間隔にする。
+  コードブロック・テーブル・引用の上下 margin は持たせない。
+  前後の間隔は実体化された空行 (空段落) が担う。
 */
 #editor-host .milkdown .ProseMirror .milkdown-code-block,
-#editor-host .milkdown .ProseMirror table {
-  margin: 1.5em 0;
+#editor-host .milkdown .ProseMirror table,
+#editor-host .milkdown .ProseMirror blockquote {
+  margin: 0;
 }
 
 /*
@@ -526,7 +526,7 @@ body {
 
 /*
   見出しは Obsidian Default に倣い、サイズ・weight・line-height を h ごとに個別指定。
-  margin は共通 (1rem 0)。
+  上下 margin は持たせない (間隔は空行で表現)。
 */
 #editor-host .milkdown .ProseMirror h1,
 #editor-host .milkdown .ProseMirror h2,
@@ -534,7 +534,7 @@ body {
 #editor-host .milkdown .ProseMirror h4,
 #editor-host .milkdown .ProseMirror h5,
 #editor-host .milkdown .ProseMirror h6 {
-  margin: 1rem 0;
+  margin: 0;
 }
 
 #editor-host .milkdown .ProseMirror h1 { font-size: 2em;    font-weight: 700; line-height: 1.2; }
