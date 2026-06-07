@@ -228,7 +228,7 @@ fn build_menu(app: &AppHandle<Wry>, recent: &[String]) -> tauri::Result<Menu<Wry
         Some(
             AboutMetadataBuilder::new()
                 .name(Some("mdedit"))
-                .version(Some("1.0.0"))
+                .version(Some("1.0.1"))
                 .build(),
         ),
     )?;
