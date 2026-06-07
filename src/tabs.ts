@@ -1,4 +1,3 @@
-import Sortable from "sortablejs";
 import { store, type Tab } from "./store";
 import { showContextMenu, type MenuItem } from "./context-menu";
 import { t } from "./i18n";
@@ -11,7 +10,12 @@ export type TabBarHandlers = {
   onCloseToRight: (tabId: string) => void;
   onOpenInNewWindow: (tabId: string) => void;
   onCopyPath: (tabId: string) => void;
+  /** タブをウィンドウ外で離して切り離した（新規ウィンドウ化）。pos は離した画面座標。 */
+  onTearOff: (tabId: string, pos: { x: number; y: number }) => void;
 };
+
+/** ドラッグ開始とみなす移動量（px）。これ未満はクリック（選択）扱い。 */
+const DRAG_THRESHOLD = 4;
 
 function fileNameOf(tab: Tab): string {
   if (!tab.filePath) return "Untitled";
@@ -24,6 +28,7 @@ export function createTabBar(
   handlers: TabBarHandlers,
 ): void {
   parent.innerHTML = "";
+  parent.style.position = "relative";
 
   const list = document.createElement("div");
   list.className = "tab-list";
@@ -36,25 +41,63 @@ export function createTabBar(
   newBtn.addEventListener("click", () => handlers.onNew());
   parent.appendChild(newBtn);
 
-  Sortable.create(list, {
-    animation: 150,
-    draggable: ".tab",
-    onEnd: (evt) => {
-      if (
-        typeof evt.oldIndex === "number" &&
-        typeof evt.newIndex === "number" &&
-        evt.oldIndex !== evt.newIndex
-      ) {
-        store.reorder(evt.oldIndex, evt.newIndex);
+  // 並べ替え時の挿入位置を示す縦線。tabbar 基準で絶対配置。
+  const indicator = document.createElement("div");
+  indicator.className = "tab-drop-indicator";
+  indicator.hidden = true;
+  parent.appendChild(indicator);
+
+  // ドラッグ状態（描画をまたいで保持。ドラッグ中は再描画しないため要素は維持される）。
+  let drag: {
+    id: string;
+    fromIndex: number;
+    startX: number;
+    startY: number;
+    pointerId: number;
+    el: HTMLElement;
+    started: boolean;
+  } | null = null;
+  // ドラッグ直後の click を選択として処理しないためのフラグ。
+  let suppressClickId: string | null = null;
+
+  const isOutsideWindow = (e: PointerEvent): boolean =>
+    e.clientX < 0 ||
+    e.clientY < 0 ||
+    e.clientX > window.innerWidth ||
+    e.clientY > window.innerHeight;
+
+  /** ポインタ X から挿入位置（0..n）と、インジケータの parent 基準 X を求める。 */
+  const computeInsertion = (clientX: number): { ins: number; x: number } => {
+    const els = Array.from(list.querySelectorAll<HTMLElement>(".tab"));
+    const parentRect = parent.getBoundingClientRect();
+    for (let i = 0; i < els.length; i++) {
+      const r = els[i].getBoundingClientRect();
+      if (clientX < r.left + r.width / 2) {
+        return { ins: i, x: r.left - parentRect.left };
       }
-    },
-  });
+    }
+    const last = els[els.length - 1];
+    const x = last
+      ? last.getBoundingClientRect().right - parentRect.left
+      : 0;
+    return { ins: els.length, x };
+  };
+
+  const endDrag = (el: HTMLElement, pointerId: number) => {
+    try {
+      el.releasePointerCapture(pointerId);
+    } catch {
+      /* キャプチャ済みでない場合は無視 */
+    }
+    el.classList.remove("dragging");
+    indicator.hidden = true;
+  };
 
   const render = () => {
     const { tabs, activeTabId } = store.getState();
     list.innerHTML = "";
 
-    for (const tab of tabs) {
+    tabs.forEach((tab, index) => {
       const el = document.createElement("div");
       el.className = "tab";
       el.dataset.tabId = tab.id;
@@ -83,7 +126,78 @@ export function createTabBar(
       });
       el.appendChild(closeBtn);
 
+      // ---- ドラッグ（並べ替え / 切り離し） ----
+      el.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        if ((e.target as HTMLElement).closest(".tab-close")) return;
+        drag = {
+          id: tab.id,
+          fromIndex: index,
+          startX: e.clientX,
+          startY: e.clientY,
+          pointerId: e.pointerId,
+          el,
+          started: false,
+        };
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {
+          /* 無視 */
+        }
+      });
+
+      el.addEventListener("pointermove", (e) => {
+        if (!drag || drag.id !== tab.id) return;
+        if (!drag.started) {
+          if (
+            Math.abs(e.clientX - drag.startX) < DRAG_THRESHOLD &&
+            Math.abs(e.clientY - drag.startY) < DRAG_THRESHOLD
+          ) {
+            return;
+          }
+          drag.started = true;
+          el.classList.add("dragging");
+        }
+        if (isOutsideWindow(e)) {
+          indicator.hidden = true;
+        } else {
+          const { x } = computeInsertion(e.clientX);
+          indicator.style.left = `${x}px`;
+          indicator.hidden = false;
+        }
+      });
+
+      el.addEventListener("pointerup", (e) => {
+        if (!drag || drag.id !== tab.id) return;
+        const d = drag;
+        drag = null;
+        endDrag(el, e.pointerId);
+        if (!d.started) return; // しきい値未満 → click（選択）に委ねる
+
+        suppressClickId = tab.id;
+        if (isOutsideWindow(e)) {
+          // タブが1つだけのウィンドウでは切り離さない（空ウィンドウを作らない）。
+          if (store.getState().tabs.length > 1) {
+            handlers.onTearOff(tab.id, { x: e.screenX, y: e.screenY });
+          }
+        } else {
+          const { ins } = computeInsertion(e.clientX);
+          const to = ins > d.fromIndex ? ins - 1 : ins;
+          if (to !== d.fromIndex && to >= 0) store.reorder(d.fromIndex, to);
+        }
+      });
+
+      el.addEventListener("pointercancel", (e) => {
+        if (!drag || drag.id !== tab.id) return;
+        drag = null;
+        endDrag(el, e.pointerId);
+      });
+
       el.addEventListener("click", () => {
+        if (suppressClickId === tab.id) {
+          suppressClickId = null;
+          return;
+        }
         handlers.onSelect(tab.id);
       });
 
@@ -138,7 +252,7 @@ export function createTabBar(
       });
 
       list.appendChild(el);
-    }
+    });
   };
 
   store.subscribe(render);

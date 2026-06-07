@@ -69,14 +69,27 @@ TabPayload = {
   移送後、元ウィンドウからはそのタブを削除（`editor.destroy` + `store.removeTab`）。
 - i18n: `tabcm.*`（close / closeOthers / closeRight / newWindow / copyPath）を ja・en に追加。
 
-### Phase 2 — ドラッグでの切り離し
+### Phase 2 — ドラッグでの切り離し（実装済み）
 
-- タブの `pointerdown` で `setPointerCapture`（WebView2 で有効）し、`pointermove` /
-  `pointerup` をウィンドウ外でも追跡。
-- 既存 Sortable（並べ替え）との住み分け: タブバー矩形の内側で離したら従来の並べ替え、
-  外側で離したら切り離し。閾値・判定ロジックは Phase 2 の計画で確定。
-- ウィンドウ外で離したら Phase 1 の移送機構で新規ウィンドウ化。離した画面座標を
-  新ウィンドウの初期位置に渡す。
+- `tabs.ts` の `Sortable.create` を独自のポインタドラッグに置換する。各タブに
+  `pointerdown`/`pointermove`/`pointerup` を付け、`setPointerCapture` で
+  ウィンドウ外まで追跡する（WebView2 で有効）。`sortablejs` 依存はタブから外す。
+- ドラッグの流れ:
+  - `pointerdown`（左ボタン、×ボタン以外）で開始位置・対象タブを記録し capture。
+  - `pointermove` で移動が閾値（4px）を超えたらドラッグ開始。ウィンドウ内では挿入位置
+    インジケータ（縦線）を表示し、ストアは触らない（再描画で capture 中の要素が
+    消えるのを避け、確定はドロップ時に1回だけ）。ドラッグ中のタブは `.dragging` で半透明。
+  - `pointerup`:
+    - ウィンドウ外（`clientX/Y` がビューポート外）→ 切り離し。Phase 1 の
+      `openTabInNewWindow(tabId, editor, {x,y})` に離した画面座標（`screenX/screenY`）を
+      渡して新ウィンドウを開く。
+    - ウィンドウ内 → 挿入位置を計算して `store.reorder` で並べ替えを確定。
+  - ドラッグ後の `click` は抑止（選択との誤発火回避）。閾値未満はクリック＝選択。
+- `TabBarHandlers` に `onTearOff(tabId, {x,y})` を追加し `main.ts` で配線。並べ替えは
+  `tabs.ts` 内で `store.reorder` を直接呼ぶ。
+- 内外判定はビューポート座標で簡潔に行う（タイトルバー/メニュー領域も「外」扱い）。
+  新ウィンドウ位置は `screenX/screenY`（CSS px ≒ WebviewWindow の logical px）を使う。
+- `pointercancel` でドラッグ状態をリセットする。
 
 ### Phase 3 — ドラッグでの結合（最難所）
 

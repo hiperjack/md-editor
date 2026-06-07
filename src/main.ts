@@ -192,6 +192,9 @@ async function bootstrap(): Promise<void> {
     onCopyPath: (id) => {
       void copyTabPath(id);
     },
+    onTearOff: (id, pos) => {
+      void openTabInNewWindow(id, editor, pos);
+    },
   });
 
   // ファイル系メニューアクション

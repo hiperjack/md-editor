@@ -906,6 +906,26 @@ body {
   background: rgba(255, 196, 0, 0.55);
 }
 
+/* ===== タブのドラッグ（並べ替え / 切り離し） ===== */
+.tab.dragging {
+  opacity: 0.5;
+}
+
+/* 並べ替え時の挿入位置インジケータ（縦線） */
+.tab-drop-indicator {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.tab-drop-indicator[hidden] {
+  display: none;
+}
+
 /* ===== コンテキストメニュー（エディタ右クリック） ===== */
 .context-menu {
   position: fixed;
