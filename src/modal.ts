@@ -117,6 +117,24 @@ export function confirmDuplicate(filename: string): Promise<DuplicateChoice> {
   });
 }
 
+export type DuplicateWindowChoice = "switch" | "open" | "cancel";
+
+/** 別ウィンドウで既に開いているファイルを開こうとしたときの確認。 */
+export function confirmDuplicateWindow(
+  filename: string,
+): Promise<DuplicateWindowChoice> {
+  return showModal<DuplicateWindowChoice>({
+    title: t("dlg.dupwin.title"),
+    body: t("dlg.dupwin.body").replace("{filename}", filename),
+    buttons: [
+      { label: t("dlg.dupwin.switch"), value: "switch", kind: "primary" },
+      { label: t("dlg.dupwin.open"), value: "open" },
+      { label: t("dlg.dupwin.cancel"), value: "cancel" },
+    ],
+    defaultValue: "cancel",
+  });
+}
+
 export type CloseAllChoice = "discard" | "cancel" | "review";
 
 export function confirmCloseAll(): Promise<CloseAllChoice> {

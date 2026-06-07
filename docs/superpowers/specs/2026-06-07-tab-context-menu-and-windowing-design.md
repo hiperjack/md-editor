@@ -91,13 +91,75 @@ TabPayload = {
   新ウィンドウ位置は `screenX/screenY`（CSS px ≒ WebviewWindow の logical px）を使う。
 - `pointercancel` でドラッグ状態をリセットする。
 
-### Phase 3 — ドラッグでの結合（最難所）
+### Phase 3 — ドラッグでの結合（実装済み）
 
-- 各ウィンドウは自分のタブバーの画面矩形を Rust に登録（移動・リサイズ時に更新）。
-- 切り離しドラッグの `pointerup` 画面座標を Rust に渡し、登録済みの各ウィンドウの
-  タブバー矩形とヒットテスト。
-- 対象ウィンドウがあれば、そのウィンドウへ移送イベントを送ってタブ追加、
-  元ウィンドウからは削除。対象が無ければ Phase 2 の新規ウィンドウ化にフォールバック。
+**Rust（`tabwin.rs`）**
+- 状態 `TabBarRects: Mutex<HashMap<label, Rect>>`（Rect は logical 画面座標 {x,y,w,h}）。
+- `register_tabbar_rect(label, x, y, w, h)`: 各ウィンドウが自分のタブバー画面矩形を登録/更新。
+- `find_drop_target(x, y, source_label) -> Option<label>`: 点を含むタブバーを持つ
+  ウィンドウを返す（source 除外、実在しないウィンドウは無視）。
+- `transfer_tab(target_label, payload)`: 対象ウィンドウへ `add-moved-tab` を送り、
+  `set_focus` で前面化。
+
+**フロント（各ウィンドウ）**
+- 起動時にタブバー画面矩形を登録。`onMoved`/`onResized` で再登録。閉じる時は
+  best-effort で登録解除。
+- 矩形 = `innerPosition ÷ scaleFactor`（logical）＋ タブバーの `getBoundingClientRect`。
+  座標は logical px で統一（ポインタ `screenX/Y` と同じ系）。
+- `add-moved-tab` を購読 → 既存 `openMovedTab(payload)` でタブ追加＋前面化。
+
+**切り離しリリース時の判定（`main.ts` の `onTearOff`）**
+```
+target = find_drop_target(pos)
+if (target) → transfer_tab で結合（単一タブでも許可）
+else if (タブが2つ以上) → 新規ウィンドウ化（Phase 2）
+else → 何もしない
+```
+- `tabs.ts` の単一タブガードは撤去し、判定を `onTearOff` に集約する。
+
+**移送内容**: Phase 1 と同じ `{filePath, content, baseline, diskContent}`。
+
+**エラー処理**: `find_drop_target`/`transfer_tab` 失敗時は新規ウィンドウ化に
+フォールバック。stale な矩形は Rust 側でウィンドウ実在チェックして無視。
+
+**追補（実装済み）**
+- 結合元が1タブだったら、移送後に元ウィンドウを閉じる（空タブを残さない）。
+  保存ダイアログの誤発火を避けるため、先にタブを除去してから `close()` する。
+- 結合ドラッグ中、結合先ウィンドウのタブバーに青い挿入インジケータを表示する。
+  ソースは rAF スロットルで `drag_over(sourceLabel, x, y)` を送り、Rust が
+  ヒットテストして対象へ `tabbar-dragover{x}`／直前対象へ `tabbar-dragleave` を送出
+  （直前対象は `DragHover` で保持）。対象は画面 X をビューポート X に変換して既存の
+  挿入位置計算で青線を表示。`drag_end`・`add-moved-tab` 受信時に確実に消す。
+- イベント購読はグローバル `listen` ではなく `appWin.listen`（当該ウィンドウ宛てのみ）
+  を使う。グローバル `listen` は全ターゲット宛てを受信するため、`emit_to` で
+  絞ったイベントが全ウィンドウで発火してしまう（最近ファイルの二重オープン等）。
+
+### 追加機能 — ウィンドウ間の同一ファイル二重オープン検知（実装済み）
+
+複数ウィンドウで同じファイルを別々に開けてしまうのを防ぐため、別ウィンドウで開いて
+いるファイルを開こうとしたらポップアップを表示する。
+
+**Rust（全体レジストリ）**
+- `OpenFiles: Mutex<HashMap<label, Vec<path>>>`（ウィンドウごとの開いているパス一覧）。
+- `set_open_files(label, paths)`: そのウィンドウの一覧を置き換え。
+- `find_file_window(path, source_label) -> Option<label>`: そのパスを開いている別の
+  実在ウィンドウを返す。
+- `activate_file_in_window(target_label, path)`: 対象へ `activate-file{path}` を送り
+  `unminimize`＋`set_focus`。
+
+**フロント**
+- 各ウィンドウは store 変更時に開いているパス一覧を `set_open_files` で同期（変化時のみ）。
+- `openOrSwitch`: 自ウィンドウ内（既存）→ 無ければ `find_file_window` で他ウィンドウ確認。
+  見つかればポップアップ（切替 / ここで開く / キャンセル）。
+  - 切替 → `activate_file_in_window`。自ウィンドウでは開かない。
+  - ここで開く → 自ウィンドウで開く（意図的な二重を許可）。
+  - キャンセル → 何もしない。
+- `activate-file{path}` を購読 → `store.findByPath` でタブをアクティブ化。
+- モーダル `confirmDuplicateWindow`（switch/open/cancel）と i18n `dlg.dupwin.*` を追加。
+- 対象の全入口（メニュー開く/最近/ドラッグドロップ/ファイル関連付け）は `openOrSwitch`
+  を通るため一括でカバー。
+
+**エラー処理**: stale エントリは実在チェックで無視。コマンド失敗時は従来どおり開く。
 
 ## 主要な決定（承認済み）
 

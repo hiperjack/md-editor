@@ -12,6 +12,18 @@ export type TabBarHandlers = {
   onCopyPath: (tabId: string) => void;
   /** タブをウィンドウ外で離して切り離した（新規ウィンドウ化）。pos は離した画面座標。 */
   onTearOff: (tabId: string, pos: { x: number; y: number }) => void;
+  /** ドラッグ中の移動（結合先ハイライト用）。画面座標を渡す。 */
+  onDragMove?: (screenX: number, screenY: number) => void;
+  /** ドラッグ終了（結合先ハイライトのクリア用）。 */
+  onDragEnd?: () => void;
+};
+
+/** タブバーの外部制御 API。別ウィンドウからの結合ドラッグ時の青線表示に使う。 */
+export type TabBar = {
+  /** 結合先として、ビューポート X 位置に挿入インジケータを表示する。 */
+  showExternalDropIndicator: (clientX: number) => void;
+  /** 挿入インジケータを消す。 */
+  hideExternalDropIndicator: () => void;
 };
 
 /** ドラッグ開始とみなす移動量（px）。これ未満はクリック（選択）扱い。 */
@@ -26,7 +38,7 @@ function fileNameOf(tab: Tab): string {
 export function createTabBar(
   parent: HTMLElement,
   handlers: TabBarHandlers,
-): void {
+): TabBar {
   parent.innerHTML = "";
   parent.style.position = "relative";
 
@@ -165,6 +177,8 @@ export function createTabBar(
           indicator.style.left = `${x}px`;
           indicator.hidden = false;
         }
+        // 結合先ウィンドウのハイライト用に画面座標を通知。
+        handlers.onDragMove?.(e.screenX, e.screenY);
       });
 
       el.addEventListener("pointerup", (e) => {
@@ -172,14 +186,13 @@ export function createTabBar(
         const d = drag;
         drag = null;
         endDrag(el, e.pointerId);
+        handlers.onDragEnd?.();
         if (!d.started) return; // しきい値未満 → click（選択）に委ねる
 
         suppressClickId = tab.id;
         if (isOutsideWindow(e)) {
-          // タブが1つだけのウィンドウでは切り離さない（空ウィンドウを作らない）。
-          if (store.getState().tabs.length > 1) {
-            handlers.onTearOff(tab.id, { x: e.screenX, y: e.screenY });
-          }
+          // 結合/新規ウィンドウ化/何もしない の判定は onTearOff 側で行う。
+          handlers.onTearOff(tab.id, { x: e.screenX, y: e.screenY });
         } else {
           const { ins } = computeInsertion(e.clientX);
           const to = ins > d.fromIndex ? ins - 1 : ins;
@@ -191,6 +204,7 @@ export function createTabBar(
         if (!drag || drag.id !== tab.id) return;
         drag = null;
         endDrag(el, e.pointerId);
+        handlers.onDragEnd?.();
       });
 
       el.addEventListener("click", () => {
@@ -257,4 +271,15 @@ export function createTabBar(
 
   store.subscribe(render);
   render();
+
+  return {
+    showExternalDropIndicator: (clientX: number) => {
+      const { x } = computeInsertion(clientX);
+      indicator.style.left = `${x}px`;
+      indicator.hidden = false;
+    },
+    hideExternalDropIndicator: () => {
+      indicator.hidden = true;
+    },
+  };
 }

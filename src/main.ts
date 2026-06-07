@@ -1,4 +1,3 @@
-import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { store } from "./store";
@@ -20,6 +19,8 @@ import {
   openFileFromDialog,
   openTabInNewWindow,
   openMovedTab,
+  transferTabToWindow,
+  syncOpenFiles,
   saveTab,
   saveTabAs,
   type MovedTabPayload,
@@ -172,7 +173,37 @@ async function bootstrap(): Promise<void> {
     }
   });
 
-  createTabBar(tabbarEl, {
+  // 結合ドラッグ中、ポインタ位置を Rust に通知して結合先ウィンドウに青線を出させる。
+  // rAF でスロットルし、毎フレーム1回だけ送る。
+  let dragOverRaf = 0;
+  let pendingDragPos: { x: number; y: number } | null = null;
+  const onTabDragMove = (sx: number, sy: number) => {
+    if (!isTauriContext()) return;
+    pendingDragPos = { x: sx, y: sy };
+    if (dragOverRaf) return;
+    dragOverRaf = requestAnimationFrame(() => {
+      dragOverRaf = 0;
+      const p = pendingDragPos;
+      pendingDragPos = null;
+      if (!p) return;
+      void invoke("drag_over", {
+        sourceLabel: getCurrentWindow().label,
+        x: p.x,
+        y: p.y,
+      }).catch(() => {});
+    });
+  };
+  const onTabDragEnd = () => {
+    if (dragOverRaf) {
+      cancelAnimationFrame(dragOverRaf);
+      dragOverRaf = 0;
+    }
+    pendingDragPos = null;
+    if (!isTauriContext()) return;
+    void invoke("drag_end").catch(() => {});
+  };
+
+  const tabbar = createTabBar(tabbarEl, {
     onSelect: (id) => store.setActive(id),
     onClose: (id) => {
       void closeTab(id, editor);
@@ -192,8 +223,29 @@ async function bootstrap(): Promise<void> {
     onCopyPath: (id) => {
       void copyTabPath(id);
     },
+    onDragMove: (sx, sy) => onTabDragMove(sx, sy),
+    onDragEnd: () => onTabDragEnd(),
     onTearOff: (id, pos) => {
-      void openTabInNewWindow(id, editor, pos);
+      void (async () => {
+        const label = getCurrentWindow().label;
+        let target: string | null = null;
+        try {
+          target = await invoke<string | null>("find_drop_target", {
+            x: pos.x,
+            y: pos.y,
+            sourceLabel: label,
+          });
+        } catch (e) {
+          console.warn("find_drop_target failed:", e);
+        }
+        if (target) {
+          // 別ウィンドウのタブバー上で離した → 結合（単一タブでも許可）。
+          await transferTabToWindow(id, target, editor);
+        } else if (store.getState().tabs.length > 1) {
+          // どのタブバーにも乗っていない → 新規ウィンドウ化（単一タブでは何もしない）。
+          await openTabInNewWindow(id, editor, pos);
+        }
+      })();
     },
   });
 
@@ -262,16 +314,85 @@ async function bootstrap(): Promise<void> {
       console.warn("init_window_menu failed:", e),
     );
 
+    // このウィンドウのハンドル。イベント購読はこのウィンドウ宛てのみを受け取る
+    // よう、グローバル listen ではなく appWin.listen を使う（emit_to で
+    // フォーカス中ウィンドウに送ったイベントが全ウィンドウで発火しないように）。
+    const appWin = getCurrentWindow();
+
+    // メニュー操作・ファイルオープンの宛先特定に使う「直近フォーカス」を Rust に通知。
+    // メニュー操作時は webview の is_focused が false になるため、これで補う。
+    const markFocused = () =>
+      void invoke("set_last_focused", { label: appWin.label }).catch(() => {});
+    markFocused();
+    await appWin.onFocusChanged(({ payload }) => {
+      if (payload) markFocused();
+    });
+
     // 切り離し（新規ウィンドウ化）で移送されてきたタブがあれば、起動直後の
     // 空タブの代わりにそれを開く。
     try {
       const moved = await invoke<MovedTabPayload | null>("take_pending_tab", {
-        label: getCurrentWindow().label,
+        label: appWin.label,
       });
       if (moved) await openMovedTab(moved, editor);
     } catch (e) {
       console.warn("take_pending_tab failed:", e);
     }
+
+    // Phase 3: このウィンドウのタブバー画面矩形（logical px）を Rust に登録する。
+    // 別ウィンドウからの切り離しドラッグが、ここに乗ったかのヒットテストに使う。
+    // あわせて、ビューポート左端の画面 logical X を保持し、結合ドラッグの青線位置の
+    // 画面座標→ビューポート座標変換に使う。
+    let winViewportLeftLogical = 0;
+    const registerTabbarRect = async () => {
+      try {
+        const scale = await appWin.scaleFactor();
+        const inner = await appWin.innerPosition(); // 物理px（webview 左上）
+        const r = tabbarEl.getBoundingClientRect();
+        winViewportLeftLogical = inner.x / scale;
+        await invoke("register_tabbar_rect", {
+          label: appWin.label,
+          x: winViewportLeftLogical + r.left,
+          y: inner.y / scale + r.top,
+          w: r.width,
+          h: r.height,
+        });
+      } catch (e) {
+        console.warn("register_tabbar_rect failed:", e);
+      }
+    };
+    await registerTabbarRect();
+    await appWin.onMoved(() => void registerTabbarRect());
+    await appWin.onResized(() => void registerTabbarRect());
+
+    // 別ウィンドウから移送されてきたタブを受け取って追加する（このウィンドウ宛てのみ）。
+    await appWin.listen<MovedTabPayload>("add-moved-tab", (event) => {
+      // 結合が成立したので青線は確実に消す（イベント順序に依存しない保険）。
+      tabbar.hideExternalDropIndicator();
+      void openMovedTab(event.payload, editor).then(() => editor.focus());
+    });
+
+    // 結合ドラッグ中、このウィンドウが結合先のとき青い挿入インジケータを表示する。
+    await appWin.listen<number>("tabbar-dragover", (event) => {
+      const clientX = event.payload - winViewportLeftLogical;
+      tabbar.showExternalDropIndicator(clientX);
+    });
+    await appWin.listen("tabbar-dragleave", () => {
+      tabbar.hideExternalDropIndicator();
+    });
+
+    // このウィンドウが開いているファイル一覧を全体レジストリへ同期（二重オープン検知用）。
+    void syncOpenFiles();
+    store.subscribe(() => void syncOpenFiles());
+
+    // 別ウィンドウから「このファイルを前面で表示して」と要求されたらタブをアクティブ化。
+    await appWin.listen<string>("activate-file", (event) => {
+      const tab = store.findByPath(event.payload);
+      if (tab) {
+        store.setActive(tab.id);
+        editor.focus();
+      }
+    });
 
     // 設定で「最近使ったファイル表示」のオンオフをRustに反映
     const syncRecentVisible = (show: boolean) => {
@@ -301,18 +422,18 @@ async function bootstrap(): Promise<void> {
       }
     });
 
-    await listen<OpenFilePayload>("open-file", (event) => {
+    await appWin.listen<OpenFilePayload>("open-file", (event) => {
       const { path, content } = event.payload;
       void openOrSwitch(path, content, editor);
     });
 
-    await listen<string>("menu-action", (event) => {
+    await appWin.listen<string>("menu-action", (event) => {
       const id = event.payload;
       const fn = fileActions[id] ?? viewActions[id] ?? fmtActions[id];
       if (fn) fn();
     });
 
-    const win = getCurrentWindow();
+    const win = appWin;
 
     await win.onDragDropEvent(async (event) => {
       if (event.payload.type !== "drop") return;

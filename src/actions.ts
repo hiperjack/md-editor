@@ -1,8 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { save as saveDialog, open as openDialog } from "@tauri-apps/plugin-dialog";
 import { store, type Tab } from "./store";
-import { confirmSave, confirmDuplicate } from "./modal";
+import { confirmSave, confirmDuplicate, confirmDuplicateWindow } from "./modal";
 import type { EditorHost } from "./editor";
 
 const MD_FILTERS = [
@@ -141,6 +142,31 @@ export async function openOrSwitch(
       await editor.recreate(tab);
     }
     return;
+  }
+
+  // 別ウィンドウで同じファイルを開いていないか確認する。
+  if (isTauriContext()) {
+    try {
+      const otherWin = await invoke<string | null>("find_file_window", {
+        path,
+        sourceLabel: getCurrentWindow().label,
+      });
+      if (otherWin) {
+        const name = path.split(/[\\/]/).pop() || path;
+        const choice = await confirmDuplicateWindow(name);
+        if (choice === "cancel") return;
+        if (choice === "switch") {
+          await invoke("activate_file_in_window", {
+            targetLabel: otherWin,
+            path,
+          });
+          return;
+        }
+        // "open" の場合はこのまま自ウィンドウで開く。
+      }
+    } catch (e) {
+      console.warn("find_file_window failed:", e);
+    }
   }
 
   // 起動直後の空タブを置き換え
@@ -320,6 +346,56 @@ export async function openTabInNewWindow(
   if (a) await editor.show(a);
 }
 
+/**
+ * タブを既存の別ウィンドウへ移送（結合）する。移送に成功したら元から削除する。
+ */
+export async function transferTabToWindow(
+  tabId: string,
+  targetLabel: string,
+  editor: EditorHost,
+): Promise<void> {
+  if (!isTauriContext()) return;
+  const tab = store.getState().tabs.find((t) => t.id === tabId);
+  if (!tab) return;
+
+  const content = editor.getMarkdown(tabId) ?? tab.diskContent;
+  const baseline = editor.getBaseline(tabId) ?? content;
+
+  // このタブが元ウィンドウの唯一のタブなら、移送後にウィンドウごと閉じる。
+  const wasOnlyTab = store.getState().tabs.length === 1;
+
+  try {
+    await invoke<void>("transfer_tab", {
+      targetLabel,
+      payload: {
+        filePath: tab.filePath,
+        content,
+        baseline,
+        diskContent: tab.diskContent,
+      },
+    });
+  } catch (e) {
+    console.error("transfer_tab failed:", e);
+    return;
+  }
+
+  // 先にタブを除去して dirty を解消し、保存ダイアログの誤発火を防いでから閉じる。
+  await editor.destroy(tabId);
+  store.removeTab(tabId);
+
+  if (wasOnlyTab) {
+    try {
+      await getCurrentWindow().close();
+      return;
+    } catch (e) {
+      console.warn("close source window failed:", e);
+    }
+  }
+
+  const a = store.getActive();
+  if (a) await editor.show(a);
+}
+
 /** 移送ペイロード（Rust の TabPayload と対応）。 */
 export type MovedTabPayload = {
   filePath: string | null;
@@ -364,4 +440,28 @@ export async function newTab(editor: EditorHost): Promise<void> {
   store.addTab();
   const a = store.getActive();
   if (a) await editor.show(a);
+}
+
+/**
+ * このウィンドウが開いているファイルパス一覧を Rust の全体レジストリへ同期する。
+ * ウィンドウ間の同一ファイル二重オープン検知に使う。変化が無ければ送らない。
+ */
+let lastOpenFilesKey = "";
+export async function syncOpenFiles(): Promise<void> {
+  if (!isTauriContext()) return;
+  const paths = store
+    .getState()
+    .tabs.map((t) => t.filePath)
+    .filter((p): p is string => !!p);
+  const key = paths.join("\n");
+  if (key === lastOpenFilesKey) return;
+  lastOpenFilesKey = key;
+  try {
+    await invoke("set_open_files", {
+      label: getCurrentWindow().label,
+      paths,
+    });
+  } catch (e) {
+    console.warn("set_open_files failed:", e);
+  }
 }

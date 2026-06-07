@@ -32,6 +32,10 @@ pub fn run() {
         .manage(recent::RecentVisible(Mutex::new(true)))
         .manage(i18n::LangState(Mutex::new(i18n::Lang::Ja)))
         .manage(tabwin::PendingTabs(Mutex::new(HashMap::new())))
+        .manage(tabwin::TabBarRects(Mutex::new(HashMap::new())))
+        .manage(tabwin::DragHover(Mutex::new(None)))
+        .manage(tabwin::LastFocused(Mutex::new(Some("main".to_string()))))
+        .manage(tabwin::OpenFiles(Mutex::new(HashMap::new())))
         .invoke_handler(tauri::generate_handler![
             commands::read_file,
             commands::write_file,
@@ -43,6 +47,15 @@ pub fn run() {
             commands::init_window_menu,
             tabwin::stash_pending_tab,
             tabwin::take_pending_tab,
+            tabwin::register_tabbar_rect,
+            tabwin::find_drop_target,
+            tabwin::transfer_tab,
+            tabwin::drag_over,
+            tabwin::drag_end,
+            tabwin::set_last_focused,
+            tabwin::set_open_files,
+            tabwin::find_file_window,
+            tabwin::activate_file_in_window,
         ])
         .setup(|app| {
             // 最近開いたファイルをロードしてstateへ
