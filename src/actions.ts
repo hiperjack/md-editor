@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { save as saveDialog, open as openDialog } from "@tauri-apps/plugin-dialog";
 import { store, type Tab } from "./store";
 import { confirmSave, confirmDuplicate } from "./modal";
@@ -169,20 +170,21 @@ export async function openOrSwitch(
 
 /**
  * タブを閉じる。dirtyなら保存確認。
+ * @returns 実際に閉じたら true、保存ダイアログ等でキャンセルされたら false。
  */
 export async function closeTab(
   tabId: string,
   editor: EditorHost,
-): Promise<void> {
+): Promise<boolean> {
   const tab = store.getState().tabs.find((t) => t.id === tabId);
-  if (!tab) return;
+  if (!tab) return false;
 
   if (store.isDirty(tabId)) {
     const choice = await confirmSave(fileNameOf(tab));
-    if (choice === "cancel") return;
+    if (choice === "cancel") return false;
     if (choice === "save") {
       const ok = await saveTab(tabId, editor);
-      if (!ok) return;
+      if (!ok) return false;
     }
   }
   await editor.destroy(tabId);
@@ -190,6 +192,172 @@ export async function closeTab(
   // 残タブのアクティブをエディタに反映
   const a = store.getActive();
   if (a) await editor.show(a);
+  return true;
+}
+
+/** 指定タブ以外をすべて閉じる。保存がキャンセルされたら以降を中断する。 */
+export async function closeOtherTabs(
+  tabId: string,
+  editor: EditorHost,
+): Promise<void> {
+  const others = store
+    .getState()
+    .tabs.filter((t) => t.id !== tabId)
+    .map((t) => t.id);
+  for (const id of others) {
+    const ok = await closeTab(id, editor);
+    if (!ok) break;
+  }
+}
+
+/** 指定タブより右側のタブをすべて閉じる。保存がキャンセルされたら以降を中断する。 */
+export async function closeTabsToRight(
+  tabId: string,
+  editor: EditorHost,
+): Promise<void> {
+  const { tabs } = store.getState();
+  const idx = tabs.findIndex((t) => t.id === tabId);
+  if (idx < 0) return;
+  const rightIds = tabs.slice(idx + 1).map((t) => t.id);
+  for (const id of rightIds) {
+    const ok = await closeTab(id, editor);
+    if (!ok) break;
+  }
+}
+
+/** タブのファイルパスをクリップボードにコピーする（パスが無ければ何もしない）。 */
+export async function copyTabPath(tabId: string): Promise<void> {
+  const tab = store.getState().tabs.find((t) => t.id === tabId);
+  if (!tab?.filePath) return;
+  try {
+    await navigator.clipboard.writeText(tab.filePath);
+  } catch (e) {
+    console.warn("copyTabPath failed:", e);
+  }
+}
+
+/** 新規ウィンドウ用の一意ラベルを生成する（capabilities の `tab-*` に一致させる）。 */
+function genWindowLabel(): string {
+  return `tab-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * タブを新規ウィンドウへ移送する。現在の表示内容（未保存分込み）と baseline を
+ * 引き継ぎ、移送に成功したら元ウィンドウからタブを削除する。
+ *
+ * ウィンドウ生成はフロントの WebviewWindow API（Tauri 内部の正規経路）で行う。
+ * Rust コマンド内での生成は Windows で白画面/フリーズする既知問題があるため使わない。
+ * @param position 切り離しドラッグ時の画面座標（任意。新ウィンドウの初期位置）。
+ */
+export async function openTabInNewWindow(
+  tabId: string,
+  editor: EditorHost,
+  position?: { x: number; y: number },
+): Promise<void> {
+  if (!isTauriContext()) return;
+  const tab = store.getState().tabs.find((t) => t.id === tabId);
+  if (!tab) return;
+
+  const content = editor.getMarkdown(tabId) ?? tab.diskContent;
+  const baseline = editor.getBaseline(tabId) ?? content;
+  const label = genWindowLabel();
+
+  // 先に内容を退避（新ウィンドウが起動時に take_pending_tab で取り出す）。
+  try {
+    await invoke<void>("stash_pending_tab", {
+      label,
+      payload: {
+        filePath: tab.filePath,
+        content,
+        baseline,
+        diskContent: tab.diskContent,
+      },
+    });
+  } catch (e) {
+    console.error("stash_pending_tab failed:", e);
+    return;
+  }
+
+  const w = new WebviewWindow(label, {
+    url: "index.html",
+    title: "mdedit",
+    width: 1100,
+    height: 720,
+    minWidth: 600,
+    minHeight: 400,
+    ...(position ? { x: position.x, y: position.y } : {}),
+  });
+
+  const created = await new Promise<boolean>((resolve) => {
+    let settled = false;
+    const done = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve(ok);
+    };
+    void w.once("tauri://created", () => done(true));
+    void w.once("tauri://error", (e) => {
+      console.error("create window error:", e);
+      done(false);
+    });
+    // 念のためのタイムアウト（イベントが来ない場合のフォールバック）。
+    setTimeout(() => done(true), 2000);
+  });
+
+  if (!created) {
+    // 生成失敗 → 退避を破棄して元タブは残す。
+    try {
+      await invoke("take_pending_tab", { label });
+    } catch {
+      /* 破棄失敗は無視 */
+    }
+    return;
+  }
+
+  await editor.destroy(tabId);
+  store.removeTab(tabId);
+  const a = store.getActive();
+  if (a) await editor.show(a);
+}
+
+/** 移送ペイロード（Rust の TabPayload と対応）。 */
+export type MovedTabPayload = {
+  filePath: string | null;
+  content: string;
+  baseline: string;
+  diskContent: string;
+};
+
+/**
+ * 新規ウィンドウ起動時、移送されてきたタブを開く。
+ * 起動直後の空タブがあれば置き換える。
+ */
+export async function openMovedTab(
+  payload: MovedTabPayload,
+  editor: EditorHost,
+): Promise<void> {
+  const { tabs } = store.getState();
+  const blankId =
+    tabs.length === 1 &&
+    tabs[0].filePath === null &&
+    tabs[0].diskContent === "" &&
+    !store.isDirty(tabs[0].id)
+      ? tabs[0].id
+      : null;
+
+  store.addTab({
+    filePath: payload.filePath,
+    content: payload.diskContent,
+    initialContent: payload.content,
+    initialBaseline: payload.baseline,
+  });
+  const moved = store.getActive();
+  if (moved) await editor.show(moved);
+
+  if (blankId) {
+    await editor.destroy(blankId);
+    store.removeTab(blankId);
+  }
 }
 
 export async function newTab(editor: EditorHost): Promise<void> {

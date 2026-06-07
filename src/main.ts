@@ -9,13 +9,20 @@ import { setupTitle } from "./title";
 import { setupShortcuts } from "./shortcuts";
 import { createFindReplace } from "./find-replace";
 import { createOutlinePanel } from "./outline";
+import { createEditorContextMenu } from "./editor-context-menu";
 import {
   closeTab,
+  closeOtherTabs,
+  closeTabsToRight,
+  copyTabPath,
   newTab,
   openOrSwitch,
   openFileFromDialog,
+  openTabInNewWindow,
+  openMovedTab,
   saveTab,
   saveTabAs,
+  type MovedTabPayload,
 } from "./actions";
 import { confirmCloseAll } from "./modal";
 import { settings } from "./settings";
@@ -173,6 +180,18 @@ async function bootstrap(): Promise<void> {
     onNew: () => {
       void newTab(editor);
     },
+    onCloseOthers: (id) => {
+      void closeOtherTabs(id, editor);
+    },
+    onCloseToRight: (id) => {
+      void closeTabsToRight(id, editor);
+    },
+    onOpenInNewWindow: (id) => {
+      void openTabInNewWindow(id, editor);
+    },
+    onCopyPath: (id) => {
+      void copyTabPath(id);
+    },
   });
 
   // ファイル系メニューアクション
@@ -206,6 +225,23 @@ async function bootstrap(): Promise<void> {
   const fmtActions = makeToolbarActions(editor);
   createToolbar(toolbarEl, { ...fileActions, ...viewActions, ...fmtActions });
 
+  // 右クリックメニュー:
+  //  - エディタ本文の上では独自の文脈対応メニューを表示する。
+  //  - それ以外（タブ・左パネル・ツールバー等）では WebView2 標準メニューを抑止。
+  const editorContextMenu = createEditorContextMenu(editor, fmtActions, find);
+  document.addEventListener(
+    "contextmenu",
+    (e) => {
+      const target = e.target as Element | null;
+      if (target?.closest(".editor-pane .ProseMirror")) {
+        editorContextMenu(e);
+      } else {
+        e.preventDefault();
+      }
+    },
+    { capture: true },
+  );
+
   // アウトライン表示トグルボタンの active 状態を設定に同期（ツールバー生成後）。
   const syncOutlineButton = () => {
     const btn = toolbarEl.querySelector('[data-action="view_outline"]');
@@ -218,6 +254,22 @@ async function bootstrap(): Promise<void> {
   setupShortcuts(editor, fileActions, find);
 
   if (isTauriContext()) {
+    // このウィンドウ専用のネイティブメニューを割り当てる（HMENU を共有しない）。
+    void invoke("init_window_menu").catch((e) =>
+      console.warn("init_window_menu failed:", e),
+    );
+
+    // 切り離し（新規ウィンドウ化）で移送されてきたタブがあれば、起動直後の
+    // 空タブの代わりにそれを開く。
+    try {
+      const moved = await invoke<MovedTabPayload | null>("take_pending_tab", {
+        label: getCurrentWindow().label,
+      });
+      if (moved) await openMovedTab(moved, editor);
+    } catch (e) {
+      console.warn("take_pending_tab failed:", e);
+    }
+
     // 設定で「最近使ったファイル表示」のオンオフをRustに反映
     const syncRecentVisible = (show: boolean) => {
       void invoke("set_recent_visible", { show }).catch((e) =>
@@ -301,4 +353,11 @@ async function bootstrap(): Promise<void> {
 
 bootstrap().catch((err) => {
   console.error("bootstrap failed:", err);
+  // 起動に失敗したら白画面のままにせず、原因を画面に出す。
+  const pre = document.createElement("pre");
+  pre.style.cssText =
+    "position:fixed;inset:0;margin:0;padding:16px;overflow:auto;" +
+    "background:#1e1e1e;color:#e85c4a;font:13px/1.5 monospace;white-space:pre-wrap;z-index:99999;";
+  pre.textContent = `bootstrap failed:\n${(err && err.stack) || String(err)}`;
+  document.body.appendChild(pre);
 });

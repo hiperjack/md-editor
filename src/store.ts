@@ -28,6 +28,14 @@ const state: AppState = {
 
 const listeners = new Set<Listener>();
 
+/**
+ * 移送（新規ウィンドウ化）で作るタブの初期内容オーバーライド。
+ * エディタ生成時に一度だけ消費する（diskContent ではなく content を表示し、
+ * baseline を移送元から引き継いで dirty 状態を保持するため）。
+ */
+type InitialOverride = { content: string; baseline: string };
+const initialOverrides = new Map<string, InitialOverride>();
+
 function notify(): void {
   for (const fn of listeners) fn(state);
 }
@@ -59,7 +67,14 @@ export const store = {
     return state.tabs.find((t) => t.filePath === path) ?? null;
   },
 
-  addTab(opts?: { filePath?: string; content?: string }): string {
+  addTab(opts?: {
+    filePath?: string | null;
+    content?: string;
+    /** 移送タブ用: エディタに表示する内容（未保存分込み）。diskContent と別。 */
+    initialContent?: string;
+    /** 移送タブ用: dirty 判定の基準（移送元の baseline）。 */
+    initialBaseline?: string;
+  }): string {
     const filePath = opts?.filePath ?? null;
     const diskContent = opts?.content ?? "";
     const tab: Tab = {
@@ -70,8 +85,21 @@ export const store = {
     };
     state.tabs.push(tab);
     state.activeTabId = tab.id;
+    if (opts?.initialContent !== undefined) {
+      initialOverrides.set(tab.id, {
+        content: opts.initialContent,
+        baseline: opts.initialBaseline ?? opts.initialContent,
+      });
+    }
     notify();
     return tab.id;
+  },
+
+  /** 移送タブの初期内容オーバーライドを取り出す（消費して削除）。 */
+  takeInitialOverride(tabId: string): InitialOverride | undefined {
+    const ov = initialOverrides.get(tabId);
+    if (ov) initialOverrides.delete(tabId);
+    return ov;
   },
 
   removeTab(tabId: string): void {

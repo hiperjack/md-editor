@@ -56,7 +56,13 @@ pub fn emit_open_file(app: &AppHandle, path: String) {
             return;
         }
     };
-    let _ = app.emit("open-file", OpenFilePayload { path, content });
+    // 外部ファイルオープンは今フォーカス中のウィンドウだけに届ける
+    // （全ウィンドウで同じファイルが開かないように）。
+    if let Some(win) = crate::tabwin::focused_or_main(app) {
+        let _ = app.emit_to(win.label(), "open-file", OpenFilePayload { path, content });
+    } else {
+        let _ = app.emit("open-file", OpenFilePayload { path, content });
+    }
 }
 
 /// 2回目起動時に呼ばれる

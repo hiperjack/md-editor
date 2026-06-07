@@ -21,23 +21,29 @@ pub fn write_file(path: String, content: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn add_recent_file(app: AppHandle, path: String) -> Result<(), String> {
-    let updated = crate::recent::add(&app, path);
-    crate::menu::set_from_recent(&app, &updated).map_err(|e| e.to_string())?;
+    crate::recent::add(&app, path);
+    crate::menu::rebuild_all(&app).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
 pub fn set_recent_visible(app: AppHandle, show: bool) -> Result<(), String> {
     crate::recent::set_visible(&app, show);
-    crate::menu::rebuild(&app).map_err(|e| e.to_string())?;
+    crate::menu::rebuild_all(&app).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
 pub fn set_lang(app: AppHandle, lang: String) -> Result<(), String> {
     crate::i18n::set(&app, crate::i18n::Lang::from_code(&lang));
-    crate::menu::rebuild(&app).map_err(|e| e.to_string())?;
+    crate::menu::rebuild_all(&app).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// 各ウィンドウが起動時に呼び、自分専用のメニューを割り当てる。
+#[tauri::command]
+pub fn init_window_menu(app: AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
+    crate::menu::apply_to_window(&app, &window).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

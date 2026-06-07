@@ -66,6 +66,8 @@ export type EditorHost = {
   destroy: (tabId: string) => Promise<void>;
   /** 現在のmarkdownを取得（保存用）。 */
   getMarkdown: (tabId: string) => string | null;
+  /** baseline（正規化済みディスク内容）を取得（移送時の dirty 引き継ぎ用）。 */
+  getBaseline: (tabId: string) => string | null;
   /** baselineを現在のmarkdownにリセット（保存後）。 */
   resetBaseline: (tabId: string) => void;
   /** タブのエディタを作り直す（reload時）。 */
@@ -152,6 +154,10 @@ export function createEditorHost(root: HTMLElement): EditorHost {
   };
 
   const make = async (tab: Tab): Promise<EditorEntry> => {
+    // 移送（新規ウィンドウ化）タブは、表示内容と baseline を引き継ぐ。
+    // 通常タブでは undefined。
+    const override = store.takeInitialOverride(tab.id);
+
     const container = document.createElement("div");
     container.className = "editor-pane";
     container.dataset.tabId = tab.id;
@@ -194,7 +200,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
 
     const crepe = new Crepe({
       root: container,
-      defaultValue: tab.diskContent,
+      defaultValue: override?.content ?? tab.diskContent,
       features: {
         [Crepe.Feature.BlockEdit]: false,
         [Crepe.Feature.Toolbar]: false,
@@ -589,8 +595,9 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     });
 
     // 初期シリアライズ結果をbaselineとする（MarkText問題回避：
-    //   生のファイル内容ではなくMilkdown正規化後の文字列を基準にする）
-    const baseline = crepe.getMarkdown();
+    //   生のファイル内容ではなくMilkdown正規化後の文字列を基準にする）。
+    // 移送タブは移送元の baseline を引き継ぎ、未保存状態を保持する。
+    const baseline = override?.baseline ?? crepe.getMarkdown();
 
     const detachLineNumbers = attachLineNumbers(container, () =>
       crepe.getMarkdown(),
@@ -619,6 +626,12 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         for (const fn of contentListeners) fn(tab.id);
       });
     });
+
+    // 移送タブで content が baseline と異なる（＝未保存だった）場合、
+    // markdownUpdated は編集まで発火しないので初期 dirty をここで反映する。
+    if (override && crepe.getMarkdown() !== baseline) {
+      store.setDirty(tab.id, true);
+    }
 
     return entry;
   };
@@ -659,6 +672,12 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       const entry = editors.get(tabId);
       if (!entry) return null;
       return entry.crepe.getMarkdown();
+    },
+
+    getBaseline(tabId: string) {
+      const entry = editors.get(tabId);
+      if (!entry) return null;
+      return entry.baseline;
     },
 
     resetBaseline(tabId: string) {

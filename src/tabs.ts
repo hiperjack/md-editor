@@ -1,10 +1,16 @@
 import Sortable from "sortablejs";
 import { store, type Tab } from "./store";
+import { showContextMenu, type MenuItem } from "./context-menu";
+import { t } from "./i18n";
 
 export type TabBarHandlers = {
   onSelect: (tabId: string) => void;
   onClose: (tabId: string) => void;
   onNew: () => void;
+  onCloseOthers: (tabId: string) => void;
+  onCloseToRight: (tabId: string) => void;
+  onOpenInNewWindow: (tabId: string) => void;
+  onCopyPath: (tabId: string) => void;
 };
 
 function fileNameOf(tab: Tab): string {
@@ -90,6 +96,45 @@ export function createTabBar(
 
       el.addEventListener("mousedown", (e) => {
         if (e.button === 1) e.preventDefault();
+      });
+
+      el.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const items: MenuItem[] = [
+          {
+            type: "item",
+            label: t("tabcm.close"),
+            action: () => handlers.onClose(tab.id),
+          },
+          {
+            type: "item",
+            label: t("tabcm.closeOthers"),
+            disabled: store.getState().tabs.length <= 1,
+            action: () => handlers.onCloseOthers(tab.id),
+          },
+          {
+            type: "item",
+            label: t("tabcm.closeRight"),
+            disabled:
+              store.getState().tabs.findIndex((x) => x.id === tab.id) >=
+              store.getState().tabs.length - 1,
+            action: () => handlers.onCloseToRight(tab.id),
+          },
+          { type: "separator" },
+          {
+            type: "item",
+            label: t("tabcm.newWindow"),
+            action: () => handlers.onOpenInNewWindow(tab.id),
+          },
+          {
+            type: "item",
+            label: t("tabcm.copyPath"),
+            disabled: !tab.filePath,
+            action: () => handlers.onCopyPath(tab.id),
+          },
+        ];
+        showContextMenu(e.clientX, e.clientY, items);
       });
 
       list.appendChild(el);

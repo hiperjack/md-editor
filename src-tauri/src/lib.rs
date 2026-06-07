@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::Manager;
 
@@ -6,6 +7,7 @@ mod i18n;
 mod menu;
 mod recent;
 mod startup;
+mod tabwin;
 
 pub struct PendingPath(pub Mutex<Option<String>>);
 pub struct FrontendReady(pub Mutex<bool>);
@@ -29,6 +31,7 @@ pub fn run() {
         .manage(recent::RecentFiles(Mutex::new(Vec::new())))
         .manage(recent::RecentVisible(Mutex::new(true)))
         .manage(i18n::LangState(Mutex::new(i18n::Lang::Ja)))
+        .manage(tabwin::PendingTabs(Mutex::new(HashMap::new())))
         .invoke_handler(tauri::generate_handler![
             commands::read_file,
             commands::write_file,
@@ -37,14 +40,18 @@ pub fn run() {
             commands::set_recent_visible,
             commands::set_lang,
             commands::open_external_url,
+            commands::init_window_menu,
+            tabwin::stash_pending_tab,
+            tabwin::take_pending_tab,
         ])
         .setup(|app| {
             // 最近開いたファイルをロードしてstateへ
             let initial = recent::load_initial(app.handle());
-            recent::set_initial(app.handle(), initial.clone());
-            // メニュー：イベントハンドラ登録（一度だけ）→ 初期メニュー設定
+            recent::set_initial(app.handle(), initial);
+            // メニューイベントハンドラを登録（一度だけ）。
+            // メニュー自体は各ウィンドウが起動時に init_window_menu で個別に割り当てる
+            // （HMENU を共有しないことで、子ウィンドウを閉じても他のメニューが壊れない）。
             menu::register_handlers(app.handle());
-            menu::set_from_recent(app.handle(), &initial)?;
             // 初回起動時の引数を保留に格納
             let argv: Vec<String> = std::env::args().collect();
             startup::extract_path_to_pending(app.handle(), &argv);

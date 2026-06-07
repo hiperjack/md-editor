@@ -2,7 +2,7 @@ use tauri::menu::{
     AboutMetadataBuilder, Menu, MenuBuilder, MenuItem, MenuItemBuilder, PredefinedMenuItem,
     Submenu, SubmenuBuilder,
 };
-use tauri::{AppHandle, Emitter, Wry};
+use tauri::{AppHandle, Emitter, Manager, WebviewWindow, Wry};
 
 use crate::i18n;
 
@@ -19,22 +19,42 @@ pub fn register_handlers(app: &AppHandle<Wry>) {
             return;
         }
         if id.starts_with("file_") || id.starts_with("fmt_") || id.starts_with("view_") {
-            let _ = app.emit("menu-action", id);
+            // メニューはアプリ全体に設定されているため、操作は今フォーカス中の
+            // ウィンドウだけに届ける（全ウィンドウで保存等が発火しないように）。
+            if let Some(win) = crate::tabwin::focused_or_main(app) {
+                let _ = app.emit_to(win.label(), "menu-action", id);
+            } else {
+                let _ = app.emit("menu-action", id);
+            }
         }
     });
 }
 
-pub fn set_from_recent(app: &AppHandle<Wry>, recent: &[String]) -> tauri::Result<()> {
+/// 現在の最近ファイル・言語設定から新しいメニューを1つ作る。
+/// メニューはウィンドウごとに個別に生成して割り当てる（HMENU を共有しない）。
+/// アプリ全体で1つのメニューを共有すると、Windows では子ウィンドウを閉じた際に
+/// 共有 HMENU が破棄され、残ったウィンドウのメニューが壊れるため。
+fn menu_for(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
+    let recent = crate::recent::current(app);
     let visible = crate::recent::is_visible(app);
-    let effective: &[String] = if visible { recent } else { &[] };
-    let menu = build_menu(app, effective)?;
-    app.set_menu(menu)?;
+    let effective: &[String] = if visible { &recent } else { &[] };
+    build_menu(app, effective)
+}
+
+/// 指定ウィンドウに、そのウィンドウ専用の新しいメニューを割り当てる。
+pub fn apply_to_window(app: &AppHandle<Wry>, window: &WebviewWindow<Wry>) -> tauri::Result<()> {
+    let menu = menu_for(app)?;
+    window.set_menu(menu)?;
     Ok(())
 }
 
-pub fn rebuild(app: &AppHandle<Wry>) -> tauri::Result<()> {
-    let recent = crate::recent::current(app);
-    set_from_recent(app, &recent)
+/// 全ウィンドウのメニューを作り直して割り当てる（最近ファイル・言語変更時）。
+pub fn rebuild_all(app: &AppHandle<Wry>) -> tauri::Result<()> {
+    for window in app.webview_windows().values() {
+        let menu = menu_for(app)?;
+        window.set_menu(menu)?;
+    }
+    Ok(())
 }
 
 fn basename(path: &str) -> String {
