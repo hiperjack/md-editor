@@ -536,6 +536,7 @@ export function openFontSettings(): Promise<void> {
       note.textContent = t("mermaid.note");
       c.appendChild(note);
 
+      // 配色セレクト（個別指定）。先に生成して、チェックボックスから enable/disable する。
       const row = document.createElement("label");
       row.className = "settings-row";
       const span = document.createElement("span");
@@ -558,6 +559,25 @@ export function openFontSettings(): Promise<void> {
       select.addEventListener("change", () => {
         docDraft.theme.mermaidTheme = select.value as MermaidColorScheme;
       });
+
+      // 「表示テーマに揃える」チェックボックス（既定ON）。ONのときは個別セレクトを無効化。
+      const followRow = document.createElement("label");
+      followRow.className = "settings-row settings-row-checkbox";
+      const follow = document.createElement("input");
+      follow.type = "checkbox";
+      follow.className = "settings-input";
+      follow.checked = docDraft.theme.mermaidFollowApp;
+      const followText = document.createElement("span");
+      followText.textContent = t("mermaid.followApp");
+      follow.addEventListener("change", () => {
+        docDraft.theme.mermaidFollowApp = follow.checked;
+        select.disabled = follow.checked;
+      });
+      followRow.appendChild(follow);
+      followRow.appendChild(followText);
+      c.appendChild(followRow);
+
+      select.disabled = docDraft.theme.mermaidFollowApp;
       row.appendChild(select);
       c.appendChild(row);
 

@@ -125,6 +125,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "tabcm.closeRight": "右側のタブをすべて閉じる",
     "tabcm.newWindow": "新規ウィンドウで開く",
     "tabcm.copyPath": "パスをコピー",
+    "tabcm.htmlPreview": "HTMLプレビューを開く",
     // HTML出力・印刷
     "tb.file_export": "HTMLとして出力 (Ctrl+Shift+E)",
     "export.dialogTitle": "HTMLとして出力",
@@ -163,7 +164,8 @@ const DICT: Record<Lang, Record<string, string>> = {
       "この設定はHTML出力・PDF印刷の文書の見た目に適用されます。",
     // Mermaid設定タブ
     "mermaid.note":
-      "Mermaid図の配色設定です。プレビュー・HTML出力・PDF印刷に共通で適用されます。",
+      "Mermaid図の配色設定です。プレビューに適用されます（HTML出力・PDF印刷は文書の背景色に合わせます）。",
+    "mermaid.followApp": "表示テーマに揃える",
     "mermaid.theme": "配色",
     "mermaid.theme.system": "システムに合わせる",
     "mermaid.theme.light": "ライト",
@@ -299,6 +301,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "tabcm.closeRight": "Close to the right",
     "tabcm.newWindow": "Open in new window",
     "tabcm.copyPath": "Copy path",
+    "tabcm.htmlPreview": "Open HTML preview",
     "tb.file_export": "Export as HTML (Ctrl+Shift+E)",
     "export.dialogTitle": "Export as HTML",
     "export.rendering": "Generating HTML…",
@@ -331,7 +334,8 @@ const DICT: Record<Lang, Record<string, string>> = {
     "docTheme.note":
       "These settings apply to the look of HTML export and PDF printing.",
     "mermaid.note":
-      "Color scheme for Mermaid diagrams. Applies to preview, HTML export and PDF printing.",
+      "Color scheme for Mermaid diagrams in the preview (HTML export and PDF printing follow the document background).",
+    "mermaid.followApp": "Match display theme",
     "mermaid.theme": "Color scheme",
     "mermaid.theme.system": "Match system",
     "mermaid.theme.light": "Light",

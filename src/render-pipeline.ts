@@ -2,7 +2,7 @@ import MarkdownIt from "markdown-it";
 import anchor from "markdown-it-anchor";
 import toc from "markdown-it-toc-done-right";
 import githubAlerts from "markdown-it-github-alerts";
-import type { DocSettings } from "./theme";
+import { type DocSettings, isLightColor } from "./theme";
 import { renderMermaidSvg } from "./mermaid-renderer";
 
 /**
@@ -130,6 +130,7 @@ function buildMarkdownIt(settings: DocSettings, hljs: Hljs | null): MarkdownIt {
 /** Mermaidプレースホルダを実SVGに差し替える。エラー時はソースを残したエラー表示。 */
 async function resolveMermaidBlocks(
   container: HTMLElement,
+  scheme: "light" | "dark",
   onProgress?: MermaidProgress,
 ): Promise<void> {
   const blocks = Array.from(
@@ -142,7 +143,7 @@ async function resolveMermaidBlocks(
   for (const block of blocks) {
     const source = block.dataset.source ?? "";
     try {
-      const svg = await renderMermaidSvg(source);
+      const svg = await renderMermaidSvg(source, scheme);
       const figure = document.createElement("figure");
       figure.className = "mermaid-figure";
       figure.innerHTML = svg;
@@ -182,7 +183,9 @@ export async function renderDocumentBody(
 
   const container = document.createElement("div");
   container.innerHTML = html;
-  await resolveMermaidBlocks(container, opts.onMermaidProgress);
+  // Mermaid図は文書背景の明暗に合わせて配色する（白背景→ライト図）
+  const scheme = isLightColor(settings.theme.bgColor) ? "light" : "dark";
+  await resolveMermaidBlocks(container, scheme, opts.onMermaidProgress);
   return container;
 }
 
@@ -192,12 +195,14 @@ export async function renderDocumentBody(
  */
 export async function renderMermaidDocumentBody(
   source: string,
+  settings: DocSettings,
   opts: RenderOptions = {},
 ): Promise<HTMLDivElement> {
   const container = document.createElement("div");
+  const scheme = isLightColor(settings.theme.bgColor) ? "light" : "dark";
   opts.onMermaidProgress?.(0, 1);
   try {
-    const svg = await renderMermaidSvg(source);
+    const svg = await renderMermaidSvg(source, scheme);
     const figure = document.createElement("figure");
     figure.className = "mermaid-figure mmd-single";
     figure.innerHTML = svg;

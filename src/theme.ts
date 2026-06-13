@@ -28,8 +28,10 @@ export type DocTheme = {
   bgColor: string;
   headingStyle: HeadingStyle;
   highlightTheme: HighlightTheme;
-  /** Mermaid図の配色 */
+  /** Mermaid図の配色（mermaidFollowApp=false のときに使用） */
   mermaidTheme: MermaidColorScheme;
+  /** Mermaid配色をアプリの表示テーマに揃えるか（true=揃える、false=mermaidThemeで個別指定） */
+  mermaidFollowApp: boolean;
 };
 
 export type DocDecorations = {
@@ -84,6 +86,7 @@ export const DEFAULT_DOC_SETTINGS: DocSettings = {
     headingStyle: "underline",
     highlightTheme: "github",
     mermaidTheme: "system",
+    mermaidFollowApp: true,
   },
   decorations: {
     autoToc: false,
@@ -147,6 +150,10 @@ export function validateDocSettings(raw: unknown): DocSettings {
     t.mermaidTheme === "system" || t.mermaidTheme === "light" || t.mermaidTheme === "dark"
       ? t.mermaidTheme
       : d.theme.mermaidTheme;
+  const mermaidFollowApp =
+    typeof t.mermaidFollowApp === "boolean"
+      ? t.mermaidFollowApp
+      : d.theme.mermaidFollowApp;
 
   return {
     version: 1,
@@ -160,6 +167,7 @@ export function validateDocSettings(raw: unknown): DocSettings {
       headingStyle,
       highlightTheme,
       mermaidTheme,
+      mermaidFollowApp,
     },
     decorations: {
       autoToc: typeof dec.autoToc === "boolean" ? dec.autoToc : d.decorations.autoToc,
@@ -192,6 +200,17 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
     g: parseInt(hex.slice(3, 5), 16),
     b: parseInt(hex.slice(5, 7), 16),
   };
+}
+
+/**
+ * 背景色が明るいか（輝度ベース）。HTML出力・印刷・プレビューで、Mermaid図の
+ * 配色を文書背景に合わせる判定に使う（明るい背景→ライト図、暗い背景→ダーク図）。
+ */
+export function isLightColor(hex: string): boolean {
+  if (!isHexColor(hex)) return true;
+  const { r, g, b } = hexToRgb(hex);
+  // ITU-R BT.601 輝度（0..255）。中間より明るければライト扱い。
+  return 0.299 * r + 0.587 * g + 0.114 * b > 140;
 }
 
 function rgba(hex: string, alpha: number): string {

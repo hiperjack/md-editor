@@ -263,6 +263,11 @@ export const settings = {
     return effectiveLang();
   },
 
+  /** 表示テーマを解決済みの "dark"|"light" として取得（Mermaid配色の連動に使う）。 */
+  getEffectiveTheme(): "dark" | "light" {
+    return effectiveTheme();
+  },
+
   setTheme(v: Theme): void {
     if (v === current.theme) return;
     current = { ...current, theme: v };
