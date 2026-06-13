@@ -195,10 +195,11 @@ export async function openOrSwitch(
     }
   }
 
-  // 起動直後の空タブを置き換え
+  // 起動直後の空タブを置き換え（プレビュータブは空タブ扱いにしない）
   const { tabs } = store.getState();
   if (
     tabs.length === 1 &&
+    tabs[0].kind !== "preview" &&
     tabs[0].filePath === null &&
     tabs[0].diskContent === "" &&
     !store.isDirty(tabs[0].id)
