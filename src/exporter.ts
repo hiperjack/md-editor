@@ -127,7 +127,7 @@ export async function exportActiveTabAsHtml(editor: EditorHost): Promise<void> {
   try {
     const body =
       fileTypeOfPath(tab.filePath) === "mmd"
-        ? await renderMermaidDocumentBody(extractMermaidSource(markdown), {
+        ? await renderMermaidDocumentBody(extractMermaidSource(markdown), settings, {
             onMermaidProgress,
           })
         : await renderDocumentBody(markdown, settings, { onMermaidProgress });
@@ -176,7 +176,7 @@ export async function openHtmlPreviewTab(editor: EditorHost): Promise<void> {
   try {
     const body =
       fileTypeOfPath(tab.filePath) === "mmd"
-        ? await renderMermaidDocumentBody(extractMermaidSource(markdown), {
+        ? await renderMermaidDocumentBody(extractMermaidSource(markdown), settings, {
             onMermaidProgress,
           })
         : await renderDocumentBody(markdown, settings, { onMermaidProgress });

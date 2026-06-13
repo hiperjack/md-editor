@@ -126,7 +126,41 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
     updateCurrent();
   };
 
+  /** プレビュータブ用: HTML見出し(h1〜h6)からアウトラインを作る。 */
+  const renderPreviewOutline = () => {
+    const pane = document.querySelector<HTMLElement>(
+      "#editor-host .editor-pane.preview-pane",
+    );
+    const headings = pane
+      ? Array.from(pane.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6"))
+      : [];
+    list.replaceChildren();
+    for (const h of headings) {
+      const level = Number(h.tagName.slice(1)) || 1;
+      const li = document.createElement("li");
+      li.className = `outline-item outline-level-${level}`;
+      li.textContent = h.textContent || t("outline.untitled");
+      li.title = li.textContent;
+      li.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        h.scrollIntoView({ block: "start" });
+      });
+      list.appendChild(li);
+    }
+    const hasHeadings = headings.length > 0;
+    list.hidden = !hasHeadings;
+    empty.hidden = hasHeadings;
+    // プレビューはProseMirror非依存のためスクロール監視は張らない
+    detachScroll?.();
+    detachScroll = null;
+  };
+
   const render = () => {
+    // プレビュータブはHTML見出しからアウトラインを作る（ProseMirror非依存）
+    if (store.getActive()?.kind === "preview") {
+      renderPreviewOutline();
+      return;
+    }
     const view = editor.getActiveView();
     const headings = view ? collectHeadings(view.state.doc) : [];
 

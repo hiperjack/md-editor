@@ -10,6 +10,8 @@ export type TabBarHandlers = {
   onCloseToRight: (tabId: string) => void;
   onOpenInNewWindow: (tabId: string) => void;
   onCopyPath: (tabId: string) => void;
+  /** タブの内容をHTMLプレビュータブで開く。 */
+  onHtmlPreview: (tabId: string) => void;
   /** タブをウィンドウ外で離して切り離した（新規ウィンドウ化）。pos は離した画面座標。 */
   onTearOff: (tabId: string, pos: { x: number; y: number }) => void;
   /** ドラッグ中の移動（結合先ハイライト用）。画面座標を渡す。 */
@@ -252,6 +254,14 @@ export function createTabBar(
               store.getState().tabs.findIndex((x) => x.id === tab.id) >=
               store.getState().tabs.length - 1,
             action: () => handlers.onCloseToRight(tab.id),
+          },
+          { type: "separator" },
+          {
+            type: "item",
+            label: t("tabcm.htmlPreview"),
+            // プレビュータブ自身は対象外
+            disabled: tab.kind === "preview",
+            action: () => handlers.onHtmlPreview(tab.id),
           },
           { type: "separator" },
           {
