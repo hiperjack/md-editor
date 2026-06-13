@@ -134,6 +134,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "export.failed": "HTML出力に失敗しました。",
     "tb.file_html_preview": "HTMLプレビュー (Ctrl+Shift+V)",
     "preview.tabPrefix": "プレビュー: ",
+    "preview.cannotRefresh": "更新できません（元ファイル/タブが見つかりません）",
     "print.preparing": "印刷を準備中…",
     "print.failed": "印刷の準備に失敗しました。",
     // コードブロックのプレビューパネル（Mermaid）
@@ -310,6 +311,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "export.failed": "Failed to export HTML.",
     "tb.file_html_preview": "HTML preview (Ctrl+Shift+V)",
     "preview.tabPrefix": "Preview: ",
+    "preview.cannotRefresh": "Cannot refresh (source file/tab not found)",
     "print.preparing": "Preparing to print…",
     "print.failed": "Failed to prepare printing.",
     "cb.previewLabel": "Preview",

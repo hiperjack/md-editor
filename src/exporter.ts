@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { save as saveDialog, message } from "@tauri-apps/plugin-dialog";
-import { store } from "./store";
+import { store, type Tab } from "./store";
 import type { EditorHost } from "./editor";
 import {
   docTheme,
@@ -153,16 +153,13 @@ export async function exportActiveTabAsHtml(editor: EditorHost): Promise<void> {
 }
 
 /**
- * アクティブタブの内容を、HTML出力と同じ見た目で読み取り専用の新規タブに表示する。
- * 保存はしない（出力前の見た目確認用）。HTML出力と同一パイプラインを通すため、
- * 「プレビューで見た通りに出力される」ことが保証される。
+ * 元タブ(markdown)からプレビュー用の文書HTMLをレンダリングして返す。
+ * HTML出力と同一パイプラインを通すため「見たまま出力される」ことを保証する。
  */
-export async function openHtmlPreviewTab(editor: EditorHost): Promise<void> {
-  const tab = store.getActive();
-  if (!tab) return;
-  const markdown = editor.getMarkdown(tab.id);
-  if (markdown === null) return; // プレビュータブ自身など、編集内容がない場合
-
+async function renderExportPreview(
+  filePath: string | null,
+  markdown: string,
+): Promise<{ html: string; title: string }> {
   const settings = docTheme.get();
   const progress = showProgress(t("export.rendering"));
   const onMermaidProgress: MermaidProgress = (done, total) => {
@@ -172,16 +169,15 @@ export async function openHtmlPreviewTab(editor: EditorHost): Promise<void> {
         .replace("{total}", String(total)),
     );
   };
-
   try {
     const body =
-      fileTypeOfPath(tab.filePath) === "mmd"
+      fileTypeOfPath(filePath) === "mmd"
         ? await renderMermaidDocumentBody(extractMermaidSource(markdown), settings, {
             onMermaidProgress,
           })
         : await renderDocumentBody(markdown, settings, { onMermaidProgress });
 
-    await embedLocalImages(body, tab.filePath);
+    await embedLocalImages(body, filePath);
 
     // プレビュータブの .document にも文書CSS / ハイライトCSSを適用する
     ensureDocumentStyles();
@@ -192,10 +188,31 @@ export async function openHtmlPreviewTab(editor: EditorHost): Promise<void> {
     main.setAttribute("style", docThemeCssVars(settings.theme));
     main.innerHTML = body.innerHTML;
 
-    const name = baseNameWithoutExt(tab.filePath);
+    const name = baseNameWithoutExt(filePath);
+    return { html: main.outerHTML, title: `${t("preview.tabPrefix")}${name}` };
+  } finally {
+    progress.close();
+  }
+}
+
+/**
+ * アクティブタブの内容を、HTML出力と同じ見た目で読み取り専用の新規タブに表示する。
+ * 保存はしない（出力前の見た目確認用）。元タブを記録し、更新で再レンダリングできる。
+ */
+export async function openHtmlPreviewTab(editor: EditorHost): Promise<void> {
+  const tab = store.getActive();
+  if (!tab) return;
+  const markdown = editor.getMarkdown(tab.id);
+  if (markdown === null) return; // プレビュータブ自身など、編集内容がない場合
+
+  try {
+    const { html, title } = await renderExportPreview(tab.filePath, markdown);
     store.addPreviewTab({
-      title: `${t("preview.tabPrefix")}${name}`,
-      html: main.outerHTML,
+      title,
+      html,
+      mode: "export",
+      sourceTabId: tab.id,
+      sourceFilePath: tab.filePath,
     });
     const created = store.getActive();
     if (created) await editor.show(created);
@@ -205,7 +222,92 @@ export async function openHtmlPreviewTab(editor: EditorHost): Promise<void> {
       `${t("export.failed")}\n${e instanceof Error ? e.message : String(e)}`,
       { kind: "error" },
     );
-  } finally {
-    progress.close();
+  }
+}
+
+/**
+ * 外部HTMLファイルをサンドボックスiframeの読み取り専用タブで開く。
+ */
+export async function openHtmlFileTab(
+  path: string,
+  content: string,
+  editor: EditorHost,
+): Promise<void> {
+  const name = baseNameWithoutExt(path);
+  store.addPreviewTab({
+    title: `${t("preview.tabPrefix")}${name}`,
+    srcDoc: content,
+    mode: "htmlfile",
+    sourceFilePath: path,
+  });
+  const created = store.getActive();
+  if (created) await editor.show(created);
+}
+
+/** プレビュータブを更新（再描画）できるか。 */
+export function canRefreshPreview(tab: Tab, editor: EditorHost): boolean {
+  if (tab.kind !== "preview") return false;
+  if (tab.previewMode === "htmlfile") return !!tab.sourceFilePath;
+  // export: 同一ウィンドウに元タブが残っている、またはディスクのファイルがある。
+  const hasLiveSource =
+    !!tab.sourceTabId && editor.getMarkdown(tab.sourceTabId) !== null;
+  return hasLiveSource || !!tab.sourceFilePath;
+}
+
+/**
+ * プレビュータブを元ソースから再レンダリングして内容を差し替える。
+ * - htmlfile: sourceFilePath をディスクから読み直す。
+ * - export: 同一ウィンドウの元タブの現在内容を優先、無ければ sourceFilePath を読む。
+ * スクロール位置・ズーム倍率は editor.refreshPreviewPane が保持する。
+ */
+export async function refreshPreviewTab(
+  previewTabId: string,
+  editor: EditorHost,
+): Promise<void> {
+  const tab = store.getState().tabs.find((t) => t.id === previewTabId);
+  if (!tab || tab.kind !== "preview") return;
+  try {
+    if (tab.previewMode === "htmlfile") {
+      if (!tab.sourceFilePath) {
+        await message(t("preview.cannotRefresh"), { kind: "info" });
+        return;
+      }
+      const content = await invoke<string>("read_file", {
+        path: tab.sourceFilePath,
+      });
+      store.updatePreview(previewTabId, { srcDoc: content });
+      await editor.refreshPreviewPane(previewTabId);
+      return;
+    }
+    // export モード
+    let markdown: string | null = null;
+    let filePath: string | null = tab.sourceFilePath ?? null;
+    if (tab.sourceTabId) {
+      const live = editor.getMarkdown(tab.sourceTabId);
+      if (live !== null) {
+        markdown = live;
+        const src = store
+          .getState()
+          .tabs.find((t) => t.id === tab.sourceTabId);
+        if (src) filePath = src.filePath;
+      }
+    }
+    if (markdown === null && tab.sourceFilePath) {
+      markdown = await invoke<string>("read_file", { path: tab.sourceFilePath });
+      filePath = tab.sourceFilePath;
+    }
+    if (markdown === null) {
+      await message(t("preview.cannotRefresh"), { kind: "info" });
+      return;
+    }
+    const { html, title } = await renderExportPreview(filePath, markdown);
+    store.updatePreview(previewTabId, { html, title });
+    await editor.refreshPreviewPane(previewTabId);
+  } catch (e) {
+    console.error("refreshPreviewTab failed:", e);
+    await message(
+      `${t("export.failed")}\n${e instanceof Error ? e.message : String(e)}`,
+      { kind: "error" },
+    );
   }
 }
