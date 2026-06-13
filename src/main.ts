@@ -29,7 +29,7 @@ import { confirmCloseAll } from "./modal";
 import { settings } from "./settings";
 import { docTheme, resolveMermaidScheme } from "./theme";
 import { openFontSettings } from "./settings-modal";
-import { exportActiveTabAsHtml, openHtmlPreviewTab } from "./exporter";
+import { exportActiveTabAsHtml, openHtmlPreviewTab, openHtmlFileTab } from "./exporter";
 import { printActiveTab } from "./print";
 import { installDiagramViewerTrigger } from "./diagram-viewer";
 import { setMermaidColorScheme } from "./mermaid-renderer";
@@ -527,12 +527,16 @@ async function bootstrap(): Promise<void> {
     await win.onDragDropEvent(async (event) => {
       if (event.payload.type !== "drop") return;
       const paths = event.payload.paths.filter((p) =>
-        /\.(md|markdown|mmd|mermaid)$/i.test(p),
+        /\.(md|markdown|mmd|mermaid|html?|htm)$/i.test(p),
       );
       for (const path of paths) {
         try {
           const content = await invoke<string>("read_file", { path });
-          await openOrSwitch(path, content, editor);
+          if (/\.html?$/i.test(path)) {
+            await openHtmlFileTab(path, content, editor);
+          } else {
+            await openOrSwitch(path, content, editor);
+          }
         } catch (e) {
           console.error("drop open failed:", path, e);
         }

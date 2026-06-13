@@ -6,10 +6,12 @@ import { store, type Tab } from "./store";
 import { confirmSave, confirmDuplicate, confirmDuplicateWindow } from "./modal";
 import type { EditorHost } from "./editor";
 import { fileTypeOfPath, extractMermaidSource } from "./mmd";
+import { openHtmlFileTab } from "./exporter";
 
 const MD_FILTERS = [
   { name: "Markdown", extensions: ["md", "markdown"] },
   { name: "Mermaid", extensions: ["mmd", "mermaid"] },
+  { name: "HTML", extensions: ["html", "htm"] },
   { name: "All Files", extensions: ["*"] },
 ];
 
@@ -130,7 +132,11 @@ export async function openFileFromDialog(editor: EditorHost): Promise<void> {
   });
   if (!picked || typeof picked !== "string") return;
   const content = await readFile(picked);
-  await openOrSwitch(picked, content, editor);
+  if (/\.html?$/i.test(picked)) {
+    await openHtmlFileTab(picked, content, editor);
+  } else {
+    await openOrSwitch(picked, content, editor);
+  }
 }
 
 /**
