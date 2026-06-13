@@ -149,3 +149,19 @@ export function confirmCloseAll(): Promise<CloseAllChoice> {
     defaultValue: "cancel",
   });
 }
+
+export type PrintOrientationChoice = "portrait" | "landscape" | "cancel";
+
+/** 印刷（PDF出力）前に用紙の向きを尋ねる。 */
+export function askPrintOrientation(): Promise<PrintOrientationChoice> {
+  return showModal<PrintOrientationChoice>({
+    title: t("dlg.print.title"),
+    body: t("dlg.print.body"),
+    buttons: [
+      { label: t("dlg.print.portrait"), value: "portrait", kind: "primary" },
+      { label: t("dlg.print.landscape"), value: "landscape" },
+      { label: t("dlg.print.cancel"), value: "cancel" },
+    ],
+    defaultValue: "cancel",
+  });
+}

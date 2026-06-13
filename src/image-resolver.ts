@@ -73,15 +73,15 @@ function isBareFilename(src: string): boolean {
 }
 
 /**
- * markdown 上の画像 src に対して、試行する asset URL の候補を優先順で返す。
- * 1つ目で読み込めなければ呼び出し側で次の候補に切り替えてフォールバックする想定。
+ * markdown 上の画像 src を、絶対ファイルパスの候補（優先順）に解決する。
+ * HTML出力時の data URI 埋め込み（Rustでのファイル読み込み）用。
  *
- * - 外部URL (http/data/blob 等) → 空配列（書き換え不要なので呼び出し側が放置）
- * - `file://` / 絶対パス → 単一 asset URL
- * - 相対パス （ディレクトリ区切りあり、または `./..` 接頭辞）→ md ディレクトリ基準の単一 asset URL
- * - 「ベアファイル名」 → `<mdDir>/img/<mdBasename>/<file>` を優先、`<mdDir>/<file>` をフォールバックの2要素
+ * - 外部URL (http/data/blob 等) → 空配列
+ * - `file://` / 絶対パス → 単一候補
+ * - 相対パス → md ディレクトリ基準の単一候補
+ * - 「ベアファイル名」 → `<mdDir>/img/<mdBasename>/<file>` 優先、`<mdDir>/<file>` フォールバック
  */
-export function resolveImageCandidates(
+export function resolveImagePathCandidates(
   src: string,
   mdFilePath: string | null,
 ): string[] {
@@ -89,14 +89,13 @@ export function resolveImageCandidates(
   if (isExternalUrl(src) && !src.startsWith("file:")) return [];
   if (src.startsWith("file://")) {
     try {
-      const filePath = decodeURI(src.replace(/^file:\/\/\/?/, ""));
-      return [convertFileSrc(filePath)];
+      return [decodeURI(src.replace(/^file:\/\/\/?/, ""))];
     } catch {
       return [];
     }
   }
   if (isWindowsAbsolute(src) || isPosixAbsolute(src)) {
-    return [convertFileSrc(src)];
+    return [src];
   }
   if (!mdFilePath) return [];
   const baseDir = dirname(mdFilePath);
@@ -104,12 +103,24 @@ export function resolveImageCandidates(
 
   if (isBareFilename(src)) {
     const stem = basenameWithoutExt(mdFilePath);
-    const conventionAbs = joinPath(joinPath(baseDir, "img/" + stem), src);
-    const directAbs = joinPath(baseDir, src);
-    return [convertFileSrc(conventionAbs), convertFileSrc(directAbs)];
+    return [joinPath(joinPath(baseDir, "img/" + stem), src), joinPath(baseDir, src)];
   }
 
-  return [convertFileSrc(joinPath(baseDir, src))];
+  return [joinPath(baseDir, src)];
+}
+
+/**
+ * markdown 上の画像 src に対して、試行する asset URL の候補を優先順で返す。
+ * 1つ目で読み込めなければ呼び出し側で次の候補に切り替えてフォールバックする想定。
+ * 候補の決め方は resolveImagePathCandidates と同じ。
+ */
+export function resolveImageCandidates(
+  src: string,
+  mdFilePath: string | null,
+): string[] {
+  return resolveImagePathCandidates(src, mdFilePath).map((p) =>
+    convertFileSrc(p),
+  );
 }
 
 /**

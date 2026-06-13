@@ -19,6 +19,67 @@ pub fn write_file(path: String, content: String) -> Result<(), String> {
     fs::write(&path, content).map_err(|e| format!("write_file({}): {}", path, e))
 }
 
+/// 文書テーマ設定の保存先（{appDataDir}/settings.json）。
+fn settings_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {}", e))?;
+    Ok(dir.join("settings.json"))
+}
+
+#[tauri::command]
+pub fn load_settings(app: AppHandle) -> Result<Option<String>, String> {
+    let path = settings_path(&app)?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    fs::read_to_string(&path)
+        .map(Some)
+        .map_err(|e| format!("load_settings: {}", e))
+}
+
+#[tauri::command]
+pub fn save_settings(app: AppHandle, json: String) -> Result<(), String> {
+    let path = settings_path(&app)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("create dir: {}", e))?;
+    }
+    fs::write(&path, json).map_err(|e| format!("save_settings: {}", e))
+}
+
+/// 依存最小方針のため base64 は自前実装（標準アルファベット・パディングあり）。
+fn base64_encode(data: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = u32::from(*chunk.get(1).unwrap_or(&0));
+        let b2 = u32::from(*chunk.get(2).unwrap_or(&0));
+        let n = (b0 << 16) | (b1 << 8) | b2;
+        out.push(TABLE[((n >> 18) & 63) as usize] as char);
+        out.push(TABLE[((n >> 12) & 63) as usize] as char);
+        out.push(if chunk.len() > 1 {
+            TABLE[((n >> 6) & 63) as usize] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            TABLE[(n & 63) as usize] as char
+        } else {
+            '='
+        });
+    }
+    out
+}
+
+/// HTML出力時のローカル画像埋め込み（data URI化）用。
+#[tauri::command]
+pub fn read_file_base64(path: String) -> Result<String, String> {
+    let bytes = fs::read(&path).map_err(|e| format!("read_file_base64({}): {}", path, e))?;
+    Ok(base64_encode(&bytes))
+}
+
 #[tauri::command]
 pub fn add_recent_file(app: AppHandle, path: String) -> Result<(), String> {
     crate::recent::add(&app, path);

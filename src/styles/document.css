@@ -1,0 +1,259 @@
+/*
+ * 文書テーマの基礎CSS。
+ * プレビュー（設定モーダル内サンプル）・HTML出力・PDF印刷の3経路で共有する。
+ * 値はすべて --doc-* CSS変数を参照する（変数は theme.ts が生成し、
+ * .document 要素の style 属性または <style> でインライン定義される）。
+ *
+ * モディファイアクラス（.document に付与）:
+ *   .heading-underline    見出し下線
+ *   .heading-left-border  見出し左ボーダー
+ *   .numbered-headings    h1〜h3の自動番号
+ *   .striped-tables       表の縞模様
+ */
+
+.document {
+  font-family: var(--doc-font-family);
+  font-size: var(--doc-font-size);
+  line-height: var(--doc-line-height);
+  color: var(--doc-text);
+  background: var(--doc-bg);
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 32px 40px 64px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* ── 見出し ─────────────────────────────────────── */
+
+.document h1,
+.document h2,
+.document h3,
+.document h4,
+.document h5,
+.document h6 {
+  color: var(--doc-accent);
+  line-height: 1.35;
+  margin: 1.6em 0 0.6em;
+  font-weight: 700;
+}
+
+.document h1 { font-size: 1.7em; margin-top: 0.4em; }
+.document h2 { font-size: 1.4em; }
+.document h3 { font-size: 1.2em; }
+.document h4 { font-size: 1.05em; }
+.document h5,
+.document h6 { font-size: 1em; }
+
+.document.heading-underline h1,
+.document.heading-underline h2 {
+  border-bottom: 2px solid var(--doc-accent-soft);
+  padding-bottom: 0.25em;
+}
+
+.document.heading-left-border h1,
+.document.heading-left-border h2,
+.document.heading-left-border h3 {
+  border-left: 5px solid var(--doc-accent);
+  padding-left: 0.5em;
+}
+
+/* 見出し番号（CSSカウンタ、h1〜h3対象） */
+.document.numbered-headings { counter-reset: doc-h1; }
+.document.numbered-headings h1 {
+  counter-increment: doc-h1;
+  counter-reset: doc-h2;
+}
+.document.numbered-headings h1::before { content: counter(doc-h1) ". "; }
+.document.numbered-headings h2 {
+  counter-increment: doc-h2;
+  counter-reset: doc-h3;
+}
+.document.numbered-headings h2::before {
+  content: counter(doc-h1) "." counter(doc-h2) " ";
+}
+.document.numbered-headings h3 { counter-increment: doc-h3; }
+.document.numbered-headings h3::before {
+  content: counter(doc-h1) "." counter(doc-h2) "." counter(doc-h3) " ";
+}
+
+/* ── 本文要素 ───────────────────────────────────── */
+
+.document p { margin: 0.7em 0; }
+
+.document a {
+  color: var(--doc-accent);
+  text-decoration: none;
+}
+.document a:hover { text-decoration: underline; }
+
+.document hr {
+  border: none;
+  border-top: 2px solid var(--doc-border);
+  margin: 2em 0;
+}
+
+.document ul,
+.document ol {
+  padding-left: 1.7em;
+  margin: 0.7em 0;
+}
+.document li { margin: 0.25em 0; }
+.document li > ul,
+.document li > ol { margin: 0.15em 0; }
+
+/* タスクリスト */
+.document li.task-list-item {
+  list-style: none;
+  margin-left: -1.4em;
+}
+.document li.task-list-item > input[type="checkbox"] {
+  margin-right: 0.45em;
+  accent-color: var(--doc-accent);
+  vertical-align: -0.1em;
+}
+
+/* 引用 */
+.document blockquote {
+  margin: 0.9em 0;
+  padding: 0.1em 1em;
+  border-left: 4px solid var(--doc-accent-soft);
+  color: var(--doc-muted);
+  background: var(--doc-bg);
+}
+
+/* ── コールアウト（markdown-it-github-alerts） ─────── */
+
+.document .markdown-alert {
+  margin: 0.9em 0;
+  padding: 0.6em 1em;
+  border-left: 4px solid var(--alert-color, var(--doc-border));
+  border-radius: 0 4px 4px 0;
+  background: var(--alert-bg, var(--doc-stripe-bg));
+}
+.document .markdown-alert > p { margin: 0.3em 0; }
+.document .markdown-alert .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  font-weight: 700;
+  color: var(--alert-color, var(--doc-text));
+}
+.document .markdown-alert .markdown-alert-title svg { fill: currentColor; }
+
+.document .markdown-alert-note      { --alert-color: #0969da; --alert-bg: rgba(9, 105, 218, 0.07); }
+.document .markdown-alert-tip       { --alert-color: #1a7f37; --alert-bg: rgba(26, 127, 55, 0.07); }
+.document .markdown-alert-important { --alert-color: #8250df; --alert-bg: rgba(130, 80, 223, 0.07); }
+.document .markdown-alert-warning   { --alert-color: #9a6700; --alert-bg: rgba(154, 103, 0, 0.07); }
+.document .markdown-alert-caution   { --alert-color: #d1242f; --alert-bg: rgba(209, 36, 47, 0.07); }
+
+/* ── コード ─────────────────────────────────────── */
+
+.document code {
+  font-family: Consolas, "Cascadia Code", Menlo, Monaco, "Courier New", monospace;
+  font-size: 0.875em;
+}
+
+.document :not(pre) > code {
+  background: var(--doc-code-bg);
+  border-radius: 4px;
+  padding: 0.15em 0.4em;
+}
+
+.document pre {
+  margin: 0.9em 0;
+  padding: 0.9em 1.1em;
+  border: 1px solid var(--doc-border-soft);
+  border-radius: 6px;
+  overflow-x: auto;
+  line-height: 1.55;
+  /* hljsテーマ未適用時のフォールバック背景 */
+  background: var(--doc-code-bg);
+}
+.document pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* ── 表 ────────────────────────────────────────── */
+
+.document .table-wrap {
+  overflow-x: auto;
+  margin: 0.9em 0;
+}
+
+.document table {
+  border-collapse: collapse;
+  min-width: 50%;
+}
+
+.document th,
+.document td {
+  border: 1px solid var(--doc-border);
+  padding: 0.4em 0.8em;
+  text-align: left;
+}
+
+.document thead th {
+  background: var(--doc-accent-bg);
+  color: var(--doc-text);
+  font-weight: 700;
+  border-bottom: 2px solid var(--doc-accent-soft);
+}
+
+.document.striped-tables tbody tr:nth-child(even) {
+  background: var(--doc-stripe-bg);
+}
+
+/* ── 画像・図 ───────────────────────────────────── */
+
+.document img {
+  max-width: 100%;
+  height: auto;
+}
+
+.document figure.mermaid-figure {
+  margin: 1.2em 0;
+  text-align: left;
+}
+.document figure.mermaid-figure svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* .mmd 単体出力（図1枚を中央配置） */
+.document figure.mermaid-figure.mmd-single {
+  display: flex;
+  justify-content: center;
+  margin: 2em 0;
+}
+
+/* Mermaid変換エラー（ソースを残して可視化する） */
+.document pre.mermaid-error {
+  border: 1px solid #d1242f;
+  background: rgba(209, 36, 47, 0.06);
+  color: #d1242f;
+  white-space: pre-wrap;
+}
+
+/* ── 目次（markdown-it-toc-done-right） ────────────── */
+
+.document nav.table-of-contents {
+  border: 1px solid var(--doc-border-soft);
+  border-left: 4px solid var(--doc-accent);
+  border-radius: 0 6px 6px 0;
+  background: var(--doc-accent-bg);
+  padding: 0.8em 1.2em;
+  margin: 1.2em 0 1.8em;
+  font-size: 0.92em;
+}
+.document nav.table-of-contents ol {
+  list-style: none;
+  margin: 0;
+  padding-left: 0;
+}
+.document nav.table-of-contents ol ol {
+  padding-left: 1.4em;
+}
+.document nav.table-of-contents li { margin: 0.2em 0; }

@@ -39,6 +39,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::read_file,
             commands::write_file,
+            commands::read_file_base64,
+            commands::load_settings,
+            commands::save_settings,
             commands::frontend_ready,
             commands::add_recent_file,
             commands::set_recent_visible,
