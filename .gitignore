@@ -28,6 +28,9 @@ test-fixtures/
 # 動作確認用の手元 markdown / 画像はコミットしない
 test/
 
+# --- 設計メモ（ローカル参照のみ・ビルド不要） ---
+docs/
+
 # --- Claude Code 関連 ---
 .claude/
 
