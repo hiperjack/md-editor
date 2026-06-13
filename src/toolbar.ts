@@ -7,13 +7,12 @@ import {
   wrapInBulletListCommand,
   wrapInOrderedListCommand,
   wrapInHeadingCommand,
-  createCodeBlockCommand,
   insertHrCommand,
   toggleLinkCommand,
 } from "@milkdown/kit/preset/commonmark";
 import { toggleStrikethroughCommand, insertTableCommand } from "@milkdown/kit/preset/gfm";
 
-import type { EditorHost } from "./editor";
+import { type EditorHost, createCodeBlockFromSelection } from "./editor";
 import { imageActionFromMenu } from "./image-edit";
 import { t, onLangChange } from "./i18n";
 
@@ -137,7 +136,15 @@ export function makeToolbarActions(editor: EditorHost): Record<string, Action> {
     fmt_bullet: () => run((c) => c.call(wrapInBulletListCommand.key)),
     fmt_ordered: () => run((c) => c.call(wrapInOrderedListCommand.key)),
     fmt_quote: () => run((c) => c.call(wrapInBlockquoteCommand.key)),
-    fmt_codeblock: () => run((c) => c.call(createCodeBlockCommand.key)),
+    fmt_codeblock: () => {
+      // 既定の setBlockType は hardbreak（改行）を捨てるため、改行を保持する
+      // 独自実装で選択範囲を単一のコードブロックへ変換する。
+      const view = editor.getActiveView();
+      if (view) {
+        createCodeBlockFromSelection(view);
+        view.focus();
+      }
+    },
     fmt_table: () =>
       run((c) => c.call(insertTableCommand.key, { row: 3, col: 3 })),
     fmt_hr: () => run((c) => c.call(insertHrCommand.key)),

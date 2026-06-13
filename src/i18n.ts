@@ -145,6 +145,8 @@ const DICT: Record<Lang, Record<string, string>> = {
     "cb.previewLoading": "図を準備中…",
     "cb.previewEdit": "編集",
     "cb.previewHide": "隠す",
+    "cb.unwrap": "解除",
+    "cb.unwrapTitle": "コードブロックを解除して通常テキストに戻す",
     // 図ビューア
     "viewer.zoomIn": "拡大",
     "viewer.zoomOut": "縮小",
@@ -323,6 +325,8 @@ const DICT: Record<Lang, Record<string, string>> = {
     "cb.previewLoading": "Rendering diagram…",
     "cb.previewEdit": "Edit",
     "cb.previewHide": "Hide",
+    "cb.unwrap": "Unwrap",
+    "cb.unwrapTitle": "Unwrap code block back to plain text",
     "viewer.zoomIn": "Zoom in",
     "viewer.zoomOut": "Zoom out",
     "viewer.fit": "Fit",

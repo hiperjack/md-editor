@@ -8,7 +8,8 @@ import {
   remarkStringifyOptionsCtx,
 } from "@milkdown/kit/core";
 import { keymap } from "@milkdown/kit/prose/keymap";
-import { Plugin } from "@milkdown/kit/prose/state";
+import { Plugin, TextSelection } from "@milkdown/kit/prose/state";
+import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { GapCursor } from "@milkdown/kit/prose/gapcursor";
 import { exitCode, lift } from "@milkdown/kit/prose/commands";
 import type { EditorView } from "@milkdown/kit/prose/view";
@@ -128,6 +129,101 @@ function restoreCodeBlockHidden(container: HTMLElement, states: boolean[]): void
     });
   };
   requestAnimationFrame(apply);
+}
+
+// クリックされた .milkdown-code-block の DOM から、対応する code_block ノードの
+// ドキュメント位置を求める。見つからなければ null。
+function findCodeBlockPos(view: EditorView, blockEl: HTMLElement): number | null {
+  let found: number | null = null;
+  view.state.doc.descendants((node, pos) => {
+    if (found !== null) return false;
+    if (node.type.name !== "code_block") return true;
+    const dom = view.nodeDOM(pos);
+    if (
+      dom === blockEl ||
+      (dom instanceof Node && blockEl.contains(dom)) ||
+      (dom instanceof Node && dom.contains(blockEl))
+    ) {
+      found = pos;
+      return false;
+    }
+    return true;
+  });
+  return found;
+}
+
+// code_block を解除し、中身を通常段落へ戻す。
+// 行区切りは hardbreak（このエディタの「1行=hardbreak」方針）で保持する。
+function unwrapCodeBlockAt(view: EditorView, pos: number): void {
+  const node = view.state.doc.nodeAt(pos);
+  if (!node || node.type.name !== "code_block") return;
+  const schema = view.state.schema;
+  const paragraphType = schema.nodes.paragraph;
+  const hardbreakType = schema.nodes.hardbreak;
+  if (!paragraphType) return;
+
+  const lines = node.textContent.split("\n");
+  const inline: ProseNode[] = [];
+  lines.forEach((line, i) => {
+    if (i > 0 && hardbreakType) inline.push(hardbreakType.create());
+    if (line.length > 0) inline.push(schema.text(line));
+  });
+  const paragraph = paragraphType.create(null, inline);
+
+  const tr = view.state.tr.replaceWith(pos, pos + node.nodeSize, paragraph);
+  // 解除後の段落先頭へキャレットを置く
+  const sel = TextSelection.create(tr.doc, pos + 1);
+  view.dispatch(tr.setSelection(sel).scrollIntoView());
+  view.focus();
+}
+
+// 1ブロック分のインライン内容を「コードとしてのプレーンテキスト」に変換する。
+// hardbreak は改行に、テキストはそのまま連結する。
+function blockTextWithBreaks(node: ProseNode): string {
+  let out = "";
+  node.forEach((child) => {
+    if (child.isText) out += child.text ?? "";
+    else if (child.type.name === "hardbreak") out += "\n";
+    else out += child.textContent;
+  });
+  return out;
+}
+
+/**
+ * 選択範囲を1つの code_block に変換する。
+ * Milkdown 既定の createCodeBlockCommand（= setBlockType）は code_block が
+ * 許可しない hardbreak ノードを変換時に捨てるため、改行が潰れて1行になる。
+ * ここでは範囲内の各ブロックのテキストを hardbreak→改行・ブロック境界→改行で
+ * 連結し、改行を保持したまま単一のコードブロックを作る（解除→再ブロック化の
+ * 往復が成立する）。
+ */
+export function createCodeBlockFromSelection(view: EditorView): boolean {
+  const { state } = view;
+  const schema = state.schema;
+  const codeBlockType = schema.nodes.code_block;
+  if (!codeBlockType) return false;
+
+  const { $from, $to } = state.selection;
+  const range = $from.blockRange($to);
+  if (!range) return false;
+  const { parent, startIndex, endIndex, start, end } = range;
+
+  const parts: string[] = [];
+  for (let i = startIndex; i < endIndex; i++) {
+    parts.push(blockTextWithBreaks(parent.child(i)));
+  }
+  const text = parts.join("\n");
+
+  const codeBlock = codeBlockType.create(
+    { language: "" },
+    text.length > 0 ? schema.text(text) : null,
+  );
+  const tr = state.tr.replaceWith(start, end, codeBlock);
+  // カーソルをコードブロック内の先頭へ
+  const sel = TextSelection.create(tr.doc, start + 1);
+  view.dispatch(tr.setSelection(sel).scrollIntoView());
+  view.focus();
+  return true;
 }
 
 /** ハイライトなしのプレーンテキスト言語を作る（言語ピッカー登録用）。 */
@@ -624,10 +720,51 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       },
     });
 
+    /*
+      コードブロック右上のツールバー（.tools-button-group: コピーボタン等が並ぶ）に
+      「解除」ボタンを差し込み、押下でそのコードブロックを通常テキストへ戻す。
+      ツールバーは Crepe の Vue コンポーネントが管理するため、再描画で消えても
+      MutationObserver で再注入する（既存の画像プラグインと同じ手法）。
+    */
+    const codeBlockUnwrapPlugin = new Plugin({
+      view(editorView) {
+        const BTN_CLASS = "cb-unwrap-button";
+        const inject = () => {
+          editorView.dom
+            .querySelectorAll<HTMLElement>(".milkdown-code-block")
+            .forEach((block) => {
+              const group =
+                block.querySelector<HTMLElement>(".tools .tools-button-group") ??
+                block.querySelector<HTMLElement>(".tools");
+              if (!group || group.querySelector(`.${BTN_CLASS}`)) return;
+              const btn = document.createElement("button");
+              btn.type = "button";
+              btn.className = BTN_CLASS;
+              btn.textContent = t("cb.unwrap");
+              btn.title = t("cb.unwrapTitle");
+              // PM 側の選択変更/blur を避けるため mousedown を握りつぶす
+              btn.addEventListener("mousedown", (e) => e.preventDefault());
+              btn.addEventListener("click", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const pos = findCodeBlockPos(editorView, block);
+                if (pos != null) unwrapCodeBlockAt(editorView, pos);
+              });
+              group.appendChild(btn);
+            });
+        };
+        inject();
+        const observer = new MutationObserver(() => inject());
+        observer.observe(editorView.dom, { childList: true, subtree: true });
+        return { destroy: () => observer.disconnect() };
+      },
+    });
+
     crepe.editor.config((ctx) => {
       ctx.update(prosePluginsCtx, (plugins) => [
         searchPlugin,
         gapClickPlugin,
+        codeBlockUnwrapPlugin,
         imageDoubleClickPlugin,
         imageWheelResizePlugin,
         imageBlockSizePlugin,
