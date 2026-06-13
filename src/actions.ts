@@ -310,8 +310,9 @@ export async function openTabInNewWindow(
   const tab = store.getState().tabs.find((t) => t.id === tabId);
   if (!tab) return;
 
-  const content = editor.getMarkdown(tabId) ?? tab.diskContent;
-  const baseline = editor.getBaseline(tabId) ?? content;
+  const isPreview = tab.kind === "preview";
+  const content = isPreview ? "" : (editor.getMarkdown(tabId) ?? tab.diskContent);
+  const baseline = isPreview ? "" : (editor.getBaseline(tabId) ?? content);
   const label = genWindowLabel();
 
   // 先に内容を退避（新ウィンドウが起動時に take_pending_tab で取り出す）。
@@ -323,6 +324,13 @@ export async function openTabInNewWindow(
         content,
         baseline,
         diskContent: tab.diskContent,
+        ...(isPreview
+          ? {
+              kind: "preview",
+              previewHtml: tab.previewHtml ?? "",
+              previewTitle: tab.previewTitle ?? "",
+            }
+          : {}),
       },
     });
   } catch (e) {
@@ -384,8 +392,9 @@ export async function transferTabToWindow(
   const tab = store.getState().tabs.find((t) => t.id === tabId);
   if (!tab) return;
 
-  const content = editor.getMarkdown(tabId) ?? tab.diskContent;
-  const baseline = editor.getBaseline(tabId) ?? content;
+  const isPreview = tab.kind === "preview";
+  const content = isPreview ? "" : (editor.getMarkdown(tabId) ?? tab.diskContent);
+  const baseline = isPreview ? "" : (editor.getBaseline(tabId) ?? content);
 
   // このタブが元ウィンドウの唯一のタブなら、移送後にウィンドウごと閉じる。
   const wasOnlyTab = store.getState().tabs.length === 1;
@@ -398,6 +407,13 @@ export async function transferTabToWindow(
         content,
         baseline,
         diskContent: tab.diskContent,
+        ...(isPreview
+          ? {
+              kind: "preview",
+              previewHtml: tab.previewHtml ?? "",
+              previewTitle: tab.previewTitle ?? "",
+            }
+          : {}),
       },
     });
   } catch (e) {
@@ -428,6 +444,10 @@ export type MovedTabPayload = {
   content: string;
   baseline: string;
   diskContent: string;
+  /** "preview" のとき移送先はプレビュータブとして復元する。通常タブでは undefined。 */
+  kind?: "preview";
+  previewHtml?: string;
+  previewTitle?: string;
 };
 
 /**
@@ -447,12 +467,20 @@ export async function openMovedTab(
       ? tabs[0].id
       : null;
 
-  store.addTab({
-    filePath: payload.filePath,
-    content: payload.diskContent,
-    initialContent: payload.content,
-    initialBaseline: payload.baseline,
-  });
+  if (payload.kind === "preview") {
+    // プレビュータブとして復元する（ズーム倍率は引き継がず等倍）。
+    store.addPreviewTab({
+      title: payload.previewTitle ?? "Preview",
+      html: payload.previewHtml ?? "",
+    });
+  } else {
+    store.addTab({
+      filePath: payload.filePath,
+      content: payload.diskContent,
+      initialContent: payload.content,
+      initialBaseline: payload.baseline,
+    });
+  }
   const moved = store.getActive();
   if (moved) await editor.show(moved);
 
