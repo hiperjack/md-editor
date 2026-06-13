@@ -58,6 +58,40 @@ const SMART_ENTER_GUARD_NODES = new Set([
   "table_header",
 ]);
 
+// コードブロックの「プレビューのみ(隠す)」状態を出現順で取得する。
+// .cm-editor が非表示(offsetParent===null)＝「隠す」状態とみなす。
+function captureCodeBlockHidden(container: HTMLElement): boolean[] {
+  const blocks = container.querySelectorAll<HTMLElement>(".milkdown-code-block");
+  return Array.from(blocks).map((block) => {
+    const cm = block.querySelector<HTMLElement>(".cm-editor");
+    return !!cm && cm.offsetParent === null;
+  });
+}
+
+// 作り直し後のコードブロックに「隠す」状態を復元する（出現順で対応）。
+// ブロックのレンダリングを待ってからトグルボタンを押す。
+function restoreCodeBlockHidden(container: HTMLElement, states: boolean[]): void {
+  if (!states.some(Boolean)) return;
+  let tries = 0;
+  const apply = () => {
+    const blocks = Array.from(
+      container.querySelectorAll<HTMLElement>(".milkdown-code-block"),
+    );
+    if (blocks.length < states.length && tries < 60) {
+      tries++;
+      requestAnimationFrame(apply);
+      return;
+    }
+    blocks.forEach((block, i) => {
+      if (!states[i]) return;
+      const cm = block.querySelector<HTMLElement>(".cm-editor");
+      const toggle = block.querySelector<HTMLElement>(".preview-toggle-button");
+      if (cm && cm.offsetParent !== null && toggle) toggle.click();
+    });
+  };
+  requestAnimationFrame(apply);
+}
+
 /** ハイライトなしのプレーンテキスト言語を作る（言語ピッカー登録用）。 */
 function plainTextLanguage(
   name: string,
@@ -124,7 +158,20 @@ export type EditorHost = {
   /** baselineを現在のmarkdownにリセット（保存後）。 */
   resetBaseline: (tabId: string) => void;
   /** タブのエディタを作り直す（reload時）。 */
-  recreate: (tab: Tab) => Promise<void>;
+  recreate: (
+    tab: Tab,
+    opts?: {
+      noFocus?: boolean;
+      preserveScroll?: number;
+      preserveCodeBlockState?: boolean;
+    },
+  ) => Promise<void>;
+  /**
+   * Mermaidを含む全タブを、未保存内容を保ったまま作り直す。
+   * 配色変更を確実に反映するため（Crepe管理下のプレビューDOM直接書き換えは
+   * Vueの再描画で戻されるため、作り直し＝開き直しと同等の経路を使う）。
+   */
+  recreateMermaidTabs: () => Promise<void>;
   /** アクティブタブのエディタにフォーカス。 */
   focus: () => void;
   /** アクティブタブのMilkdown Editorに対して操作を実行（toolbar/menu連携用）。 */
@@ -780,7 +827,20 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       entry.baseline = entry.crepe.getMarkdown();
     },
 
-    async recreate(tab: Tab) {
+    async recreate(
+      tab: Tab,
+      opts?: {
+        noFocus?: boolean;
+        preserveScroll?: number;
+        preserveCodeBlockState?: boolean;
+      },
+    ) {
+      // 作り直し前のコードブロックの「隠す」状態を控える（復元用）
+      const hiddenStates = opts?.preserveCodeBlockState
+        ? captureCodeBlockHidden(
+            editors.get(tab.id)?.container ?? document.createElement("div"),
+          )
+        : null;
       const pending = pendingEditors.get(tab.id);
       if (pending) {
         const entry = await pending;
@@ -796,11 +856,47 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       const fresh = await make(tab);
       editors.set(tab.id, fresh);
       const activeId = store.getActive()?.id ?? null;
+      hideAll(activeId);
       if (activeId === tab.id) {
-        hideAll(activeId);
-        focusActive();
-      } else {
-        hideAll(activeId);
+        // 配色変更での作り直しは noFocus 指定。フォーカス移動はカーソル(先頭)へ
+        // スクロールさせ、位置が先頭に飛ぶ原因になるため避ける。
+        if (!opts?.noFocus) focusActive();
+        // コードブロックの「隠す」状態を復元する。
+        if (hiddenStates) restoreCodeBlockHidden(fresh.container, hiddenStates);
+        // 作り直しで失われるスクロール位置を、高さ確定まで再試行して復元する。
+        if (opts?.preserveScroll != null && opts.preserveScroll > 0) {
+          const c = fresh.container;
+          const target = opts.preserveScroll;
+          let count = 0;
+          const restore = () => {
+            c.scrollTop = target;
+            if (++count < 180 && Math.abs(c.scrollTop - target) > 2) {
+              requestAnimationFrame(restore);
+            }
+          };
+          requestAnimationFrame(restore);
+        }
+      }
+    },
+
+    async recreateMermaidTabs() {
+      const activeId = store.getActive()?.id ?? null;
+      const tabs = store.getState().tabs;
+      for (const tab of tabs) {
+        if (tab.kind === "preview") continue;
+        const entry = editors.get(tab.id);
+        if (!entry || !entry.crepe) continue;
+        const md = entry.crepe.getMarkdown();
+        // ```mermaid / ~~~mermaid を含むタブだけ作り直す
+        if (!/(?:^|\n)[ \t]*(?:`{3,}|~{3,})[ \t]*mermaid\b/i.test(md)) continue;
+        // アクティブタブのスクロール位置を保ったまま作り直す（フォーカス移動も抑止）
+        const prevScroll = tab.id === activeId ? entry.container.scrollTop : 0;
+        store.setInitialOverride(tab.id, { content: md, baseline: entry.baseline });
+        await this.recreate(tab, {
+          noFocus: true,
+          preserveScroll: prevScroll,
+          preserveCodeBlockState: true,
+        });
       }
     },
 

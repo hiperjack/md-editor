@@ -32,10 +32,7 @@ import { openFontSettings } from "./settings-modal";
 import { exportActiveTabAsHtml, openHtmlPreviewTab } from "./exporter";
 import { printActiveTab } from "./print";
 import { installDiagramViewerTrigger } from "./diagram-viewer";
-import {
-  setMermaidColorScheme,
-  refreshAllMermaidPreviews,
-} from "./mermaid-renderer";
+import { setMermaidColorScheme } from "./mermaid-renderer";
 import { setLang } from "./i18n";
 import "./style.css";
 import "./styles/print.css";
@@ -65,28 +62,21 @@ async function bootstrap(): Promise<void> {
   // 文書テーマ（HTML出力・印刷用）をディスクから読み込む
   await docTheme.init();
 
-  // Mermaid配色を文書テーマ設定（＋OS設定）から解決して適用する。
-  // 設定変更・他ウィンドウ同期時に再適用し、開いているプレビューを描き直す。
-  const applyMermaidScheme = () => {
+  // Mermaid配色を解決する。既定（mermaidFollowApp=true）はアプリの表示テーマに揃え、
+  // 個別指定のときだけ mermaidTheme を使う。
+  const resolveActiveMermaidScheme = (): "light" | "dark" => {
     const dt = docTheme.get().theme;
-    const scheme = resolveMermaidScheme(dt.mermaidTheme);
-    // 図の台紙（プレビュー・ビューア背景）をスキームに連動させる（CSSが参照）
-    document.documentElement.setAttribute("data-mermaid-scheme", scheme);
-    setMermaidColorScheme(scheme);
-    // 変更フラグに依存せず常に再描画する。docTheme.subscribe は設定変更時のみ
-    // 発火し、refresh はキャッシュが効くため安価。これにより「背景は白に変わったが
-    // 箱の色が古いまま残る」不整合（フラグ判定漏れ・二重通知）を構造的に防ぐ。
-    refreshAllMermaidPreviews();
+    return dt.mermaidFollowApp
+      ? settings.getEffectiveTheme()
+      : resolveMermaidScheme(dt.mermaidTheme);
   };
-  applyMermaidScheme();
-  docTheme.subscribe(applyMermaidScheme);
-  // "system" のとき、OSのライト/ダーク変更にライブ追従する。
-  if (typeof window.matchMedia === "function") {
-    window
-      .matchMedia("(prefers-color-scheme: dark)")
-      .addEventListener("change", () => {
-        if (docTheme.get().theme.mermaidTheme === "system") applyMermaidScheme();
-      });
+
+  // 初期Mermaid配色を適用する。この時点ではエディタ未生成のため、台紙CSS属性と
+  // レンダラの配色設定のみ行う（変更購読＝作り直しはエディタ生成後に登録する）。
+  {
+    const initScheme = resolveActiveMermaidScheme();
+    document.documentElement.setAttribute("data-mermaid-scheme", initScheme);
+    setMermaidColorScheme(initScheme);
   }
 
   // 外部URL (http/https) のアンカークリックを既定ブラウザで開く。
@@ -196,6 +186,25 @@ async function bootstrap(): Promise<void> {
   const find = createFindReplace(editor);
   const outline = createOutlinePanel(editor);
 
+  // Mermaid配色の変更を購読する。配色が変わったら、図を含むタブを作り直して
+  // 確実に反映する。Crepe(Vue)管理下のプレビューDOMを直接書き換えると、Vueの
+  // 再描画で旧配色に戻されるため、開き直しと同等の「作り直し」経路を使う。
+  const applyMermaidScheme = () => {
+    const scheme = resolveActiveMermaidScheme();
+    document.documentElement.setAttribute("data-mermaid-scheme", scheme);
+    const changed = setMermaidColorScheme(scheme);
+    if (changed) void editor.recreateMermaidTabs();
+  };
+  docTheme.subscribe(applyMermaidScheme);
+  // アプリ表示テーマに揃える設定では、表示テーマ（settings.theme）変更にも追従する。
+  settings.subscribe(applyMermaidScheme);
+  // OSのライト/ダーク変更に追従する（アプリ追従 or Mermaid個別が "system" のとき）。
+  if (typeof window.matchMedia === "function") {
+    window
+      .matchMedia("(prefers-color-scheme: dark)")
+      .addEventListener("change", () => applyMermaidScheme());
+  }
+
   store.addTab();
   const initial = store.getActive();
   if (initial) await editor.show(initial);
@@ -264,6 +273,15 @@ async function bootstrap(): Promise<void> {
     },
     onCopyPath: (id) => {
       void copyTabPath(id);
+    },
+    onHtmlPreview: (id) => {
+      // 右クリックしたタブをアクティブにしてから、その内容でプレビューを開く
+      void (async () => {
+        store.setActive(id);
+        const a = store.getActive();
+        if (a) await editor.show(a);
+        await openHtmlPreviewTab(editor);
+      })();
     },
     onDragMove: (sx, sy) => onTabDragMove(sx, sy),
     onDragEnd: () => onTabDragEnd(),

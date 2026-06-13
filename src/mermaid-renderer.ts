@@ -28,13 +28,13 @@ let colorScheme: "light" | "dark" = "light";
 /** 直近に mermaid.initialize した配色。変わったら再初期化する。 */
 let initializedScheme: "light" | "dark" | null = null;
 
-function initMermaid(mermaid: MermaidModule): void {
-  if (initializedScheme === colorScheme) return;
+function initMermaid(mermaid: MermaidModule, scheme: "light" | "dark"): void {
+  if (initializedScheme === scheme) return;
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: "strict",
     // light → "default"（白背景向け）, dark → "dark"（暗背景向け）
-    theme: colorScheme === "dark" ? "dark" : "default",
+    theme: scheme === "dark" ? "dark" : "default",
     // エディタのプレビューパネルはDOMPurifyを通すため、foreignObjectを
     // 使うHTMLラベルは除去されてしまう。SVGテキストラベルで描画する。
     // ルートレベルの htmlLabels が全図種に優先適用される（diagram別は非推奨）。
@@ -43,7 +43,7 @@ function initMermaid(mermaid: MermaidModule): void {
     // Mermaidがこのサイズを前提にノード寸法・配置を計算するためレイアウトは崩れない。
     themeVariables: { fontSize: `${MERMAID_FONT_SIZE}px` },
   });
-  initializedScheme = colorScheme;
+  initializedScheme = scheme;
 }
 
 /**
@@ -61,8 +61,8 @@ const svgCache = new Map<string, string>();
 let renderSeq = 0;
 
 /** 配色で見た目が変わるため、キャッシュキーに配色を含める。 */
-function cacheKey(source: string): string {
-  return `${colorScheme}:${source.trim()}`;
+function cacheKey(source: string, scheme: "light" | "dark"): string {
+  return `${scheme}:${source.trim()}`;
 }
 
 function cachePut(key: string, svg: string): void {
@@ -73,13 +73,21 @@ function cachePut(key: string, svg: string): void {
   svgCache.set(key, svg);
 }
 
-/** MermaidソースをSVG文字列に変換する（キャッシュあり）。構文エラー時はthrow。 */
-export async function renderMermaidSvg(source: string): Promise<string> {
-  const key = cacheKey(source);
+/**
+ * MermaidソースをSVG文字列に変換する（キャッシュあり）。構文エラー時はthrow。
+ * schemeOverride を渡すと、その配色で描画する（HTML出力・印刷・プレビューで
+ * 文書背景に合わせるのに使う）。省略時はエディタの現在配色。
+ */
+export async function renderMermaidSvg(
+  source: string,
+  schemeOverride?: "light" | "dark",
+): Promise<string> {
+  const scheme = schemeOverride ?? colorScheme;
+  const key = cacheKey(source, scheme);
   const cached = svgCache.get(key);
   if (cached) return cached;
   const mermaid = await getMermaid();
-  initMermaid(mermaid);
+  initMermaid(mermaid, scheme);
   const id = `mmd-render-${++renderSeq}`;
   try {
     const { svg } = await mermaid.render(id, source.trim());
@@ -127,7 +135,7 @@ export function mermaidCodePreview(
 
   const seq = ++applySeq;
   // renderMermaidSvg と同じ配色込みキーで引く（素のsrcだとヒットせず常に再描画になる）
-  const cached = svgCache.get(cacheKey(src));
+  const cached = svgCache.get(cacheKey(src, colorScheme));
   if (cached) {
     lastAppliedSeq = seq;
     return buildPreviewFigure(cached);
@@ -154,38 +162,6 @@ export function mermaidCodePreview(
   return undefined;
 }
 
-/**
- * 開いている全エディタのMermaidプレビューを現在の配色で再描画する。
- * 配色設定の変更時に呼ぶ。Crepeの renderPreview はテーマ変更では再発火しないため、
- * プレビューパネルと同じコードブロック内の CodeMirror からソースを取り出して描き直す。
- * パーク中（非アクティブタブ）の .editor-pane も class が維持されるので対象に含まれる。
- *
- * 世代カウンタで保護する: 配色を素早く切り替えると複数の非同期描画が並行し、
- * 遅い側（前の配色）が後から完了して新しい表示を上書きしうる（dark→lightで箱の色が
- * 残るバグの原因）。最新世代の描画結果だけを反映する。
- */
-let refreshGeneration = 0;
-export function refreshAllMermaidPreviews(): void {
-  const gen = ++refreshGeneration;
-  const previews = document.querySelectorAll<HTMLElement>(
-    ".editor-pane .preview .mermaid-preview",
-  );
-  previews.forEach((preview) => {
-    const block = preview.closest(".milkdown-code-block");
-    const cm = block?.querySelector(".cm-content");
-    if (!cm) return;
-    const source = Array.from(cm.querySelectorAll(".cm-line"))
-      .map((line) => line.textContent ?? "")
-      .join("\n");
-    if (!source.trim()) return;
-    renderMermaidSvg(source)
-      .then((svg) => {
-        // 後から完了した古い世代の描画で、新しい配色の表示を上書きしない
-        if (gen !== refreshGeneration) return;
-        preview.innerHTML = svg;
-      })
-      .catch(() => {
-        // 構文エラー中は現在の表示を維持する
-      });
-  });
-}
+// 配色変更時のエディタ内プレビュー反映は、Crepe(Vue)管理下のDOMを直接書き換えると
+// Vue再描画で戻されるため行わない。代わりに editor.recreateMermaidTabs() で
+// 図を含むタブを作り直す（mermaidCodePreview 経由で新配色で再描画される）。

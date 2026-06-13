@@ -118,6 +118,17 @@ export const store = {
     return tab.id;
   },
 
+  /**
+   * 既存タブのエディタ再生成（recreate）用に初期内容オーバーライドをセットする。
+   * Mermaid配色変更時など、未保存内容・baselineを保ったまま作り直すのに使う。
+   */
+  setInitialOverride(
+    tabId: string,
+    ov: { content: string; baseline: string },
+  ): void {
+    initialOverrides.set(tabId, { content: ov.content, baseline: ov.baseline });
+  },
+
   /** 移送タブの初期内容オーバーライドを取り出す（消費して削除）。 */
   takeInitialOverride(tabId: string): InitialOverride | undefined {
     const ov = initialOverrides.get(tabId);
