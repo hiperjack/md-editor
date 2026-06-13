@@ -26,6 +26,16 @@ pub struct TabPayload {
     pub baseline: String,
     /// 直近のディスク内容（外部変更検知用）。
     pub disk_content: String,
+    /// タブ種別。"preview" のとき移送先はプレビュータブとして復元する。
+    /// 通常（エディタ）タブの移送では None。
+    #[serde(default)]
+    pub kind: Option<String>,
+    /// preview タブ: 表示する文書HTML。
+    #[serde(default)]
+    pub preview_html: Option<String>,
+    /// preview タブ: タブに表示する名前。
+    #[serde(default)]
+    pub preview_title: Option<String>,
 }
 
 /// ラベル → 移送待ちタブ内容。
