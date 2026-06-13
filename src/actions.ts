@@ -421,16 +421,19 @@ export async function transferTabToWindow(
     return;
   }
 
-  // 先にタブを除去して dirty を解消し、保存ダイアログの誤発火を防いでから閉じる。
+  // 先にタブを除去してから、孤立したウィンドウを閉じる。
   await editor.destroy(tabId);
   store.removeTab(tabId);
 
   if (wasOnlyTab) {
     try {
-      await getCurrentWindow().close();
+      // removeTab は最後の1枚を消すと空タブを自動再生成するため、close()
+      // （onCloseRequested 経由）では確実に閉じない。destroy() で強制的に閉じる。
+      // 移送済みなので内容は失われない。
+      await getCurrentWindow().destroy();
       return;
     } catch (e) {
-      console.warn("close source window failed:", e);
+      console.warn("destroy source window failed:", e);
     }
   }
 
@@ -461,6 +464,7 @@ export async function openMovedTab(
   const { tabs } = store.getState();
   const blankId =
     tabs.length === 1 &&
+    tabs[0].kind !== "preview" &&
     tabs[0].filePath === null &&
     tabs[0].diskContent === "" &&
     !store.isDirty(tabs[0].id)
