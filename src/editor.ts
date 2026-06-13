@@ -37,6 +37,7 @@ import { searchPlugin } from "./search-plugin";
 import { fileTypeOfPath, wrapMermaidSource } from "./mmd";
 import { mermaidCodePreview } from "./mermaid-renderer";
 import { docTheme } from "./theme";
+import { ensureDocumentStyles, setHljsThemeStyle } from "./doc-styles";
 import { t } from "./i18n";
 
 /**
@@ -297,6 +298,11 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     const container = document.createElement("div");
     container.className = "editor-pane preview-pane";
     container.dataset.tabId = tab.id;
+    // プレビューの .document が参照する文書CSS・ハイライトCSSを、このウィンドウへ
+    // 確実に注入する（別ウィンドウへ移送された場合に背景等が欠落するのを防ぐ）。
+    // ensureDocumentStyles は冪等。
+    ensureDocumentStyles();
+    setHljsThemeStyle(docTheme.get().theme.highlightTheme);
     container.innerHTML = tab.previewHtml ?? "";
     parkEl.appendChild(container);
     return {
