@@ -38,6 +38,9 @@ export function setupShortcuts(
     (e) => {
       if (!isModifier(e)) return;
 
+      // Mermaid図ビューア表示中は、Ctrl+Tab等のショートカットをビューアに譲る。
+      if (document.querySelector(".diagram-viewer-overlay")) return;
+
       // タブ移動
       if (e.shiftKey && e.key === "Tab") {
         e.preventDefault();
@@ -76,6 +79,18 @@ export function setupShortcuts(
         if (k === "s") {
           e.preventDefault();
           fileActions.file_save_as?.();
+          return;
+        }
+        // HTMLとして出力（Ctrl+E はインラインコードに割当済みのため Shift 付き）
+        if (k === "e") {
+          e.preventDefault();
+          fileActions.file_export_html?.();
+          return;
+        }
+        // HTMLの見た目を新規タブでプレビュー
+        if (k === "v") {
+          e.preventDefault();
+          fileActions.file_html_preview?.();
           return;
         }
         // アウトラインパネルの表示トグル

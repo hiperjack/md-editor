@@ -40,6 +40,9 @@ const ICONS: Record<string, string> = {
     "M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8",
   file_save_as:
     "M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM12 9v8M8 13l4 4 4-4",
+  file_export:
+    "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
+  eye: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z",
   bold: "M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6zM6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z",
   italic: "M19 4h-9M14 20H5M15 4 9 20",
   strike: "M16 4H9a3 3 0 0 0-2.83 4M14 12a4 4 0 0 1 0 8H6M4 12h16",
@@ -73,6 +76,8 @@ const BUTTONS: ButtonSpec[] = [
   { key: "file_open", icon: ICONS.file_open, titleKey: "tb.file_open" },
   { key: "file_save", icon: ICONS.file_save, titleKey: "tb.file_save" },
   { key: "file_save_as", icon: ICONS.file_save_as, titleKey: "tb.file_save_as" },
+  { key: "file_export_html", icon: ICONS.file_export, titleKey: "tb.file_export" },
+  { key: "file_html_preview", icon: ICONS.eye, titleKey: "tb.file_html_preview" },
   { key: "sep", icon: "", titleKey: "" },
   { key: "fmt_h1", icon: ICONS.h1, titleKey: "tb.h1" },
   { key: "fmt_h2", icon: ICONS.h2, titleKey: "tb.h2" },

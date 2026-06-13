@@ -1,7 +1,22 @@
 import { settings, FONT_PRESETS, type Theme, type LangSetting } from "./settings";
+import {
+  docTheme,
+  validateDocSettings,
+  DEFAULT_DOC_SETTINGS,
+  DOC_FONT_PRESETS,
+  docThemeCssVars,
+  docModifierClasses,
+  type DocSettings,
+  type DocFontId,
+  type HeadingStyle,
+  type HighlightTheme,
+  type MermaidColorScheme,
+} from "./theme";
+import { renderDocumentBody } from "./render-pipeline";
+import { ensureDocumentStyles, setHljsThemeStyle } from "./doc-styles";
 import { onLangChange, t } from "./i18n";
 
-type SectionKey = "font" | "display" | "language";
+type SectionKey = "font" | "display" | "docTheme" | "mermaid" | "language";
 
 export function openFontSettings(): Promise<void> {
   return new Promise((resolve) => {
@@ -22,6 +37,10 @@ export function openFontSettings(): Promise<void> {
       lang: before.lang as LangSetting,
       theme: before.theme as Theme,
     };
+    // 文書テーマ（HTML出力・印刷用）のドラフト。Applyで永続化、Cancelで破棄。
+    const docDraft: DocSettings = docTheme.get();
+    // プレビューでライブ反映した文書テーマを、キャンセル時に戻すための初期値。
+    const beforeDoc: DocSettings = docTheme.get();
 
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
@@ -53,6 +72,8 @@ export function openFontSettings(): Promise<void> {
     const sections: { key: SectionKey; labelKey: string }[] = [
       { key: "font", labelKey: "settings.section.font" },
       { key: "display", labelKey: "settings.section.display" },
+      { key: "docTheme", labelKey: "settings.section.docTheme" },
+      { key: "mermaid", labelKey: "settings.section.mermaid" },
       { key: "language", labelKey: "settings.section.language" },
     ];
 
@@ -85,6 +106,8 @@ export function openFontSettings(): Promise<void> {
       wrap.className = "settings-panel-body";
       if (key === "font") wrap.appendChild(buildFontPanel());
       else if (key === "display") wrap.appendChild(buildDisplayPanel());
+      else if (key === "docTheme") wrap.appendChild(buildDocThemePanel());
+      else if (key === "mermaid") wrap.appendChild(buildMermaidPanel());
       else wrap.appendChild(buildLanguagePanel());
       return wrap;
     }
@@ -281,6 +304,266 @@ export function openFontSettings(): Promise<void> {
       return c;
     }
 
+    /**
+     * 文書テーマ（HTML出力・PDF印刷の見た目）設定パネル。
+     * 変更は即座にパネル下部のサンプルプレビューへ反映する。
+     * 実際のレンダリングパイプライン（render-pipeline.ts）でサンプルを
+     * 描画するため、出力と同じ見た目が保証される。
+     */
+    function buildDocThemePanel(): HTMLElement {
+      const c = document.createElement("div");
+
+      const note = document.createElement("div");
+      note.className = "settings-note";
+      note.textContent = t("docTheme.note");
+      c.appendChild(note);
+
+      const addSelectRow = (
+        label: string,
+        options: { value: string; label: string }[],
+        current: string,
+        onChange: (v: string) => void,
+      ) => {
+        const row = document.createElement("label");
+        row.className = "settings-row";
+        const span = document.createElement("span");
+        span.textContent = label;
+        row.appendChild(span);
+        const sel = document.createElement("select");
+        sel.className = "settings-input";
+        for (const opt of options) {
+          const o = document.createElement("option");
+          o.value = opt.value;
+          o.textContent = opt.label;
+          if (opt.value === current) o.selected = true;
+          sel.appendChild(o);
+        }
+        sel.addEventListener("change", () => onChange(sel.value));
+        row.appendChild(sel);
+        c.appendChild(row);
+      };
+
+      const addNumberRow = (
+        label: string,
+        min: number,
+        max: number,
+        step: number,
+        current: number,
+        onChange: (v: number) => void,
+      ) => {
+        const row = document.createElement("label");
+        row.className = "settings-row";
+        const span = document.createElement("span");
+        span.textContent = label;
+        row.appendChild(span);
+        const input = document.createElement("input");
+        input.type = "number";
+        input.min = String(min);
+        input.max = String(max);
+        input.step = String(step);
+        input.value = String(current);
+        input.className = "settings-input";
+        input.addEventListener("input", () => {
+          const n = parseFloat(input.value);
+          if (Number.isFinite(n)) onChange(n);
+        });
+        row.appendChild(input);
+        c.appendChild(row);
+      };
+
+      const addColorRow = (
+        label: string,
+        current: string,
+        onChange: (v: string) => void,
+      ) => {
+        const row = document.createElement("label");
+        row.className = "settings-row";
+        const span = document.createElement("span");
+        span.textContent = label;
+        row.appendChild(span);
+        const input = document.createElement("input");
+        input.type = "color";
+        input.className = "settings-color-input";
+        input.value = current;
+        input.addEventListener("input", () => onChange(input.value));
+        row.appendChild(input);
+        c.appendChild(row);
+      };
+
+      const addCheckRow = (
+        label: string,
+        current: boolean,
+        onChange: (v: boolean) => void,
+      ) => {
+        const row = document.createElement("label");
+        row.className = "settings-row settings-row-checkbox";
+        const check = document.createElement("input");
+        check.type = "checkbox";
+        check.checked = current;
+        check.className = "settings-input";
+        check.addEventListener("change", () => onChange(check.checked));
+        const text = document.createElement("span");
+        text.textContent = label;
+        row.appendChild(check);
+        row.appendChild(text);
+        c.appendChild(row);
+      };
+
+      addSelectRow(
+        t("docTheme.font.family"),
+        DOC_FONT_PRESETS.map((p) => ({ value: p.id, label: t(p.labelKey) })),
+        docDraft.theme.fontFamily,
+        (v) => {
+          docDraft.theme.fontFamily = v as DocFontId;
+          updateSample();
+        },
+      );
+      addNumberRow(t("docTheme.fontSize"), 12, 20, 1, docDraft.theme.fontSize, (n) => {
+        docDraft.theme.fontSize = n;
+        updateSample();
+      });
+      addNumberRow(
+        t("docTheme.lineHeight"),
+        1.4,
+        2.0,
+        0.1,
+        docDraft.theme.lineHeight,
+        (n) => {
+          docDraft.theme.lineHeight = n;
+          updateSample();
+        },
+      );
+      addColorRow(t("docTheme.accent"), docDraft.theme.accentColor, (v) => {
+        docDraft.theme.accentColor = v;
+        updateSample();
+      });
+      addColorRow(t("docTheme.textColor"), docDraft.theme.textColor, (v) => {
+        docDraft.theme.textColor = v;
+        updateSample();
+      });
+      addColorRow(t("docTheme.bgColor"), docDraft.theme.bgColor, (v) => {
+        docDraft.theme.bgColor = v;
+        updateSample();
+      });
+      addSelectRow(
+        t("docTheme.headingStyle"),
+        [
+          { value: "none", label: t("docTheme.headingStyle.none") },
+          { value: "underline", label: t("docTheme.headingStyle.underline") },
+          { value: "left-border", label: t("docTheme.headingStyle.leftBorder") },
+        ],
+        docDraft.theme.headingStyle,
+        (v) => {
+          docDraft.theme.headingStyle = v as HeadingStyle;
+          updateSample();
+        },
+      );
+      addSelectRow(
+        t("docTheme.highlight"),
+        [
+          { value: "github", label: "GitHub" },
+          { value: "atom-one-dark", label: "Atom One Dark" },
+          { value: "vs", label: "VS" },
+        ],
+        docDraft.theme.highlightTheme,
+        (v) => {
+          docDraft.theme.highlightTheme = v as HighlightTheme;
+          updateSample();
+        },
+      );
+      addCheckRow(t("docTheme.deco.autoToc"), docDraft.decorations.autoToc, (v) => {
+        docDraft.decorations.autoToc = v;
+        updateSample();
+      });
+      addCheckRow(
+        t("docTheme.deco.headingNumbers"),
+        docDraft.decorations.headingNumbers,
+        (v) => {
+          docDraft.decorations.headingNumbers = v;
+          updateSample();
+        },
+      );
+      addCheckRow(t("docTheme.deco.callouts"), docDraft.decorations.callouts, (v) => {
+        docDraft.decorations.callouts = v;
+        updateSample();
+      });
+      addCheckRow(
+        t("docTheme.deco.stripedTables"),
+        docDraft.decorations.stripedTables,
+        (v) => {
+          docDraft.decorations.stripedTables = v;
+          updateSample();
+        },
+      );
+
+      const sampleWrap = document.createElement("div");
+      sampleWrap.className = "doc-sample-preview";
+      const sampleHost = document.createElement("div");
+      sampleWrap.appendChild(sampleHost);
+      c.appendChild(sampleWrap);
+
+      // 非同期レンダリングの追い越し防止用シーケンス
+      let sampleSeq = 0;
+      function updateSample(): void {
+        const seq = ++sampleSeq;
+        const s = validateDocSettings(docDraft);
+        ensureDocumentStyles();
+        setHljsThemeStyle(s.theme.highlightTheme);
+        void renderDocumentBody(t("docTheme.sampleMd"), s)
+          .then((body) => {
+            if (seq !== sampleSeq) return;
+            sampleHost.className = ["document", ...docModifierClasses(s)].join(" ");
+            sampleHost.setAttribute("style", docThemeCssVars(s.theme));
+            sampleHost.replaceChildren(...Array.from(body.childNodes));
+          })
+          .catch((e) => console.warn("doc sample render failed:", e));
+      }
+      updateSample();
+
+      return c;
+    }
+
+    /**
+     * Mermaid専用の設定パネル。
+     * 文書テーマ（HTML/PDF用）とは独立させ、図の配色だけをここで扱う。
+     * 変更は「プレビュー」または「適用」で実エディタのプレビューに反映される。
+     */
+    function buildMermaidPanel(): HTMLElement {
+      const c = document.createElement("div");
+
+      const note = document.createElement("div");
+      note.className = "settings-note";
+      note.textContent = t("mermaid.note");
+      c.appendChild(note);
+
+      const row = document.createElement("label");
+      row.className = "settings-row";
+      const span = document.createElement("span");
+      span.textContent = t("mermaid.theme");
+      row.appendChild(span);
+      const select = document.createElement("select");
+      select.className = "settings-input";
+      const options: { value: MermaidColorScheme; labelKey: string }[] = [
+        { value: "system", labelKey: "mermaid.theme.system" },
+        { value: "light", labelKey: "mermaid.theme.light" },
+        { value: "dark", labelKey: "mermaid.theme.dark" },
+      ];
+      for (const opt of options) {
+        const o = document.createElement("option");
+        o.value = opt.value;
+        o.textContent = t(opt.labelKey);
+        if (opt.value === docDraft.theme.mermaidTheme) o.selected = true;
+        select.appendChild(o);
+      }
+      select.addEventListener("change", () => {
+        docDraft.theme.mermaidTheme = select.value as MermaidColorScheme;
+      });
+      row.appendChild(select);
+      c.appendChild(row);
+
+      return c;
+    }
+
     function buildLanguagePanel(): HTMLElement {
       const c = document.createElement("div");
 
@@ -335,6 +618,9 @@ export function openFontSettings(): Promise<void> {
       draft.showRecent = true;
       draft.lang = "system";
       draft.theme = "system";
+      const docDefaults = structuredClone(DEFAULT_DOC_SETTINGS);
+      docDraft.theme = docDefaults.theme;
+      docDraft.decorations = docDefaults.decorations;
       renderActive();
     });
 
@@ -410,6 +696,8 @@ export function openFontSettings(): Promise<void> {
           lang: before.lang,
           theme: before.theme,
         });
+        // プレビューで反映した文書テーマ（Mermaid配色等）も元に戻す（保存しない）
+        docTheme.previewLive(beforeDoc);
       }
       document.removeEventListener("keydown", onKey, true);
       unsubLang();
@@ -433,11 +721,17 @@ export function openFontSettings(): Promise<void> {
 
     const apply = () => {
       applyToLive(draft);
+      // 文書テーマはアプリUIに影響しないため、Applyでのみ永続化する
+      void docTheme
+        .save(validateDocSettings(docDraft))
+        .catch((e) => console.error("docTheme.save failed:", e));
       close(true);
     };
 
     const preview = () => {
       applyToLive(draft);
+      // 文書テーマ（Mermaid配色等）も保存せずライブ反映する（プレビューボタンの本来の役割）
+      docTheme.previewLive(docDraft);
       previewed = true;
     };
 

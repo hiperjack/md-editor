@@ -929,7 +929,8 @@ body {
 /* ===== コンテキストメニュー（エディタ右クリック） ===== */
 .context-menu {
   position: fixed;
-  z-index: 10001;
+  /* 図ビューア(10001)の上にも出せるようにする */
+  z-index: 10002;
   min-width: 180px;
   padding: 4px;
   background: var(--bg-2);
@@ -969,42 +970,183 @@ body {
   background: var(--border);
 }
 
-/* ===== 印刷（Ctrl+P）: md 本文のみを印刷する ===== */
-@media print {
-  /* タブ・ツールバー・アウトライン・検索・退避ペイン・行番号を隠す */
-  #tabbar,
-  #toolbar,
-  #outline-panel,
-  #find-root,
-  #modal-root,
-  #editor-pane-park,
-  .line-gutter {
-    display: none !important;
-  }
+/* 印刷（Ctrl+P）はエディタDOMではなく #print-root に描画した文書を
+   印刷する方式に変更した。印刷スタイルは styles/print.css を参照。 */
 
-  html,
-  body,
-  #app,
-  #editor-region,
-  #editor-host {
-    height: auto !important;
-    overflow: visible !important;
-    display: block !important;
-    background: #fff !important;
-  }
+/* ===== HTML出力・印刷・文書テーマ（v1.1） ===== */
 
-  /* スクロールでクリップされている本文ペインを全文フローさせる */
-  .editor-pane {
-    position: static !important;
-    inset: auto !important;
-    height: auto !important;
-    overflow: visible !important;
-  }
-
-  /* ダークテーマの淡色文字は紙では読めないため黒に統一 */
-  .ProseMirror,
-  .ProseMirror * {
-    color: #000 !important;
-    background: transparent !important;
-  }
+/* HTMLプレビュータブ（読み取り専用の文書表示） */
+.editor-pane.preview-pane {
+  overflow: auto;
+  background: var(--bg-1);
 }
+
+.editor-pane.preview-pane .document {
+  margin: 16px auto;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.18);
+}
+
+/* 進捗トースト（「図を変換中… 3/8」等） */
+.progress-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10000;
+  background: rgba(17, 24, 39, 0.92);
+  color: #f9fafb;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+/* エディタ内のMermaidプレビュー（コードブロック直下のパネル）。
+   エディタがダークテーマでも図が見えるよう白背景の台紙を敷く。
+   クリックでビューア（拡大・パン）が開く。 */
+.editor-pane .preview-panel .preview .mermaid-preview {
+  background: #fff;
+  border-radius: 6px;
+  padding: 12px;
+  overflow-x: auto;
+  cursor: zoom-in;
+}
+
+/* Mermaid配色がダークのときは図の台紙も暗くする（図外の白ラベルの視認性確保）。 */
+:root[data-mermaid-scheme="dark"]
+  .editor-pane
+  .preview-panel
+  .preview
+  .mermaid-preview {
+  background: #1e1e1e;
+}
+
+.editor-pane .preview-panel .preview .mermaid-preview svg {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  height: auto;
+}
+
+/* 設定モーダル: パネルが縦に長いセクション（文書テーマ）用のスクロール */
+.settings-panel {
+  max-height: 62vh;
+  overflow-y: auto;
+}
+
+/* 設定モーダル: 文書テーマのサンプルプレビュー枠 */
+.doc-sample-preview {
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  max-height: 280px;
+  overflow: auto;
+  flex-shrink: 0;
+}
+
+.doc-sample-preview .document {
+  max-width: none;
+  padding: 14px 18px;
+}
+
+/* ===== Mermaid図ビューア（クリックで拡大・パン） ===== */
+
+.diagram-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 10001;
+}
+
+.diagram-viewer-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  /* パン中に図中テキストが選択されないようにする（Shiftモードで解除） */
+  user-select: none;
+}
+
+.diagram-viewer-viewport.dragging {
+  cursor: grabbing;
+}
+
+/* テキスト選択モード（ツールバーで切替） */
+.diagram-viewer-viewport.select-mode {
+  cursor: text;
+  user-select: text;
+}
+
+.diagram-viewer-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-mermaid-scheme="dark"] .diagram-viewer-stage {
+  background: #1e1e1e;
+}
+
+.diagram-viewer-toolbar {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(30, 30, 30, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.diagram-viewer-btn {
+  min-width: 30px;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: #e6e6e6;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.diagram-viewer-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.diagram-viewer-btn.is-active {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.diagram-viewer-btn svg {
+  display: block;
+  margin: 0 auto;
+}
+
+.diagram-viewer-sep {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 0 2px;
+}
+
+.diagram-viewer-close {
+  font-size: 17px;
+}
+
+.diagram-viewer-zoom-label {
+  min-width: 44px;
+  text-align: center;
+  color: #e6e6e6;
+  font-size: 12px;
+}
+

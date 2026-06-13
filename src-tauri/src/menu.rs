@@ -80,6 +80,17 @@ fn build_menu(app: &AppHandle<Wry>, recent: &[String]) -> tauri::Result<Menu<Wry
     let file_save_as = MenuItemBuilder::with_id("file_save_as", i18n::t(lang, "file.save_as"))
         .accelerator("Ctrl+Shift+S")
         .build(app)?;
+    let file_export_html =
+        MenuItemBuilder::with_id("file_export_html", i18n::t(lang, "file.export_html"))
+            .accelerator("Ctrl+Shift+E")
+            .build(app)?;
+    let file_html_preview =
+        MenuItemBuilder::with_id("file_html_preview", i18n::t(lang, "file.html_preview"))
+            .accelerator("Ctrl+Shift+V")
+            .build(app)?;
+    let file_print = MenuItemBuilder::with_id("file_print", i18n::t(lang, "file.print"))
+        .accelerator("Ctrl+P")
+        .build(app)?;
     let file_close = MenuItemBuilder::with_id("file_close", i18n::t(lang, "file.close"))
         .accelerator("Ctrl+W")
         .build(app)?;
@@ -130,6 +141,10 @@ fn build_menu(app: &AppHandle<Wry>, recent: &[String]) -> tauri::Result<Menu<Wry
         .separator()
         .item(&file_save)
         .item(&file_save_as)
+        .separator()
+        .item(&file_export_html)
+        .item(&file_html_preview)
+        .item(&file_print)
         .separator()
         .item(&file_close)
         .separator()
@@ -228,7 +243,7 @@ fn build_menu(app: &AppHandle<Wry>, recent: &[String]) -> tauri::Result<Menu<Wry
         Some(
             AboutMetadataBuilder::new()
                 .name(Some("mdedit"))
-                .version(Some("1.0.1"))
+                .version(Some("1.1.0"))
                 .build(),
         ),
     )?;

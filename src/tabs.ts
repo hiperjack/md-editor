@@ -30,6 +30,7 @@ export type TabBar = {
 const DRAG_THRESHOLD = 4;
 
 function fileNameOf(tab: Tab): string {
+  if (tab.kind === "preview") return tab.previewTitle ?? "Preview";
   if (!tab.filePath) return "Untitled";
   const m = tab.filePath.split(/[\\/]/);
   return m[m.length - 1] || tab.filePath;
@@ -125,7 +126,10 @@ export function createTabBar(
       const label = document.createElement("span");
       label.className = "tab-label";
       label.textContent = fileNameOf(tab);
-      label.title = tab.filePath ?? "Untitled";
+      label.title =
+        tab.kind === "preview"
+          ? (tab.previewTitle ?? "")
+          : (tab.filePath ?? "Untitled");
       el.appendChild(label);
 
       const closeBtn = document.createElement("button");
@@ -253,6 +257,8 @@ export function createTabBar(
           {
             type: "item",
             label: t("tabcm.newWindow"),
+            // プレビュータブは移送非対応
+            disabled: tab.kind === "preview",
             action: () => handlers.onOpenInNewWindow(tab.id),
           },
           {

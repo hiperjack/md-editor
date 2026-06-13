@@ -5,6 +5,12 @@ export type Tab = {
   diskContent: string;
   /** 編集が発生したか。エディタ層がmarkdownUpdatedで更新する。 */
   dirty: boolean;
+  /** タブ種別。省略時は通常のエディタタブ。 */
+  kind?: "editor" | "preview";
+  /** preview タブ: 表示する文書HTML（<main class="document">…</main> 込み）。 */
+  previewHtml?: string;
+  /** preview タブ: タブに表示する名前。 */
+  previewTitle?: string;
 };
 
 export type AppState = {
@@ -91,6 +97,23 @@ export const store = {
         baseline: opts.initialBaseline ?? opts.initialContent,
       });
     }
+    notify();
+    return tab.id;
+  },
+
+  /** HTML見た目を表示する読み取り専用プレビュータブを追加する。 */
+  addPreviewTab(opts: { title: string; html: string }): string {
+    const tab: Tab = {
+      id: genId(),
+      filePath: null,
+      diskContent: "",
+      dirty: false,
+      kind: "preview",
+      previewHtml: opts.html,
+      previewTitle: opts.title,
+    };
+    state.tabs.push(tab);
+    state.activeTabId = tab.id;
     notify();
     return tab.id;
   },

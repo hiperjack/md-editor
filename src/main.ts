@@ -27,9 +27,18 @@ import {
 } from "./actions";
 import { confirmCloseAll } from "./modal";
 import { settings } from "./settings";
+import { docTheme, resolveMermaidScheme } from "./theme";
 import { openFontSettings } from "./settings-modal";
+import { exportActiveTabAsHtml, openHtmlPreviewTab } from "./exporter";
+import { printActiveTab } from "./print";
+import { installDiagramViewerTrigger } from "./diagram-viewer";
+import {
+  setMermaidColorScheme,
+  refreshAllMermaidPreviews,
+} from "./mermaid-renderer";
 import { setLang } from "./i18n";
 import "./style.css";
+import "./styles/print.css";
 
 function isTauriContext(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -53,6 +62,32 @@ async function bootstrap(): Promise<void> {
   // i18nの初期言語を設定値（解決後の ja/en）に同期
   setLang(settings.getEffectiveLang());
   settings.subscribe(() => setLang(settings.getEffectiveLang()));
+  // 文書テーマ（HTML出力・印刷用）をディスクから読み込む
+  await docTheme.init();
+
+  // Mermaid配色を文書テーマ設定（＋OS設定）から解決して適用する。
+  // 設定変更・他ウィンドウ同期時に再適用し、開いているプレビューを描き直す。
+  const applyMermaidScheme = () => {
+    const dt = docTheme.get().theme;
+    const scheme = resolveMermaidScheme(dt.mermaidTheme);
+    // 図の台紙（プレビュー・ビューア背景）をスキームに連動させる（CSSが参照）
+    document.documentElement.setAttribute("data-mermaid-scheme", scheme);
+    setMermaidColorScheme(scheme);
+    // 変更フラグに依存せず常に再描画する。docTheme.subscribe は設定変更時のみ
+    // 発火し、refresh はキャッシュが効くため安価。これにより「背景は白に変わったが
+    // 箱の色が古いまま残る」不整合（フラグ判定漏れ・二重通知）を構造的に防ぐ。
+    refreshAllMermaidPreviews();
+  };
+  applyMermaidScheme();
+  docTheme.subscribe(applyMermaidScheme);
+  // "system" のとき、OSのライト/ダーク変更にライブ追従する。
+  if (typeof window.matchMedia === "function") {
+    window
+      .matchMedia("(prefers-color-scheme: dark)")
+      .addEventListener("change", () => {
+        if (docTheme.get().theme.mermaidTheme === "system") applyMermaidScheme();
+      });
+  }
 
   // 外部URL (http/https) のアンカークリックを既定ブラウザで開く。
   // 対象:
@@ -95,6 +130,10 @@ async function bootstrap(): Promise<void> {
     "wheel",
     (e) => {
       if (!e.ctrlKey) return;
+      // 図ビューア内のホイールはビューア側のズームに委ねる
+      if ((e.target as Element | null)?.closest?.(".diagram-viewer-overlay")) {
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       const delta = e.deltaY > 0 ? -1 : 1;
@@ -102,6 +141,9 @@ async function bootstrap(): Promise<void> {
     },
     { passive: false, capture: true },
   );
+
+  // Mermaidプレビューのクリックで拡大・パン可能なビューアを開く
+  installDiagramViewerTrigger();
 
   // WebView2 標準のキー動作を抑止する。
   // アプリ未提供／実害のあるブラウザ既定動作（再読み込み・印刷・ズーム）を潰す。
@@ -140,10 +182,10 @@ async function bootstrap(): Promise<void> {
         return;
       }
 
-      // Ctrl+P: md 本文のみを印刷する（@media print で本文以外を非表示）。
+      // Ctrl+P: 文書テーマを適用した印刷（print.ts）。WebView2標準の印刷は抑止。
       if (key === "p") {
         e.preventDefault();
-        window.print();
+        fileActions.file_print?.();
         return;
       }
     },
@@ -261,6 +303,9 @@ async function bootstrap(): Promise<void> {
       const a = store.getActive();
       if (a) void saveTabAs(a.id, editor);
     },
+    file_export_html: () => void exportActiveTabAsHtml(editor),
+    file_html_preview: () => void openHtmlPreviewTab(editor),
+    file_print: () => void printActiveTab(editor),
     file_close: () => {
       const a = store.getActive();
       if (a) void closeTab(a.id, editor);
@@ -438,7 +483,7 @@ async function bootstrap(): Promise<void> {
     await win.onDragDropEvent(async (event) => {
       if (event.payload.type !== "drop") return;
       const paths = event.payload.paths.filter((p) =>
-        /\.(md|markdown)$/i.test(p),
+        /\.(md|markdown|mmd|mermaid)$/i.test(p),
       );
       for (const path of paths) {
         try {
