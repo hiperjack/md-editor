@@ -1014,6 +1014,11 @@ body {
   cursor: zoom-in;
 }
 
+/* HTMLプレビュータブ内のMermaid図もクリックで拡大ビューアを開ける。 */
+.editor-pane.preview-pane .mermaid-figure {
+  cursor: zoom-in;
+}
+
 /* Mermaid配色がダークのときは図の台紙も暗くする（図外の白ラベルの視認性確保）。 */
 :root[data-mermaid-scheme="dark"]
   .editor-pane

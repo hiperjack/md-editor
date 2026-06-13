@@ -434,25 +434,35 @@ export function installDiagramViewerTrigger(): void {
     "click",
     (e) => {
       const target = e.target as Element | null;
-      const preview = target?.closest(
+      // エディタ内インラインのMermaidプレビュー。
+      const inlinePreview = target?.closest(
         ".editor-pane .preview .mermaid-preview",
       ) as HTMLElement | null;
-      if (!preview) return;
-      const svg = preview.querySelector("svg");
+      // HTMLプレビュータブ内のMermaid図（出力と同じ <figure class="mermaid-figure">）。
+      const docFigure = target?.closest(
+        ".preview-pane .mermaid-figure",
+      ) as HTMLElement | null;
+      const host = inlinePreview ?? docFigure;
+      if (!host) return;
+      const svg = host.querySelector("svg");
       if (!svg) return;
       e.preventDefault();
       e.stopPropagation();
-      // 「コードへジャンプ」用に、同じコードブロックのCodeMirrorを含む祖先を探す
-      let sourceRoot: HTMLElement | null = preview.parentElement;
-      while (
-        sourceRoot &&
-        !sourceRoot.querySelector(".cm-content") &&
-        !sourceRoot.classList.contains("editor-pane")
-      ) {
-        sourceRoot = sourceRoot.parentElement;
-      }
-      if (sourceRoot && !sourceRoot.querySelector(".cm-content")) {
-        sourceRoot = null;
+      // 「コードへジャンプ」はエディタ内インラインのときのみ有効。
+      // プレビュータブには元コードが無いため sourceRoot は null。
+      let sourceRoot: HTMLElement | null = null;
+      if (inlinePreview) {
+        sourceRoot = inlinePreview.parentElement;
+        while (
+          sourceRoot &&
+          !sourceRoot.querySelector(".cm-content") &&
+          !sourceRoot.classList.contains("editor-pane")
+        ) {
+          sourceRoot = sourceRoot.parentElement;
+        }
+        if (sourceRoot && !sourceRoot.querySelector(".cm-content")) {
+          sourceRoot = null;
+        }
       }
       openDiagramViewer(svg.outerHTML, sourceRoot);
     },
