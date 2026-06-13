@@ -81,6 +81,7 @@ function getSelectionText(): string {
 export function openDiagramViewer(
   svgHtml: string,
   sourceRoot: HTMLElement | null = null,
+  opts?: { background?: string },
 ): void {
   const root = document.getElementById("modal-root") ?? document.body;
   if (root.querySelector(".diagram-viewer-overlay")) return; // 多重起動防止
@@ -140,6 +141,10 @@ export function openDiagramViewer(
 
   const stage = document.createElement("div");
   stage.className = "diagram-viewer-stage";
+  // 呼び出し側が背景を指定した場合は、台紙の既定（表示テーマ連動）より優先する。
+  if (opts?.background) {
+    stage.style.background = opts.background;
+  }
   stage.innerHTML = svgHtml;
   viewport.appendChild(stage);
 
@@ -464,7 +469,19 @@ export function installDiagramViewerTrigger(): void {
           sourceRoot = null;
         }
       }
-      openDiagramViewer(svg.outerHTML, sourceRoot);
+      // プレビュータブの図は、文書(.document)の背景色に台紙を合わせる
+      // （表示テーマ連動のダーク台紙に引きずられて黒くならないように）。
+      let viewerOpts: { background?: string } | undefined;
+      if (docFigure) {
+        const docEl = docFigure.closest(".document") as HTMLElement | null;
+        if (docEl) {
+          const bg = getComputedStyle(docEl).backgroundColor;
+          if (bg && bg !== "transparent" && bg !== "rgba(0, 0, 0, 0)") {
+            viewerOpts = { background: bg };
+          }
+        }
+      }
+      openDiagramViewer(svg.outerHTML, sourceRoot, viewerOpts);
     },
     { capture: true },
   );
