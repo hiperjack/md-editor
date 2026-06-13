@@ -267,8 +267,6 @@ export function createTabBar(
           {
             type: "item",
             label: t("tabcm.newWindow"),
-            // プレビュータブは移送非対応
-            disabled: tab.kind === "preview",
             action: () => handlers.onOpenInNewWindow(tab.id),
           },
           {
