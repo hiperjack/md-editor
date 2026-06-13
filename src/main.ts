@@ -115,6 +115,24 @@ async function bootstrap(): Promise<void> {
     { capture: true },
   );
 
+  // プレビュータブ専用ズーム（エディタのグローバル文字サイズとは独立）。
+  // CSS の zoom を .document に適用し、倍率は pane の dataset に保持する。
+  const PREVIEW_ZOOM_MIN = 0.5;
+  const PREVIEW_ZOOM_MAX = 3.0;
+  const adjustPreviewZoom = (pane: HTMLElement, delta: number): void => {
+    const doc = pane.querySelector<HTMLElement>(".document");
+    if (!doc) return;
+    const current = parseFloat(pane.dataset.zoom ?? "1") || 1;
+    const factor = delta > 0 ? 1.1 : 1 / 1.1;
+    const next = Math.min(
+      PREVIEW_ZOOM_MAX,
+      Math.max(PREVIEW_ZOOM_MIN, current * factor),
+    );
+    pane.dataset.zoom = String(next);
+    // zoom は非標準プロパティのため setProperty で設定する。
+    doc.style.setProperty("zoom", String(next));
+  };
+
   // Ctrl+ホイール で文字サイズ変更（WebView2の標準ズームを抑止するためcapture+非passive）
   document.addEventListener(
     "wheel",
@@ -127,6 +145,14 @@ async function bootstrap(): Promise<void> {
       e.preventDefault();
       e.stopPropagation();
       const delta = e.deltaY > 0 ? -1 : 1;
+      // プレビュータブ上では、そのプレビューだけを独立してズームする。
+      const pane = (e.target as Element | null)?.closest?.(
+        ".preview-pane",
+      ) as HTMLElement | null;
+      if (pane) {
+        adjustPreviewZoom(pane, delta);
+        return;
+      }
       settings.changeFontSize(delta);
     },
     { passive: false, capture: true },
