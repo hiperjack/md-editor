@@ -11,6 +11,14 @@ export type Tab = {
   previewHtml?: string;
   /** preview タブ: タブに表示する名前。 */
   previewTitle?: string;
+  /** preview タブの種別。"export"=markdown出力プレビュー（既定）、"htmlfile"=外部HTMLをiframe表示。 */
+  previewMode?: "export" | "htmlfile";
+  /** previewMode "htmlfile" のときの iframe srcdoc 用の生HTML。 */
+  previewSrcDoc?: string;
+  /** 更新（再レンダリング）用: 元エディタタブのid（同一ウィンドウ内）。 */
+  sourceTabId?: string | null;
+  /** 更新用: 元ファイルのパス（ディスク再読み込み用）。 */
+  sourceFilePath?: string | null;
 };
 
 export type AppState = {
@@ -102,7 +110,14 @@ export const store = {
   },
 
   /** HTML見た目を表示する読み取り専用プレビュータブを追加する。 */
-  addPreviewTab(opts: { title: string; html: string }): string {
+  addPreviewTab(opts: {
+    title: string;
+    html?: string;
+    srcDoc?: string;
+    mode?: "export" | "htmlfile";
+    sourceTabId?: string | null;
+    sourceFilePath?: string | null;
+  }): string {
     const tab: Tab = {
       id: genId(),
       filePath: null,
@@ -111,11 +126,28 @@ export const store = {
       kind: "preview",
       previewHtml: opts.html,
       previewTitle: opts.title,
+      previewMode: opts.mode ?? "export",
+      previewSrcDoc: opts.srcDoc,
+      sourceTabId: opts.sourceTabId ?? null,
+      sourceFilePath: opts.sourceFilePath ?? null,
     };
     state.tabs.push(tab);
     state.activeTabId = tab.id;
     notify();
     return tab.id;
+  },
+
+  /** 既存プレビュータブの内容を更新する（更新ボタン用）。指定フィールドのみ差し替え。 */
+  updatePreview(
+    tabId: string,
+    patch: { title?: string; html?: string; srcDoc?: string },
+  ): void {
+    const tab = state.tabs.find((t) => t.id === tabId);
+    if (!tab || tab.kind !== "preview") return;
+    if (patch.title !== undefined) tab.previewTitle = patch.title;
+    if (patch.html !== undefined) tab.previewHtml = patch.html;
+    if (patch.srcDoc !== undefined) tab.previewSrcDoc = patch.srcDoc;
+    notify();
   },
 
   /**
