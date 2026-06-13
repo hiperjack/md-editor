@@ -706,7 +706,7 @@ body {
 
 /* ── Settings modal: tree layout ─────────────── */
 .settings-dialog {
-  width: 640px;
+  width: 720px;
   max-width: 90vw;
   min-width: 520px;
 }
