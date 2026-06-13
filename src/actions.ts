@@ -5,11 +5,23 @@ import { save as saveDialog, open as openDialog } from "@tauri-apps/plugin-dialo
 import { store, type Tab } from "./store";
 import { confirmSave, confirmDuplicate, confirmDuplicateWindow } from "./modal";
 import type { EditorHost } from "./editor";
+import { fileTypeOfPath, extractMermaidSource } from "./mmd";
 
 const MD_FILTERS = [
   { name: "Markdown", extensions: ["md", "markdown"] },
+  { name: "Mermaid", extensions: ["mmd", "mermaid"] },
   { name: "All Files", extensions: ["*"] },
 ];
+
+/**
+ * 保存先パスの種別に応じて、エディタのmarkdownをディスクへ書く内容に変換する。
+ * .mmd はフェンスをアンラップして素のMermaidソースに戻す。
+ */
+function contentForDisk(markdown: string, path: string): string {
+  return fileTypeOfPath(path) === "mmd"
+    ? extractMermaidSource(markdown)
+    : markdown;
+}
 
 function isTauriContext(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -51,6 +63,7 @@ export async function saveTab(
   const markdown = editor.getMarkdown(tabId);
   if (markdown === null) return false;
 
+  const prevType = fileTypeOfPath(tab.filePath);
   let path = tab.filePath;
   if (!path) {
     const picked = await saveDialog({
@@ -62,10 +75,16 @@ export async function saveTab(
     path = picked;
   }
 
-  await writeFile(path, markdown);
-  store.markSaved(tabId, path, markdown);
+  const content = contentForDisk(markdown, path);
+  await writeFile(path, content);
+  store.markSaved(tabId, path, content);
   editor.resetBaseline(tabId);
   void addRecent(path);
+  // md⇄mmd の種別が変わったらラップ規約が変わるため、保存内容でエディタを作り直す
+  if (prevType !== fileTypeOfPath(path)) {
+    const saved = store.getState().tabs.find((t) => t.id === tabId);
+    if (saved) await editor.recreate(saved);
+  }
   return true;
 }
 
@@ -87,10 +106,17 @@ export async function saveTabAs(
   });
   if (!picked) return false;
 
-  await writeFile(picked, markdown);
-  store.markSaved(tabId, picked, markdown);
+  const prevType = fileTypeOfPath(tab.filePath);
+  const content = contentForDisk(markdown, picked);
+  await writeFile(picked, content);
+  store.markSaved(tabId, picked, content);
   editor.resetBaseline(tabId);
   void addRecent(picked);
+  // md⇄mmd の種別が変わったらラップ規約が変わるため、保存内容でエディタを作り直す
+  if (prevType !== fileTypeOfPath(picked)) {
+    const saved = store.getState().tabs.find((t) => t.id === tabId);
+    if (saved) await editor.recreate(saved);
+  }
   return true;
 }
 

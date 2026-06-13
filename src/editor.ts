@@ -18,6 +18,12 @@ import {
 } from "@milkdown/preset-commonmark";
 import { keymap as cmKeymap } from "@codemirror/view";
 import { Prec } from "@codemirror/state";
+import {
+  LanguageDescription,
+  LanguageSupport,
+  StreamLanguage,
+} from "@codemirror/language";
+import { languages as codeLanguages } from "@codemirror/language-data";
 import remarkBreaks from "remark-breaks";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame-dark.css";
@@ -28,6 +34,9 @@ import { attachLineNumbers } from "./line-numbers";
 import { attachImageResolver } from "./image-resolver";
 import { editImageNodeAtPos, isImageNode } from "./image-edit";
 import { searchPlugin } from "./search-plugin";
+import { fileTypeOfPath, wrapMermaidSource } from "./mmd";
+import { mermaidCodePreview } from "./mermaid-renderer";
+import { t } from "./i18n";
 
 /**
  * Smart Enter: Obsidian Live Preview に近い挙動にする。
@@ -49,10 +58,54 @@ const SMART_ENTER_GUARD_NODES = new Set([
   "table_header",
 ]);
 
+/** ハイライトなしのプレーンテキスト言語を作る（言語ピッカー登録用）。 */
+function plainTextLanguage(
+  name: string,
+  alias: string[],
+  extensions: string[],
+): LanguageDescription {
+  return LanguageDescription.of({
+    name,
+    alias,
+    extensions,
+    load: async () =>
+      new LanguageSupport(
+        StreamLanguage.define({
+          token: (stream) => {
+            stream.skipToEnd();
+            return null;
+          },
+        }),
+      ),
+  });
+}
+
+/**
+ * コードブロックの言語ピッカーに出す言語一覧。
+ * CodeMirror公式の言語定義（@codemirror/language-data）には mermaid と
+ * プレーンテキストが存在しないため、ここで追加する（名前順の位置に挿入）。
+ * mermaid のプレビュー描画は renderPreview 側が言語名で判定する。
+ */
+const codeBlockLanguages: LanguageDescription[] = (() => {
+  const list = [...codeLanguages];
+  for (const lang of [
+    // mermaid はフェンス互換性（GitHub等は小文字のみ図として描画）のため小文字
+    plainTextLanguage("mermaid", ["mmd"], ["mmd", "mermaid"]),
+    plainTextLanguage("Text", ["text", "plaintext", "txt", "plain"], ["txt"]),
+  ]) {
+    const idx = list.findIndex(
+      (l) => l.name.toLowerCase() > lang.name.toLowerCase(),
+    );
+    list.splice(idx < 0 ? list.length : idx, 0, lang);
+  }
+  return list;
+})();
+
 type EditorEntry = {
   tabId: string;
   container: HTMLElement;
-  crepe: Crepe;
+  /** preview タブは Crepe を持たない（読み取り専用のHTML表示）。 */
+  crepe: Crepe | null;
   /** 「未編集」の基準とするシリアライズ済みmarkdown */
   baseline: string;
   detachLineNumbers: () => void;
@@ -111,10 +164,12 @@ export function createEditorHost(root: HTMLElement): EditorHost {
   const destroyEntry = async (entry: EditorEntry) => {
     entry.detachLineNumbers();
     entry.detachImageResolver();
-    try {
-      await entry.crepe.destroy();
-    } catch (e) {
-      console.warn("crepe.destroy failed:", e);
+    if (entry.crepe) {
+      try {
+        await entry.crepe.destroy();
+      } catch (e) {
+        console.warn("crepe.destroy failed:", e);
+      }
     }
     entry.container.remove();
   };
@@ -153,7 +208,26 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     });
   };
 
+  // 読み取り専用のHTMLプレビュータブ。Crepeを使わず、レンダリング済みHTMLを表示する。
+  const makePreview = (tab: Tab): EditorEntry => {
+    const container = document.createElement("div");
+    container.className = "editor-pane preview-pane";
+    container.dataset.tabId = tab.id;
+    container.innerHTML = tab.previewHtml ?? "";
+    parkEl.appendChild(container);
+    return {
+      tabId: tab.id,
+      container,
+      crepe: null,
+      baseline: "",
+      detachLineNumbers: () => {},
+      detachImageResolver: () => {},
+    };
+  };
+
   const make = async (tab: Tab): Promise<EditorEntry> => {
+    if (tab.kind === "preview") return makePreview(tab);
+
     // 移送（新規ウィンドウ化）タブは、表示内容と baseline を引き継ぐ。
     // 通常タブでは undefined。
     const override = store.takeInitialOverride(tab.id);
@@ -198,9 +272,18 @@ export function createEditorHost(root: HTMLElement): EditorHost {
        ]),
      );
 
+    // .mmd（Mermaid単体ファイル）は、全体を1つの ```mermaid フェンスにラップして
+    // 編集する。保存時に actions.ts がアンラップする。移送タブ（override）は
+    // ラップ済みのmarkdownを引き継いでいるので再ラップしない。
+    const initialValue =
+      override?.content ??
+      (fileTypeOfPath(tab.filePath) === "mmd"
+        ? wrapMermaidSource(tab.diskContent)
+        : tab.diskContent);
+
     const crepe = new Crepe({
       root: container,
-      defaultValue: override?.content ?? tab.diskContent,
+      defaultValue: initialValue,
       features: {
         [Crepe.Feature.BlockEdit]: false,
         [Crepe.Feature.Toolbar]: false,
@@ -208,6 +291,17 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       featureConfigs: {
         [Crepe.Feature.CodeMirror]: {
           extensions: [codeBlockExitKeymap],
+          languages: codeBlockLanguages,
+          // ```mermaid ブロックの直下に図のライブプレビューを表示する。
+          // 描画はデバウンス＋キャッシュ付き（mermaid-renderer.ts）。
+          renderPreview: (language, content, applyPreview) => {
+            if (language.toLowerCase() !== "mermaid") return null;
+            return mermaidCodePreview(content, applyPreview);
+          },
+          previewLabel: t("cb.previewLabel"),
+          previewLoading: t("cb.previewLoading"),
+          previewToggleText: (previewOnlyMode) =>
+            previewOnlyMode ? t("cb.previewEdit") : t("cb.previewHide"),
         },
       },
     });
@@ -670,7 +764,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
 
     getMarkdown(tabId: string) {
       const entry = editors.get(tabId);
-      if (!entry) return null;
+      if (!entry || !entry.crepe) return null;
       return entry.crepe.getMarkdown();
     },
 
@@ -682,7 +776,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
 
     resetBaseline(tabId: string) {
       const entry = editors.get(tabId);
-      if (!entry) return;
+      if (!entry || !entry.crepe) return;
       entry.baseline = entry.crepe.getMarkdown();
     },
 
@@ -716,7 +810,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       const id = store.getActive()?.id;
       if (!id) return;
       const entry = editors.get(id);
-      if (!entry) return;
+      if (!entry || !entry.crepe) return;
       // Crepe.editor は内部のMilkdown Editorインスタンス
       try {
         fn(entry.crepe.editor);
@@ -732,7 +826,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       const id = store.getActive()?.id;
       if (!id) return null;
       const entry = editors.get(id);
-      if (!entry) return null;
+      if (!entry || !entry.crepe) return null;
       let view: EditorView | null = null;
       try {
         entry.crepe.editor.action((ctx) => {
