@@ -16,7 +16,7 @@ import { renderDocumentBody } from "./render-pipeline";
 import { ensureDocumentStyles, setHljsThemeStyle } from "./doc-styles";
 import { onLangChange, t } from "./i18n";
 
-type SectionKey = "font" | "display" | "docTheme" | "mermaid" | "language";
+type SectionKey = "font" | "display" | "docTheme" | "language";
 
 export function openFontSettings(): Promise<void> {
   return new Promise((resolve) => {
@@ -73,7 +73,6 @@ export function openFontSettings(): Promise<void> {
       { key: "font", labelKey: "settings.section.font" },
       { key: "display", labelKey: "settings.section.display" },
       { key: "docTheme", labelKey: "settings.section.docTheme" },
-      { key: "mermaid", labelKey: "settings.section.mermaid" },
       { key: "language", labelKey: "settings.section.language" },
     ];
 
@@ -107,7 +106,6 @@ export function openFontSettings(): Promise<void> {
       if (key === "font") wrap.appendChild(buildFontPanel());
       else if (key === "display") wrap.appendChild(buildDisplayPanel());
       else if (key === "docTheme") wrap.appendChild(buildDocThemePanel());
-      else if (key === "mermaid") wrap.appendChild(buildMermaidPanel());
       else wrap.appendChild(buildLanguagePanel());
       return wrap;
     }
@@ -300,6 +298,78 @@ export function openFontSettings(): Promise<void> {
       row.appendChild(check);
       row.appendChild(text);
       c.appendChild(row);
+
+      // ── Mermaid 設定 ────────────────────────────────────
+      const mermaidHeading = document.createElement("div");
+      mermaidHeading.className = "settings-subheading";
+      mermaidHeading.textContent = t("settings.section.mermaid");
+      c.appendChild(mermaidHeading);
+
+      const mermaidNote = document.createElement("div");
+      mermaidNote.className = "settings-note";
+      mermaidNote.textContent = t("mermaid.note");
+      c.appendChild(mermaidNote);
+
+      // 配色セレクト（個別指定）。先に生成して、チェックボックスから enable/disable する。
+      const mermaidRow = document.createElement("label");
+      mermaidRow.className = "settings-row";
+      const mermaidSpan = document.createElement("span");
+      mermaidSpan.textContent = t("mermaid.theme");
+      mermaidRow.appendChild(mermaidSpan);
+      const mermaidSelect = document.createElement("select");
+      mermaidSelect.className = "settings-input";
+      const mermaidOptions: { value: MermaidColorScheme; labelKey: string }[] = [
+        { value: "system", labelKey: "mermaid.theme.system" },
+        { value: "light", labelKey: "mermaid.theme.light" },
+        { value: "dark", labelKey: "mermaid.theme.dark" },
+      ];
+      for (const opt of mermaidOptions) {
+        const o = document.createElement("option");
+        o.value = opt.value;
+        o.textContent = t(opt.labelKey);
+        if (opt.value === docDraft.theme.mermaidTheme) o.selected = true;
+        mermaidSelect.appendChild(o);
+      }
+      mermaidSelect.addEventListener("change", () => {
+        docDraft.theme.mermaidTheme = mermaidSelect.value as MermaidColorScheme;
+      });
+
+      // 「表示テーマに揃える」チェックボックス（既定ON）。ONのときは個別セレクトを無効化。
+      const followRow = document.createElement("label");
+      followRow.className = "settings-row settings-row-checkbox";
+      const follow = document.createElement("input");
+      follow.type = "checkbox";
+      follow.className = "settings-input";
+      follow.checked = docDraft.theme.mermaidFollowApp;
+      const followText = document.createElement("span");
+      followText.textContent = t("mermaid.followApp");
+      follow.addEventListener("change", () => {
+        docDraft.theme.mermaidFollowApp = follow.checked;
+        mermaidSelect.disabled = follow.checked;
+      });
+      followRow.appendChild(follow);
+      followRow.appendChild(followText);
+      c.appendChild(followRow);
+
+      mermaidSelect.disabled = docDraft.theme.mermaidFollowApp;
+      mermaidRow.appendChild(mermaidSelect);
+      c.appendChild(mermaidRow);
+
+      // 「コードを既定で隠す」チェックボックス（既定ON）
+      const collapseRow = document.createElement("label");
+      collapseRow.className = "settings-row settings-row-checkbox";
+      const collapse = document.createElement("input");
+      collapse.type = "checkbox";
+      collapse.className = "settings-input";
+      collapse.checked = docDraft.theme.mermaidCollapsed;
+      const collapseText = document.createElement("span");
+      collapseText.textContent = t("mermaid.collapse");
+      collapse.addEventListener("change", () => {
+        docDraft.theme.mermaidCollapsed = collapse.checked;
+      });
+      collapseRow.appendChild(collapse);
+      collapseRow.appendChild(collapseText);
+      c.appendChild(collapseRow);
 
       return c;
     }
@@ -519,83 +589,6 @@ export function openFontSettings(): Promise<void> {
           .catch((e) => console.warn("doc sample render failed:", e));
       }
       updateSample();
-
-      return c;
-    }
-
-    /**
-     * Mermaid専用の設定パネル。
-     * 文書テーマ（HTML/PDF用）とは独立させ、図の配色だけをここで扱う。
-     * 変更は「プレビュー」または「適用」で実エディタのプレビューに反映される。
-     */
-    function buildMermaidPanel(): HTMLElement {
-      const c = document.createElement("div");
-
-      const note = document.createElement("div");
-      note.className = "settings-note";
-      note.textContent = t("mermaid.note");
-      c.appendChild(note);
-
-      // 配色セレクト（個別指定）。先に生成して、チェックボックスから enable/disable する。
-      const row = document.createElement("label");
-      row.className = "settings-row";
-      const span = document.createElement("span");
-      span.textContent = t("mermaid.theme");
-      row.appendChild(span);
-      const select = document.createElement("select");
-      select.className = "settings-input";
-      const options: { value: MermaidColorScheme; labelKey: string }[] = [
-        { value: "system", labelKey: "mermaid.theme.system" },
-        { value: "light", labelKey: "mermaid.theme.light" },
-        { value: "dark", labelKey: "mermaid.theme.dark" },
-      ];
-      for (const opt of options) {
-        const o = document.createElement("option");
-        o.value = opt.value;
-        o.textContent = t(opt.labelKey);
-        if (opt.value === docDraft.theme.mermaidTheme) o.selected = true;
-        select.appendChild(o);
-      }
-      select.addEventListener("change", () => {
-        docDraft.theme.mermaidTheme = select.value as MermaidColorScheme;
-      });
-
-      // 「表示テーマに揃える」チェックボックス（既定ON）。ONのときは個別セレクトを無効化。
-      const followRow = document.createElement("label");
-      followRow.className = "settings-row settings-row-checkbox";
-      const follow = document.createElement("input");
-      follow.type = "checkbox";
-      follow.className = "settings-input";
-      follow.checked = docDraft.theme.mermaidFollowApp;
-      const followText = document.createElement("span");
-      followText.textContent = t("mermaid.followApp");
-      follow.addEventListener("change", () => {
-        docDraft.theme.mermaidFollowApp = follow.checked;
-        select.disabled = follow.checked;
-      });
-      followRow.appendChild(follow);
-      followRow.appendChild(followText);
-      c.appendChild(followRow);
-
-      select.disabled = docDraft.theme.mermaidFollowApp;
-      row.appendChild(select);
-      c.appendChild(row);
-
-      // 「コードを既定で隠す」チェックボックス（既定ON）
-      const collapseRow = document.createElement("label");
-      collapseRow.className = "settings-row settings-row-checkbox";
-      const collapse = document.createElement("input");
-      collapse.type = "checkbox";
-      collapse.className = "settings-input";
-      collapse.checked = docDraft.theme.mermaidCollapsed;
-      const collapseText = document.createElement("span");
-      collapseText.textContent = t("mermaid.collapse");
-      collapse.addEventListener("change", () => {
-        docDraft.theme.mermaidCollapsed = collapse.checked;
-      });
-      collapseRow.appendChild(collapse);
-      collapseRow.appendChild(collapseText);
-      c.appendChild(collapseRow);
 
       return c;
     }
