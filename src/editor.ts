@@ -210,6 +210,8 @@ export type EditorHost = {
    * Vueの再描画で戻されるため、作り直し＝開き直しと同等の経路を使う）。
    */
   recreateMermaidTabs: () => Promise<void>;
+  /** プレビュータブを現在のストア内容で再描画する。スクロール位置とズーム倍率を保持する。 */
+  refreshPreviewPane: (tabId: string) => Promise<void>;
   /** アクティブタブのエディタにフォーカス。 */
   focus: () => void;
   /** アクティブタブのMilkdown Editorに対して操作を実行（toolbar/menu連携用）。 */
@@ -298,12 +300,22 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     const container = document.createElement("div");
     container.className = "editor-pane preview-pane";
     container.dataset.tabId = tab.id;
-    // プレビューの .document が参照する文書CSS・ハイライトCSSを、このウィンドウへ
-    // 確実に注入する（別ウィンドウへ移送された場合に背景等が欠落するのを防ぐ）。
-    // ensureDocumentStyles は冪等。
-    ensureDocumentStyles();
-    setHljsThemeStyle(docTheme.get().theme.highlightTheme);
-    container.innerHTML = tab.previewHtml ?? "";
+    if (tab.previewMode === "htmlfile") {
+      // 外部HTMLファイルはサンドボックスiframeで隔離表示（スクリプト無効・スタイル非干渉）。
+      const iframe = document.createElement("iframe");
+      iframe.className = "preview-iframe";
+      // allow-* を一切付けない sandbox によりスクリプト等を無効化する。
+      iframe.setAttribute("sandbox", "");
+      iframe.srcdoc = tab.previewSrcDoc ?? "";
+      container.appendChild(iframe);
+    } else {
+      // プレビューの .document が参照する文書CSS・ハイライトCSSを、このウィンドウへ
+      // 確実に注入する（別ウィンドウへ移送された場合に背景等が欠落するのを防ぐ）。
+      // ensureDocumentStyles は冪等。
+      ensureDocumentStyles();
+      setHljsThemeStyle(docTheme.get().theme.highlightTheme);
+      container.innerHTML = tab.previewHtml ?? "";
+    }
     parkEl.appendChild(container);
     return {
       tabId: tab.id,
@@ -948,6 +960,22 @@ export function createEditorHost(root: HTMLElement): EditorHost {
           preserveScroll: prevScroll,
           preserveCodeBlockState: true,
         });
+      }
+    },
+
+    async refreshPreviewPane(tabId: string) {
+      const old = editors.get(tabId);
+      const scroll = old?.container.scrollTop ?? 0;
+      const zoom = old?.container.dataset.zoom;
+      const tab = store.getState().tabs.find((t) => t.id === tabId);
+      if (!tab) return;
+      await this.recreate(tab, { noFocus: true, preserveScroll: scroll });
+      const fresh = editors.get(tabId);
+      if (fresh && zoom) {
+        fresh.container.dataset.zoom = zoom;
+        fresh.container
+          .querySelector<HTMLElement>(".document")
+          ?.style.setProperty("zoom", zoom);
       }
     },
 

@@ -988,6 +988,14 @@ body {
   box-shadow: 0 1px 8px rgba(0, 0, 0, 0.18);
 }
 
+/* 外部HTMLファイルのサンドボックス表示（プレビュータブ）。 */
+.editor-pane.preview-pane .preview-iframe {
+  border: 0;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+}
+
 /* 進捗トースト（「図を変換中… 3/8」等） */
 .progress-toast {
   position: fixed;
