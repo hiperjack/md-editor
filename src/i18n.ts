@@ -126,6 +126,9 @@ const DICT: Record<Lang, Record<string, string>> = {
     "tabcm.newWindow": "新規ウィンドウで開く",
     "tabcm.copyPath": "パスをコピー",
     "tabcm.htmlPreview": "HTMLプレビューを開く",
+    "tabcm.refreshPreview": "更新",
+    // プレビューペイン右クリックメニュー
+    "previewcm.refresh": "更新",
     // HTML出力・印刷
     "tb.file_export": "HTMLとして出力 (Ctrl+Shift+E)",
     "export.dialogTitle": "HTMLとして出力",
@@ -304,6 +307,8 @@ const DICT: Record<Lang, Record<string, string>> = {
     "tabcm.newWindow": "Open in new window",
     "tabcm.copyPath": "Copy path",
     "tabcm.htmlPreview": "Open HTML preview",
+    "tabcm.refreshPreview": "Refresh",
+    "previewcm.refresh": "Refresh",
     "tb.file_export": "Export as HTML (Ctrl+Shift+E)",
     "export.dialogTitle": "Export as HTML",
     "export.rendering": "Generating HTML…",

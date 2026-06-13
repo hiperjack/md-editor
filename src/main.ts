@@ -29,11 +29,12 @@ import { confirmCloseAll } from "./modal";
 import { settings } from "./settings";
 import { docTheme, resolveMermaidScheme } from "./theme";
 import { openFontSettings } from "./settings-modal";
-import { exportActiveTabAsHtml, openHtmlPreviewTab, openHtmlFileTab } from "./exporter";
+import { exportActiveTabAsHtml, openHtmlPreviewTab, openHtmlFileTab, refreshPreviewTab, canRefreshPreview as canRefreshPreviewTab } from "./exporter";
+import { showContextMenu, type MenuItem } from "./context-menu";
 import { printActiveTab } from "./print";
 import { installDiagramViewerTrigger } from "./diagram-viewer";
 import { setMermaidColorScheme } from "./mermaid-renderer";
-import { setLang } from "./i18n";
+import { setLang, t } from "./i18n";
 import "./style.css";
 import "./styles/print.css";
 
@@ -309,6 +310,11 @@ async function bootstrap(): Promise<void> {
         await openHtmlPreviewTab(editor);
       })();
     },
+    onRefreshPreview: (id) => void refreshPreviewTab(id, editor),
+    canRefreshPreview: (id) => {
+      const tab = store.getState().tabs.find((t) => t.id === id);
+      return tab ? canRefreshPreviewTab(tab, editor) : false;
+    },
     onDragMove: (sx, sy) => onTabDragMove(sx, sy),
     onDragEnd: () => onTabDragEnd(),
     onTearOff: (id, pos) => {
@@ -379,6 +385,25 @@ async function bootstrap(): Promise<void> {
       const target = e.target as Element | null;
       if (target?.closest(".editor-pane .ProseMirror")) {
         editorContextMenu(e);
+      } else if (target?.closest(".preview-pane")) {
+        // プレビューペイン上では「更新」メニューを出す。
+        e.preventDefault();
+        const pane = target.closest(".preview-pane") as HTMLElement;
+        const tabId = pane.dataset.tabId ?? null;
+        const tab = tabId
+          ? store.getState().tabs.find((t) => t.id === tabId)
+          : null;
+        const items: MenuItem[] = [
+          {
+            type: "item",
+            label: t("previewcm.refresh"),
+            disabled: !tab || !canRefreshPreviewTab(tab, editor),
+            action: () => {
+              if (tabId) void refreshPreviewTab(tabId, editor);
+            },
+          },
+        ];
+        showContextMenu(e.clientX, e.clientY, items);
       } else {
         e.preventDefault();
       }

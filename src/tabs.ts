@@ -12,6 +12,10 @@ export type TabBarHandlers = {
   onCopyPath: (tabId: string) => void;
   /** タブの内容をHTMLプレビュータブで開く。 */
   onHtmlPreview: (tabId: string) => void;
+  /** プレビュータブを更新する。 */
+  onRefreshPreview: (tabId: string) => void;
+  /** プレビュータブを更新できるか返す。 */
+  canRefreshPreview: (tabId: string) => boolean;
   /** タブをウィンドウ外で離して切り離した（新規ウィンドウ化）。pos は離した画面座標。 */
   onTearOff: (tabId: string, pos: { x: number; y: number }) => void;
   /** ドラッグ中の移動（結合先ハイライト用）。画面座標を渡す。 */
@@ -235,7 +239,19 @@ export function createTabBar(
       el.addEventListener("contextmenu", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const items: MenuItem[] = [
+        const items: MenuItem[] = [];
+        if (tab.kind === "preview") {
+          items.push(
+            {
+              type: "item",
+              label: t("tabcm.refreshPreview"),
+              disabled: !handlers.canRefreshPreview(tab.id),
+              action: () => handlers.onRefreshPreview(tab.id),
+            },
+            { type: "separator" },
+          );
+        }
+        items.push(
           {
             type: "item",
             label: t("tabcm.close"),
@@ -275,7 +291,7 @@ export function createTabBar(
             disabled: !tab.filePath,
             action: () => handlers.onCopyPath(tab.id),
           },
-        ];
+        );
         showContextMenu(e.clientX, e.clientY, items);
       });
 
