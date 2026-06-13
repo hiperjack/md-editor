@@ -581,6 +581,22 @@ export function openFontSettings(): Promise<void> {
       row.appendChild(select);
       c.appendChild(row);
 
+      // 「コードを既定で隠す」チェックボックス（既定ON）
+      const collapseRow = document.createElement("label");
+      collapseRow.className = "settings-row settings-row-checkbox";
+      const collapse = document.createElement("input");
+      collapse.type = "checkbox";
+      collapse.className = "settings-input";
+      collapse.checked = docDraft.theme.mermaidCollapsed;
+      const collapseText = document.createElement("span");
+      collapseText.textContent = t("mermaid.collapse");
+      collapse.addEventListener("change", () => {
+        docDraft.theme.mermaidCollapsed = collapse.checked;
+      });
+      collapseRow.appendChild(collapse);
+      collapseRow.appendChild(collapseText);
+      c.appendChild(collapseRow);
+
       return c;
     }
 

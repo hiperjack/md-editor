@@ -36,6 +36,7 @@ import { editImageNodeAtPos, isImageNode } from "./image-edit";
 import { searchPlugin } from "./search-plugin";
 import { fileTypeOfPath, wrapMermaidSource } from "./mmd";
 import { mermaidCodePreview } from "./mermaid-renderer";
+import { docTheme } from "./theme";
 import { t } from "./i18n";
 
 /**
@@ -66,6 +67,42 @@ function captureCodeBlockHidden(container: HTMLElement): boolean[] {
     const cm = block.querySelector<HTMLElement>(".cm-editor");
     return !!cm && cm.offsetParent === null;
   });
+}
+
+// Mermaidコードブロックを既定で「隠す」（プレビューのみ）状態にする。
+// プレビュー(＝トグルボタン)の出現を待ってからトグルする。
+function autoCollapseMermaidBlocks(container: HTMLElement): void {
+  let tries = 0;
+  const collapsed = new WeakSet<Element>();
+  const apply = () => {
+    const blocks = Array.from(
+      container.querySelectorAll<HTMLElement>(".milkdown-code-block"),
+    );
+    let anyPending = false;
+    for (const block of blocks) {
+      const lang = block
+        .querySelector<HTMLElement>(".language-button")
+        ?.textContent?.trim()
+        .toLowerCase();
+      if (lang !== "mermaid") continue;
+      if (collapsed.has(block)) continue;
+      const cm = block.querySelector<HTMLElement>(".cm-editor");
+      const toggle = block.querySelector<HTMLElement>(".preview-toggle-button");
+      // トグルボタンはプレビュー描画後に出る。出るまで待つ。
+      if (!toggle || !cm) {
+        anyPending = true;
+        continue;
+      }
+      if (cm.offsetParent !== null) toggle.click(); // 表示中→隠す
+      collapsed.add(block);
+    }
+    // 図のプレビュー描画(デバウンス~800ms)を待つため一定回数まで再試行する。
+    if (anyPending && tries < 150) {
+      tries++;
+      requestAnimationFrame(apply);
+    }
+  };
+  requestAnimationFrame(apply);
 }
 
 // 作り直し後のコードブロックに「隠す」状態を復元する（出現順で対応）。
@@ -230,7 +267,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
 
     let pending = pendingEditors.get(tab.id);
     if (!pending) {
-      pending = make(tab)
+      pending = make(tab, { autoCollapse: true })
         .then((entry) => {
           editors.set(tab.id, entry);
           return entry;
@@ -272,7 +309,10 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     };
   };
 
-  const make = async (tab: Tab): Promise<EditorEntry> => {
+  const make = async (
+    tab: Tab,
+    opts?: { autoCollapse?: boolean },
+  ): Promise<EditorEntry> => {
     if (tab.kind === "preview") return makePreview(tab);
 
     // 移送（新規ウィンドウ化）タブは、表示内容と baseline を引き継ぐ。
@@ -772,6 +812,11 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     // markdownUpdated は編集まで発火しないので初期 dirty をここで反映する。
     if (override && crepe.getMarkdown() !== baseline) {
       store.setDirty(tab.id, true);
+    }
+
+    // Mermaidコードブロックを既定で隠す設定なら、初回生成時に折りたたむ。
+    if (opts?.autoCollapse && docTheme.get().theme.mermaidCollapsed) {
+      autoCollapseMermaidBlocks(container);
     }
 
     return entry;

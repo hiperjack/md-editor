@@ -166,6 +166,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "mermaid.note":
       "Mermaid図の配色設定です。プレビューに適用されます（HTML出力・PDF印刷は文書の背景色に合わせます）。",
     "mermaid.followApp": "表示テーマに揃える",
+    "mermaid.collapse": "コードを既定で隠す（プレビューのみ表示）",
     "mermaid.theme": "配色",
     "mermaid.theme.system": "システムに合わせる",
     "mermaid.theme.light": "ライト",
@@ -336,6 +337,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "mermaid.note":
       "Color scheme for Mermaid diagrams in the preview (HTML export and PDF printing follow the document background).",
     "mermaid.followApp": "Match display theme",
+    "mermaid.collapse": "Collapse code by default (preview only)",
     "mermaid.theme": "Color scheme",
     "mermaid.theme.system": "Match system",
     "mermaid.theme.light": "Light",

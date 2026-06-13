@@ -32,6 +32,8 @@ export type DocTheme = {
   mermaidTheme: MermaidColorScheme;
   /** Mermaid配色をアプリの表示テーマに揃えるか（true=揃える、false=mermaidThemeで個別指定） */
   mermaidFollowApp: boolean;
+  /** Mermaidコードブロックを既定で隠す（プレビューのみ表示）か */
+  mermaidCollapsed: boolean;
 };
 
 export type DocDecorations = {
@@ -87,6 +89,7 @@ export const DEFAULT_DOC_SETTINGS: DocSettings = {
     highlightTheme: "github",
     mermaidTheme: "system",
     mermaidFollowApp: true,
+    mermaidCollapsed: true,
   },
   decorations: {
     autoToc: false,
@@ -154,6 +157,10 @@ export function validateDocSettings(raw: unknown): DocSettings {
     typeof t.mermaidFollowApp === "boolean"
       ? t.mermaidFollowApp
       : d.theme.mermaidFollowApp;
+  const mermaidCollapsed =
+    typeof t.mermaidCollapsed === "boolean"
+      ? t.mermaidCollapsed
+      : d.theme.mermaidCollapsed;
 
   return {
     version: 1,
@@ -168,6 +175,7 @@ export function validateDocSettings(raw: unknown): DocSettings {
       highlightTheme,
       mermaidTheme,
       mermaidFollowApp,
+      mermaidCollapsed,
     },
     decorations: {
       autoToc: typeof dec.autoToc === "boolean" ? dec.autoToc : d.decorations.autoToc,
