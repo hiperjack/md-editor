@@ -36,6 +36,15 @@ pub struct TabPayload {
     /// preview タブ: タブに表示する名前。
     #[serde(default)]
     pub preview_title: Option<String>,
+    /// preview タブ: 表示モード ("export" | "htmlfile")。
+    #[serde(default)]
+    pub preview_mode: Option<String>,
+    /// preview タブ: htmlfile モード用の生HTML。
+    #[serde(default)]
+    pub preview_src_doc: Option<String>,
+    /// preview タブ: リフレッシュ元のファイルパス。
+    #[serde(default)]
+    pub source_file_path: Option<String>,
 }
 
 /// ラベル → 移送待ちタブ内容。

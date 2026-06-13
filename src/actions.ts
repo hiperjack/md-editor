@@ -336,6 +336,9 @@ export async function openTabInNewWindow(
               kind: "preview",
               previewHtml: tab.previewHtml ?? "",
               previewTitle: tab.previewTitle ?? "",
+              previewMode: tab.previewMode ?? "export",
+              previewSrcDoc: tab.previewSrcDoc ?? "",
+              sourceFilePath: tab.sourceFilePath ?? null,
             }
           : {}),
       },
@@ -419,6 +422,9 @@ export async function transferTabToWindow(
               kind: "preview",
               previewHtml: tab.previewHtml ?? "",
               previewTitle: tab.previewTitle ?? "",
+              previewMode: tab.previewMode ?? "export",
+              previewSrcDoc: tab.previewSrcDoc ?? "",
+              sourceFilePath: tab.sourceFilePath ?? null,
             }
           : {}),
       },
@@ -458,6 +464,9 @@ export type MovedTabPayload = {
   kind?: "preview";
   previewHtml?: string;
   previewTitle?: string;
+  previewMode?: "export" | "htmlfile";
+  previewSrcDoc?: string;
+  sourceFilePath?: string | null;
 };
 
 /**
@@ -482,7 +491,10 @@ export async function openMovedTab(
     // プレビュータブとして復元する（ズーム倍率は引き継がず等倍）。
     store.addPreviewTab({
       title: payload.previewTitle ?? "Preview",
-      html: payload.previewHtml ?? "",
+      html: payload.previewHtml,
+      srcDoc: payload.previewSrcDoc,
+      mode: payload.previewMode ?? "export",
+      sourceFilePath: payload.sourceFilePath ?? null,
     });
   } else {
     store.addTab({
