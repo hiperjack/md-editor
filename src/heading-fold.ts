@@ -22,14 +22,37 @@ interface FoldState {
 
 const foldKey = new PluginKey<FoldState>("heading-fold");
 
+/** 折りたたみ集合が変化したときに呼ぶリスナ。アウトライン再描画に使う。 */
+const foldChangeListeners = new Set<() => void>();
+
+/** 折りたたみ変化を購読する。解除関数を返す。 */
+export function onHeadingFoldChange(cb: () => void): () => void {
+  foldChangeListeners.add(cb);
+  return () => foldChangeListeners.delete(cb);
+}
+
+/** 2つの折りたたみ位置配列が(順不同で)同じ内容かを判定する。 */
+function sameFoldSet(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort((x, y) => x - y);
+  const sb = [...b].sort((x, y) => x - y);
+  return sa.every((v, i) => v === sb[i]);
+}
+
 /** 指定見出しの折りたたみ状態をトグルするトランザクションを発行する。 */
-function toggleFold(view: EditorView, headingPos: number): void {
+export function toggleFold(view: EditorView, headingPos: number): void {
   view.dispatch(view.state.tr.setMeta(foldKey, { toggle: headingPos }));
 }
 
 /** 見出しの折りたたみをすべて解除する。 */
 export function expandAllHeadingFolds(view: EditorView): void {
   view.dispatch(view.state.tr.setMeta(foldKey, { clear: true }));
+}
+
+/** 現在折りたたみ中の見出し位置の配列を返す(コピー)。無い場合は空配列。 */
+export function getHeadingFoldPositions(state: EditorState): number[] {
+  const fold = foldKey.getState(state);
+  return fold ? [...fold.collapsed] : [];
 }
 
 /** 三角アイコン（トグルボタン）の DOM を生成する。 */
@@ -146,5 +169,19 @@ export const headingFoldPlugin = new Plugin<FoldState>({
       }
       return buildDecorations(state, fold.collapsed);
     },
+  },
+  view() {
+    // 折りたたみ集合が前回と変わったらリスナへ通知する。
+    // 折りたたみトグルはドキュメント非変更のため markdownUpdated では拾えない。
+    let prev: number[] = [];
+    return {
+      update(view) {
+        const next = getHeadingFoldPositions(view.state);
+        if (!sameFoldSet(prev, next)) {
+          prev = next;
+          for (const fn of foldChangeListeners) fn();
+        }
+      },
+    };
   },
 });
