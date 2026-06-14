@@ -4,7 +4,6 @@ use tauri::Manager;
 
 mod commands;
 mod i18n;
-mod menu;
 mod recent;
 mod startup;
 mod tabwin;
@@ -46,6 +45,7 @@ pub fn run() {
             commands::add_recent_file,
             commands::set_recent_visible,
             commands::set_lang,
+            commands::list_recent_files,
             commands::open_external_url,
             commands::init_window_menu,
             tabwin::stash_pending_tab,
@@ -64,10 +64,8 @@ pub fn run() {
             // 最近開いたファイルをロードしてstateへ
             let initial = recent::load_initial(app.handle());
             recent::set_initial(app.handle(), initial);
-            // メニューイベントハンドラを登録（一度だけ）。
-            // メニュー自体は各ウィンドウが起動時に init_window_menu で個別に割り当てる
-            // （HMENU を共有しないことで、子ウィンドウを閉じても他のメニューが壊れない）。
-            menu::register_handlers(app.handle());
+            // メニューは各ウィンドウのフロント側でHTMLとして描画する
+            // （ネイティブメニューは WebView2 で Alt ニーモニックが効かないため廃止）。
             // 初回起動時の引数を保留に格納
             let argv: Vec<String> = std::env::args().collect();
             startup::extract_path_to_pending(app.handle(), &argv);

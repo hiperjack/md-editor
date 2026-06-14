@@ -91,6 +91,84 @@ body {
 }
 
 /* ── Tab bar ─────────────────────────────────── */
+/* ── Menu bar (HTML) ─────────────────────────── */
+#menubar.menubar {
+  display: flex;
+  align-items: stretch;
+  height: 26px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 50;
+  user-select: none;
+  font-size: 13px;
+}
+.menubar-top {
+  border: none;
+  background: transparent;
+  color: var(--fg-1);
+  padding: 0 10px;
+  cursor: pointer;
+  font-size: 13px;
+  height: 100%;
+}
+.menubar-top:hover,
+.menubar-top.active {
+  background: var(--bg-3);
+  color: var(--fg-0);
+}
+.menubar-top u {
+  text-underline-offset: 2px;
+}
+.menubar-dropdown {
+  position: absolute;
+  top: 100%;
+  min-width: 220px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 0 0 6px 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  padding: 4px 0;
+  z-index: 1000;
+}
+.menubar-item {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 5px 14px;
+  cursor: pointer;
+  color: var(--fg-1);
+  white-space: nowrap;
+}
+.menubar-item.highlight {
+  background: var(--accent);
+  color: #fff;
+}
+.menubar-item.highlight .menubar-item-accel {
+  color: rgba(255, 255, 255, 0.85);
+}
+.menubar-item.disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.menubar-item-label {
+  flex: 1;
+}
+.menubar-item-label u {
+  text-underline-offset: 2px;
+}
+.menubar-item-accel {
+  margin-left: auto;
+  color: var(--fg-2);
+  font-size: 12px;
+}
+.menubar-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 8px;
+}
+
 #tabbar {
   display: flex;
   align-items: stretch;

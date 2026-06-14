@@ -7,6 +7,8 @@ import { createTabBar } from "./tabs";
 import { createToolbar, makeToolbarActions } from "./toolbar";
 import { setupTitle } from "./title";
 import { openAboutModal } from "./about-modal";
+import { createMenuBar, type TopMenu, type MenuEntry } from "./menu-bar";
+import { makeEditOps } from "./edit-ops";
 import { setupShortcuts } from "./shortcuts";
 import { createFindReplace } from "./find-replace";
 import { createOutlinePanel } from "./outline";
@@ -36,7 +38,7 @@ import { showContextMenu, type MenuItem } from "./context-menu";
 import { printActiveTab } from "./print";
 import { installDiagramViewerTrigger } from "./diagram-viewer";
 import { setMermaidColorScheme } from "./mermaid-renderer";
-import { setLang, t } from "./i18n";
+import { setLang, t, onLangChange } from "./i18n";
 import "./style.css";
 import "./styles/print.css";
 
@@ -50,10 +52,11 @@ type OpenFilePayload = {
 };
 
 async function bootstrap(): Promise<void> {
+  const menubarEl = document.getElementById("menubar");
   const tabbarEl = document.getElementById("tabbar");
   const toolbarEl = document.getElementById("toolbar");
   const editorHostEl = document.getElementById("editor-host");
-  if (!tabbarEl || !toolbarEl || !editorHostEl) {
+  if (!menubarEl || !tabbarEl || !toolbarEl || !editorHostEl) {
     throw new Error("Required DOM elements not found");
   }
 
@@ -382,6 +385,138 @@ async function bootstrap(): Promise<void> {
   const fmtActions = makeToolbarActions(editor);
   createToolbar(toolbarEl, { ...fileActions, ...viewActions, ...fmtActions });
 
+  // ── HTMLメニューバー（Alt 操作対応） ──────────────
+  const editOps = makeEditOps(editor);
+  const basename = (p: string) => p.split(/[\\/]/).pop() || p;
+  let recentFiles: string[] = [];
+
+  const openRecent = async (path: string) => {
+    try {
+      const content = await invoke<string>("read_file", { path });
+      if (/\.html?$/i.test(path)) {
+        await openHtmlFileTab(path, content, editor);
+      } else {
+        await openOrSwitch(path, content, editor);
+      }
+    } catch {
+      void message(t("open.notFound").replace("{path}", path), {
+        title: t("open.notFoundTitle"),
+        kind: "error",
+      });
+    }
+  };
+
+  const buildMenus = (): TopMenu[] => [
+    {
+      id: "file",
+      label: t("menu.file"),
+      mnemonic: "F",
+      onOpen: async () => {
+        try {
+          recentFiles = await invoke<string[]>("list_recent_files");
+        } catch {
+          recentFiles = [];
+        }
+      },
+      items: () => {
+        const items: MenuEntry[] = [
+          { type: "item", label: t("menu.new"), mnemonic: "N", accel: "Ctrl+N", run: fileActions.file_new },
+          { type: "item", label: t("menu.open"), mnemonic: "O", accel: "Ctrl+O", run: fileActions.file_open },
+        ];
+        if (settings.get().showRecent && recentFiles.length > 0) {
+          items.push({ type: "sep" });
+          for (const path of recentFiles.slice(0, 10)) {
+            items.push({ type: "item", label: basename(path), run: () => void openRecent(path) });
+          }
+        }
+        items.push(
+          { type: "sep" },
+          { type: "item", label: t("menu.save"), mnemonic: "S", accel: "Ctrl+S", run: fileActions.file_save },
+          { type: "item", label: t("menu.saveAs"), mnemonic: "A", accel: "Ctrl+Shift+S", run: fileActions.file_save_as },
+          { type: "sep" },
+          { type: "item", label: t("menu.exportHtml"), mnemonic: "E", accel: "Ctrl+Shift+E", run: fileActions.file_export_html },
+          { type: "item", label: t("menu.htmlPreview"), mnemonic: "H", accel: "Ctrl+Shift+V", run: fileActions.file_html_preview },
+          { type: "item", label: t("menu.print"), mnemonic: "P", accel: "Ctrl+P", run: fileActions.file_print },
+          { type: "sep" },
+          { type: "item", label: t("menu.close"), mnemonic: "C", accel: "Ctrl+W", run: fileActions.file_close },
+          { type: "sep" },
+          { type: "item", label: t("menu.quit"), mnemonic: "Q", run: () => void getCurrentWindow().close() },
+        );
+        return items;
+      },
+    },
+    {
+      id: "edit",
+      label: t("menu.edit"),
+      mnemonic: "E",
+      items: () => [
+        { type: "item", label: t("menu.undo"), mnemonic: "U", accel: "Ctrl+Z", run: editOps.undo },
+        { type: "item", label: t("menu.redo"), mnemonic: "R", accel: "Ctrl+Y", run: editOps.redo },
+        { type: "sep" },
+        { type: "item", label: t("menu.cut"), mnemonic: "T", accel: "Ctrl+X", run: editOps.cut },
+        { type: "item", label: t("menu.copy"), mnemonic: "C", accel: "Ctrl+C", run: editOps.copy },
+        { type: "item", label: t("menu.paste"), mnemonic: "P", accel: "Ctrl+V", run: editOps.paste },
+        { type: "item", label: t("menu.selectAll"), mnemonic: "A", accel: "Ctrl+A", run: editOps.selectAll },
+      ],
+    },
+    {
+      id: "format",
+      label: t("menu.format"),
+      mnemonic: "O",
+      items: () => [
+        { type: "item", label: t("menu.bold"), mnemonic: "B", accel: "Ctrl+B", run: fmtActions.fmt_bold },
+        { type: "item", label: t("menu.italic"), mnemonic: "I", accel: "Ctrl+I", run: fmtActions.fmt_italic },
+        { type: "item", label: t("menu.strike"), mnemonic: "S", accel: "Ctrl+Shift+X", run: fmtActions.fmt_strike },
+        { type: "item", label: t("menu.code"), mnemonic: "C", accel: "Ctrl+E", run: fmtActions.fmt_code },
+        { type: "sep" },
+        { type: "item", label: t("menu.h1"), mnemonic: "1", accel: "Ctrl+Alt+1", run: fmtActions.fmt_h1 },
+        { type: "item", label: t("menu.h2"), mnemonic: "2", accel: "Ctrl+Alt+2", run: fmtActions.fmt_h2 },
+        { type: "item", label: t("menu.h3"), mnemonic: "3", accel: "Ctrl+Alt+3", run: fmtActions.fmt_h3 },
+        { type: "sep" },
+        { type: "item", label: t("menu.quote"), mnemonic: "Q", run: fmtActions.fmt_quote },
+        { type: "item", label: t("menu.bullet"), mnemonic: "U", run: fmtActions.fmt_bullet },
+        { type: "item", label: t("menu.ordered"), mnemonic: "N", run: fmtActions.fmt_ordered },
+        { type: "item", label: t("menu.codeblock"), mnemonic: "K", run: fmtActions.fmt_codeblock },
+        { type: "item", label: t("menu.table"), mnemonic: "T", run: fmtActions.fmt_table },
+        { type: "item", label: t("menu.hr"), mnemonic: "H", run: fmtActions.fmt_hr },
+        { type: "sep" },
+        { type: "item", label: t("menu.link"), mnemonic: "L", accel: "Ctrl+K", run: fmtActions.fmt_link },
+      ],
+    },
+    {
+      id: "view",
+      label: t("menu.view"),
+      mnemonic: "V",
+      items: () => [
+        { type: "item", label: t("menu.zoomIn"), mnemonic: "I", accel: "Ctrl++", run: viewActions.view_zoom_in },
+        { type: "item", label: t("menu.zoomOut"), mnemonic: "O", accel: "Ctrl+-", run: viewActions.view_zoom_out },
+        { type: "item", label: t("menu.zoomReset"), mnemonic: "R", accel: "Ctrl+0", run: viewActions.view_zoom_reset },
+        { type: "sep" },
+        { type: "item", label: t("menu.outline"), mnemonic: "L", accel: "Ctrl+Shift+O", run: viewActions.view_outline },
+        { type: "item", label: t("menu.settings"), mnemonic: "S", accel: "Ctrl+,", run: viewActions.view_font },
+      ],
+    },
+    {
+      id: "help",
+      label: t("menu.help"),
+      mnemonic: "H",
+      items: () => [
+        { type: "item", label: t("menu.about"), mnemonic: "A", run: helpActions.help_about },
+      ],
+    },
+  ];
+
+  let menuBar = createMenuBar(menubarEl, buildMenus(), {
+    onClose: () => editor.focus(),
+  });
+  // 言語切替時はラベルが変わるので作り直す。
+  onLangChange(() => {
+    menuBar.destroy();
+    menuBar = createMenuBar(menubarEl, buildMenus(), {
+      onClose: () => editor.focus(),
+    });
+  });
+
   // 右クリックメニュー:
   //  - エディタ本文の上では独自の文脈対応メニューを表示する。
   //  - それ以外（タブ・左パネル・ツールバー等）では WebView2 標準メニューを抑止。
@@ -430,10 +565,7 @@ async function bootstrap(): Promise<void> {
   setupShortcuts(editor, fileActions, find);
 
   if (isTauriContext()) {
-    // このウィンドウ専用のネイティブメニューを割り当てる（HMENU を共有しない）。
-    void invoke("init_window_menu").catch((e) =>
-      console.warn("init_window_menu failed:", e),
-    );
+    // メニューは上で生成した HTML メニューバーを使う（ネイティブメニューは廃止）。
 
     // このウィンドウのハンドル。イベント購読はこのウィンドウ宛てのみを受け取る
     // よう、グローバル listen ではなく appWin.listen を使う（emit_to で

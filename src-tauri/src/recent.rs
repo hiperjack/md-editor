@@ -57,6 +57,9 @@ pub fn set_initial(app: &AppHandle, list: Vec<String>) {
     }
 }
 
+// 旧ネイティブメニューの最近ファイル表示判定に使っていた。
+// 現在は表示可否をフロント側の設定で扱うため未使用だが、念のため残す。
+#[allow(dead_code)]
 pub fn is_visible(app: &AppHandle) -> bool {
     let state: State<RecentVisible> = app.state();
     let guard = state.0.lock();

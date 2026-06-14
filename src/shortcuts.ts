@@ -49,6 +49,30 @@ export function setupShortcuts(
         return;
       }
 
+      // 印刷（Ctrl+P）。WebView2標準の印刷を抑止して独自印刷へ。
+      if (!e.shiftKey && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        fileActions.file_print?.();
+        return;
+      }
+
+      // 文字サイズ（Ctrl + = / - / 0）。ネイティブメニュー撤去に伴い明示的に拾う。
+      if (e.key === "=" || e.key === "+") {
+        e.preventDefault();
+        settings.changeFontSize(1);
+        return;
+      }
+      if (e.key === "-") {
+        e.preventDefault();
+        settings.changeFontSize(-1);
+        return;
+      }
+      if (e.key === "0") {
+        e.preventDefault();
+        settings.resetFontSize();
+        return;
+      }
+
       // タブ移動
       if (e.shiftKey && e.key === "Tab") {
         e.preventDefault();

@@ -1,3 +1,7 @@
+// メニューはHTMLで描画するようになったため、このモジュールの翻訳テーブル等は
+// 現状フロント側に移行済み。将来の利用に備えて残すため dead_code を許可する。
+#![allow(dead_code)]
+
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
 
