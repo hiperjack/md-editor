@@ -127,6 +127,9 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
   // プレビュータブ用の表示のみ折りたたみ状態(見出しインデックスの集合)。
   // ProseMirror が無く連動先が無いため、アウトライン内の表示だけを制御する。
   const previewCollapsed = new Set<number>();
+  // previewCollapsed はインデックスで状態を持つため、見出し構成が変わったら
+  // 別項目を誤って折りたたまないよう、フィンガープリント不一致でクリアする。
+  let previewFingerprint = "";
 
   /** heading 位置へジャンプし、エディタ上端に揃える。 */
   const jumpTo = (pos: number) => {
@@ -201,6 +204,12 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
     const headings = pane
       ? Array.from(pane.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6"))
       : [];
+    // 見出し構成(テキスト列)が前回と変わっていたら折りたたみ状態をリセット。
+    const fingerprint = headings.map((h) => h.textContent ?? "").join("\x00");
+    if (fingerprint !== previewFingerprint) {
+      previewCollapsed.clear();
+      previewFingerprint = fingerprint;
+    }
     const levels = headings.map((h) => Number(h.tagName.slice(1)) || 1);
     // 子有無(直後により深いレベルがあるか)。
     const hasChild = levels.map((lv, i) => {
