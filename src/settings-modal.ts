@@ -42,6 +42,7 @@ export function openFontSettings(): Promise<void> {
       showRecent: before.showRecent,
       lang: before.lang as LangSetting,
       theme: before.theme as Theme,
+      mermaidWidthMode: before.mermaidWidthMode,
     };
     // 文書テーマ（HTML出力・印刷用）のドラフト。Applyで永続化、Cancelで破棄。
     const docDraft: DocSettings = docTheme.get();
@@ -377,6 +378,31 @@ export function openFontSettings(): Promise<void> {
       collapseRow.appendChild(collapseText);
       c.appendChild(collapseRow);
 
+      // 表示幅モード（エディタ内プレビューのみ。アプリ表示設定なので draft 側）
+      const widthRow = document.createElement("label");
+      widthRow.className = "settings-row";
+      const widthSpan = document.createElement("span");
+      widthSpan.textContent = t("mermaid.width");
+      widthRow.appendChild(widthSpan);
+      const widthSelect = document.createElement("select");
+      widthSelect.className = "settings-input";
+      const widthOptions: { value: "fit" | "native"; labelKey: string }[] = [
+        { value: "fit", labelKey: "mermaid.width.fit" },
+        { value: "native", labelKey: "mermaid.width.native" },
+      ];
+      for (const opt of widthOptions) {
+        const o = document.createElement("option");
+        o.value = opt.value;
+        o.textContent = t(opt.labelKey);
+        if (opt.value === draft.mermaidWidthMode) o.selected = true;
+        widthSelect.appendChild(o);
+      }
+      widthSelect.addEventListener("change", () => {
+        draft.mermaidWidthMode = widthSelect.value as "fit" | "native";
+      });
+      widthRow.appendChild(widthSelect);
+      c.appendChild(widthRow);
+
       return c;
     }
 
@@ -653,6 +679,7 @@ export function openFontSettings(): Promise<void> {
       draft.showRecent = true;
       draft.lang = "system";
       draft.theme = "system";
+      draft.mermaidWidthMode = "fit";
       const docDefaults = structuredClone(DEFAULT_DOC_SETTINGS);
       docDraft.theme = docDefaults.theme;
       docDraft.decorations = docDefaults.decorations;
@@ -711,6 +738,7 @@ export function openFontSettings(): Promise<void> {
       settings.setShowRecent(s.showRecent);
       settings.setLang(s.lang);
       settings.setTheme(s.theme);
+      settings.setMermaidWidthMode(s.mermaidWidthMode);
     };
 
     /** Preview を1回でも押されたか。Cancel 時に before へ戻すかの判定に使う。 */
@@ -730,6 +758,7 @@ export function openFontSettings(): Promise<void> {
           showRecent: before.showRecent,
           lang: before.lang,
           theme: before.theme,
+          mermaidWidthMode: before.mermaidWidthMode,
         });
         // プレビューで反映した文書テーマ（Mermaid配色等）も元に戻す（保存しない）
         docTheme.previewLive(beforeDoc);

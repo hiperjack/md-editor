@@ -1312,8 +1312,27 @@ body.is-resizing-outline {
 .editor-pane .preview-panel .preview .mermaid-preview svg {
   display: block;
   margin: 0 auto;
-  max-width: 100%;
   height: auto;
+}
+
+/* fit（既定）: エディタ幅に収まるよう縮小する。 */
+:root[data-mermaid-width="fit"]
+  .editor-pane
+  .preview-panel
+  .preview
+  .mermaid-preview
+  svg {
+  max-width: 100%;
+}
+
+/* native: 原寸表示。エディタ幅を超えたらコンテナ(.mermaid-preview, overflow-x:auto)で横スクロール。 */
+:root[data-mermaid-width="native"]
+  .editor-pane
+  .preview-panel
+  .preview
+  .mermaid-preview
+  svg {
+  max-width: none;
 }
 
 /* 設定モーダル: パネルが縦に長いセクション（文書テーマ）用のスクロール */
