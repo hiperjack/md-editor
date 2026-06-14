@@ -151,14 +151,23 @@ fn build_menu(app: &AppHandle<Wry>, recent: &[String]) -> tauri::Result<Menu<Wry
         .item(&quit);
     let file_menu = fb.build()?;
 
+    // OS標準の編集項目。SubmenuBuilder の .undo()/.copy() 等は既定（英語）ラベルに
+    // なるため、言語に合わせたラベルを与えた PredefinedMenuItem を明示的に作る。
+    let edit_undo = PredefinedMenuItem::undo(app, Some(i18n::t(lang, "edit.undo").as_str()))?;
+    let edit_redo = PredefinedMenuItem::redo(app, Some(i18n::t(lang, "edit.redo").as_str()))?;
+    let edit_cut = PredefinedMenuItem::cut(app, Some(i18n::t(lang, "edit.cut").as_str()))?;
+    let edit_copy = PredefinedMenuItem::copy(app, Some(i18n::t(lang, "edit.copy").as_str()))?;
+    let edit_paste = PredefinedMenuItem::paste(app, Some(i18n::t(lang, "edit.paste").as_str()))?;
+    let edit_select_all =
+        PredefinedMenuItem::select_all(app, Some(i18n::t(lang, "edit.select_all").as_str()))?;
     let edit_menu = SubmenuBuilder::new(app, i18n::t(lang, "menu.edit"))
-        .undo()
-        .redo()
+        .item(&edit_undo)
+        .item(&edit_redo)
         .separator()
-        .cut()
-        .copy()
-        .paste()
-        .select_all()
+        .item(&edit_cut)
+        .item(&edit_copy)
+        .item(&edit_paste)
+        .item(&edit_select_all)
         .build()?;
 
     let fmt_bold = MenuItemBuilder::with_id("fmt_bold", i18n::t(lang, "fmt.bold"))
@@ -237,13 +246,15 @@ fn build_menu(app: &AppHandle<Wry>, recent: &[String]) -> tauri::Result<Menu<Wry
         .build()?;
 
     let about_label = i18n::t(lang, "help.about");
+    // バージョンは Cargo.toml (CARGO_PKG_VERSION) から取得し、ハードコードを避ける。
+    let app_version = app.package_info().version.to_string();
     let about = PredefinedMenuItem::about(
         app,
         Some(about_label.as_str()),
         Some(
             AboutMetadataBuilder::new()
                 .name(Some("mdedit"))
-                .version(Some("1.1.0"))
+                .version(Some(app_version.as_str()))
                 .build(),
         ),
     )?;

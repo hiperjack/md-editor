@@ -50,6 +50,20 @@ pub fn t(lang: Lang, key: &str) -> String {
         (Ja, "menu.help") => "ヘルプ",
         (En, "menu.help") => "Help",
 
+        // 編集（OS標準項目のラベル。日本語モードでも英語のままにならないよう明示する）
+        (Ja, "edit.undo") => "元に戻す",
+        (En, "edit.undo") => "Undo",
+        (Ja, "edit.redo") => "やり直し",
+        (En, "edit.redo") => "Redo",
+        (Ja, "edit.cut") => "切り取り",
+        (En, "edit.cut") => "Cut",
+        (Ja, "edit.copy") => "コピー",
+        (En, "edit.copy") => "Copy",
+        (Ja, "edit.paste") => "貼り付け",
+        (En, "edit.paste") => "Paste",
+        (Ja, "edit.select_all") => "すべて選択",
+        (En, "edit.select_all") => "Select All",
+
         // ファイル
         (Ja, "file.new") => "新規タブ",
         (En, "file.new") => "New tab",
