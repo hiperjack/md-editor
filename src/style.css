@@ -96,7 +96,9 @@ body {
   align-items: stretch;
   background: var(--bg-2);
   border-bottom: 1px solid var(--border);
-  height: 30px;
+  /* タブ高(30px)＋横スクロールバー(4px)の領域を確保し、
+     スクロールバーがタブ文字に被らないようにする。 */
+  height: 34px;
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -104,6 +106,8 @@ body {
 .tab-list {
   display: flex;
   flex: 1;
+  /* タブは上揃え。下の余白(4px)に横スクロールバーを表示する。 */
+  align-items: flex-start;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
@@ -698,6 +702,25 @@ body {
 
 .modal-btn-danger:hover {
   background: rgba(232, 92, 74, 0.12);
+}
+
+/* ── About modal ─────────────────────────────── */
+.about-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.about-version {
+  color: var(--fg-2);
+}
+.about-link {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+  word-break: break-all;
+}
+.about-link:hover {
+  text-decoration: underline;
 }
 
 /* ── Settings modal ──────────────────────────── */

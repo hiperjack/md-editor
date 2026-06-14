@@ -53,6 +53,13 @@ pub fn emit_open_file(app: &AppHandle, path: String) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Failed to read {}: {}", path, e);
+            // 履歴・関連付け起動などでファイルが見つからない/読めないとき、
+            // 黙って失敗せずフロントへ通知してユーザーにメッセージを出す。
+            if let Some(win) = crate::tabwin::focused_or_main(app) {
+                let _ = app.emit_to(win.label(), "open-file-error", path);
+            } else {
+                let _ = app.emit("open-file-error", path);
+            }
             return;
         }
     };

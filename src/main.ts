@@ -1,10 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { message } from "@tauri-apps/plugin-dialog";
 import { store } from "./store";
 import { createEditorHost } from "./editor";
 import { createTabBar } from "./tabs";
 import { createToolbar, makeToolbarActions } from "./toolbar";
 import { setupTitle } from "./title";
+import { openAboutModal } from "./about-modal";
 import { setupShortcuts } from "./shortcuts";
 import { createFindReplace } from "./find-replace";
 import { createOutlinePanel } from "./outline";
@@ -371,6 +373,11 @@ async function bootstrap(): Promise<void> {
     view_outline: () => settings.toggleOutline(),
   };
 
+  // ヘルプメニューアクション
+  const helpActions: Record<string, () => void> = {
+    help_about: () => void openAboutModal(),
+  };
+
   // ツールバー（ファイル系・表示系もボタンに含めるためmergeしてから渡す）
   const fmtActions = makeToolbarActions(editor);
   createToolbar(toolbarEl, { ...fileActions, ...viewActions, ...fmtActions });
@@ -547,9 +554,19 @@ async function bootstrap(): Promise<void> {
       }
     });
 
+    // 履歴・関連付け起動などでファイルが見つからない/読めないときの通知。
+    await appWin.listen<string>("open-file-error", (event) => {
+      const path = event.payload;
+      void message(t("open.notFound").replace("{path}", path), {
+        title: t("open.notFoundTitle"),
+        kind: "error",
+      });
+    });
+
     await appWin.listen<string>("menu-action", (event) => {
       const id = event.payload;
-      const fn = fileActions[id] ?? viewActions[id] ?? fmtActions[id];
+      const fn =
+        fileActions[id] ?? viewActions[id] ?? fmtActions[id] ?? helpActions[id];
       if (fn) fn();
     });
 

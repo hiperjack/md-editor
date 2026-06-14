@@ -1,6 +1,5 @@
 use tauri::menu::{
-    AboutMetadataBuilder, Menu, MenuBuilder, MenuItem, MenuItemBuilder, PredefinedMenuItem,
-    Submenu, SubmenuBuilder,
+    Menu, MenuBuilder, MenuItem, MenuItemBuilder, PredefinedMenuItem, Submenu, SubmenuBuilder,
 };
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow, Wry};
 
@@ -18,7 +17,11 @@ pub fn register_handlers(app: &AppHandle<Wry>) {
             }
             return;
         }
-        if id.starts_with("file_") || id.starts_with("fmt_") || id.starts_with("view_") {
+        if id.starts_with("file_")
+            || id.starts_with("fmt_")
+            || id.starts_with("view_")
+            || id.starts_with("help_")
+        {
             // メニューはアプリ全体に設定されているため、操作は今フォーカス中の
             // ウィンドウだけに届ける（全ウィンドウで保存等が発火しないように）。
             if let Some(win) = crate::tabwin::focused_or_main(app) {
@@ -234,8 +237,9 @@ fn build_menu(app: &AppHandle<Wry>, recent: &[String]) -> tauri::Result<Menu<Wry
         MenuItemBuilder::with_id("view_zoom_reset", i18n::t(lang, "view.zoom_reset"))
             .accelerator("Ctrl+0")
             .build(app)?;
-    let view_font =
-        MenuItemBuilder::with_id("view_font", i18n::t(lang, "view.settings")).build(app)?;
+    let view_font = MenuItemBuilder::with_id("view_font", i18n::t(lang, "view.settings"))
+        .accelerator("Ctrl+,")
+        .build(app)?;
 
     let view_menu = SubmenuBuilder::new(app, i18n::t(lang, "menu.view"))
         .item(&view_zoom_in)
@@ -245,19 +249,9 @@ fn build_menu(app: &AppHandle<Wry>, recent: &[String]) -> tauri::Result<Menu<Wry
         .item(&view_font)
         .build()?;
 
-    let about_label = i18n::t(lang, "help.about");
-    // バージョンは Cargo.toml (CARGO_PKG_VERSION) から取得し、ハードコードを避ける。
-    let app_version = app.package_info().version.to_string();
-    let about = PredefinedMenuItem::about(
-        app,
-        Some(about_label.as_str()),
-        Some(
-            AboutMetadataBuilder::new()
-                .name(Some("mdedit"))
-                .version(Some(app_version.as_str()))
-                .build(),
-        ),
-    )?;
+    // About はフロント側のカスタムモーダルで表示する（バージョン＋クリック可能な
+    // GitHub リンク）。OS標準ダイアログはリンクをクリックできないため使わない。
+    let about = MenuItemBuilder::with_id("help_about", i18n::t(lang, "help.about")).build(app)?;
 
     let help_menu = SubmenuBuilder::new(app, i18n::t(lang, "menu.help"))
         .item(&about)

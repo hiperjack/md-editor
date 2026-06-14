@@ -25,6 +25,12 @@ export function openFontSettings(): Promise<void> {
       resolve();
       return;
     }
+    // 既に設定ダイアログが開いていれば二重に開かない
+    // （メニュー accelerator とフロントの Ctrl+, が両方発火しても1つに保つ）。
+    if (root.querySelector(".settings-dialog")) {
+      resolve();
+      return;
+    }
 
     const before = settings.get();
     // 編集中の値（Apply時に確定）

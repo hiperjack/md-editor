@@ -1,5 +1,6 @@
 import { store } from "./store";
 import { settings } from "./settings";
+import { openFontSettings } from "./settings-modal";
 import type { EditorHost } from "./editor";
 import type { FindReplaceController } from "./find-replace";
 
@@ -40,6 +41,13 @@ export function setupShortcuts(
 
       // Mermaid図ビューア表示中は、Ctrl+Tab等のショートカットをビューアに譲る。
       if (document.querySelector(".diagram-viewer-overlay")) return;
+
+      // 設定（Ctrl+,）。WebView2 がメニュー accelerator を取りこぼすため明示的に拾う。
+      if (e.key === ",") {
+        e.preventDefault();
+        void openFontSettings();
+        return;
+      }
 
       // タブ移動
       if (e.shiftKey && e.key === "Tab") {
