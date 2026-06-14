@@ -83,9 +83,15 @@ function setupResizer(resizer: HTMLElement): void {
     dragging = false;
     resizer.classList.remove("is-dragging");
     document.body.classList.remove("is-resizing-outline");
-    resizer.releasePointerCapture(e.pointerId);
+    // capture が既に外れていても無視する（diagram-viewer と同方針）。
+    try {
+      resizer.releasePointerCapture(e.pointerId);
+    } catch {
+      /* noop */
+    }
     resizer.removeEventListener("pointermove", onMove);
     resizer.removeEventListener("pointerup", onUp);
+    resizer.removeEventListener("pointercancel", onUp);
     // 最終位置を確定保存(settings 側がクランプし applyToDom で再反映)
     const left = region.getBoundingClientRect().left;
     settings.setOutlineWidth(e.clientX - left);
@@ -96,9 +102,15 @@ function setupResizer(resizer: HTMLElement): void {
     dragging = true;
     resizer.classList.add("is-dragging");
     document.body.classList.add("is-resizing-outline");
-    resizer.setPointerCapture(e.pointerId);
+    try {
+      resizer.setPointerCapture(e.pointerId);
+    } catch {
+      /* noop */
+    }
     resizer.addEventListener("pointermove", onMove);
     resizer.addEventListener("pointerup", onUp);
+    // ポインタがロストした場合もドラッグ状態を確実に解除する。
+    resizer.addEventListener("pointercancel", onUp);
   });
 }
 
@@ -204,8 +216,11 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
     const headings = pane
       ? Array.from(pane.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6"))
       : [];
-    // 見出し構成(テキスト列)が前回と変わっていたら折りたたみ状態をリセット。
-    const fingerprint = headings.map((h) => h.textContent ?? "").join("\x00");
+    // 見出し構成(レベル+テキスト列)が前回と変わっていたら折りたたみ状態をリセット。
+    // テキストだけだと同名見出しのレベル変更を取りこぼすため tagName も含める。
+    const fingerprint = headings
+      .map((h) => `${h.tagName}:${h.textContent ?? ""}`)
+      .join("\x00");
     if (fingerprint !== previewFingerprint) {
       previewCollapsed.clear();
       previewFingerprint = fingerprint;
