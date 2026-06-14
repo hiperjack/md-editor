@@ -117,6 +117,22 @@ function buildPreviewFigure(svg: string): HTMLElement {
   const el = document.createElement("div");
   el.className = "mermaid-preview";
   el.innerHTML = svg;
+  // mermaid は useMaxWidth により <svg width="100%" style="max-width:Npx"> を出力する。
+  // インラインの width:100% / max-width が残ると、表示幅モード(native=原寸)を CSS の
+  // max-width で制御できない（インラインstyleが優先されエディタ幅に追従してしまう）。
+  // 自然幅を固定幅として与え、レスポンシブ指定を外して、fit/native の出し分けは
+  // CSS の max-width(100% / none)に委ねる。この正規化はエディタ内プレビュー専用パス
+  // (buildPreviewFigure)のみで行い、HTML出力・印刷・図ビューアの SVG には影響しない。
+  const svgEl = el.querySelector<SVGSVGElement>("svg");
+  if (svgEl) {
+    const naturalWidth =
+      parseFloat(svgEl.style.maxWidth) || svgEl.viewBox?.baseVal?.width || 0;
+    if (naturalWidth > 0) {
+      svgEl.style.width = `${naturalWidth}px`;
+      svgEl.style.maxWidth = "";
+      svgEl.removeAttribute("width");
+    }
+  }
   return el;
 }
 
