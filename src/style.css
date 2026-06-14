@@ -1295,6 +1295,17 @@ body.is-resizing-outline {
   cursor: zoom-in;
 }
 
+/*
+  横スクロール領域を1つに集約する。
+  Crepe の .preview にも overflow-x: auto が掛かっており、.mermaid-preview と
+  二重になる。横スクロール対応マウス（例: サムボタン＋ホイール）の横ホイールが、
+  実際にはスクロールできない外側(.preview)へ流れて「途中で止まる」ため、図を含む
+  プレビューでは外側の横スクロールを無効化し、内側(.mermaid-preview)に一本化する。
+*/
+.editor-pane .preview-panel .preview:has(.mermaid-preview) {
+  overflow-x: hidden;
+}
+
 /* HTMLプレビュータブ内のMermaid図もクリックで拡大ビューアを開ける。 */
 .editor-pane.preview-pane .mermaid-figure {
   cursor: zoom-in;
