@@ -42,9 +42,59 @@ export type OutlinePanel = {
   refresh: () => void;
 };
 
+/**
+ * 左パネルとエディタの仕切りをドラッグして #outline-panel の幅を変える。
+ * 確定値は settings.setOutlineWidth に保存し localStorage 永続化する。
+ * 幅のクランプは settings 側(150〜600)に委ねる。
+ */
+function setupResizer(resizer: HTMLElement): void {
+  const region = document.getElementById("editor-region");
+  if (!region) return;
+
+  let dragging = false;
+
+  const onMove = (e: PointerEvent) => {
+    if (!dragging) return;
+    // editor-region 左端からのオフセットを新しいパネル幅にする
+    const left = region.getBoundingClientRect().left;
+    const width = e.clientX - left;
+    // ライブ反映(保存はせず CSS 変数だけ更新して滑らかに)
+    document.documentElement.style.setProperty(
+      "--outline-w",
+      `${Math.max(150, Math.min(600, Math.round(width)))}px`,
+    );
+  };
+
+  const onUp = (e: PointerEvent) => {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove("is-dragging");
+    document.body.classList.remove("is-resizing-outline");
+    resizer.releasePointerCapture(e.pointerId);
+    resizer.removeEventListener("pointermove", onMove);
+    resizer.removeEventListener("pointerup", onUp);
+    // 最終位置を確定保存(settings 側がクランプし applyToDom で再反映)
+    const left = region.getBoundingClientRect().left;
+    settings.setOutlineWidth(e.clientX - left);
+  };
+
+  resizer.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    dragging = true;
+    resizer.classList.add("is-dragging");
+    document.body.classList.add("is-resizing-outline");
+    resizer.setPointerCapture(e.pointerId);
+    resizer.addEventListener("pointermove", onMove);
+    resizer.addEventListener("pointerup", onUp);
+  });
+}
+
 export function createOutlinePanel(editor: EditorHost): OutlinePanel {
   const panel = document.getElementById("outline-panel");
   if (!panel) throw new Error("#outline-panel not found");
+
+  const resizer = document.getElementById("outline-resizer");
+  if (resizer) setupResizer(resizer);
 
   const list = document.createElement("ul");
   list.className = "outline-list";
@@ -190,6 +240,9 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
   const applyVisibility = () => {
     const visible = settings.get().showOutline;
     panel.classList.toggle("is-visible", visible);
+    document
+      .getElementById("outline-resizer")
+      ?.classList.toggle("is-visible", visible);
     if (visible) {
       render();
     } else {
