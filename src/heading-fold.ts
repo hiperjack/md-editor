@@ -23,10 +23,14 @@ interface FoldState {
 const foldKey = new PluginKey<FoldState>("heading-fold");
 
 /** 折りたたみ集合が変化したときに呼ぶリスナ。アウトライン再描画に使う。 */
-const foldChangeListeners = new Set<() => void>();
+const foldChangeListeners = new Set<(view: EditorView) => void>();
 
-/** 折りたたみ変化を購読する。解除関数を返す。 */
-export function onHeadingFoldChange(cb: () => void): () => void {
+/**
+ * 折りたたみ変化を購読する。解除関数を返す。
+ * コールバックには変化したエディタの EditorView が渡されるため、
+ * コンシューマは必要に応じて自分の対象ビューかを判別できる。
+ */
+export function onHeadingFoldChange(cb: (view: EditorView) => void): () => void {
   foldChangeListeners.add(cb);
   return () => foldChangeListeners.delete(cb);
 }
@@ -179,7 +183,7 @@ export const headingFoldPlugin = new Plugin<FoldState>({
         const next = getHeadingFoldPositions(view.state);
         if (!sameFoldSet(prev, next)) {
           prev = next;
-          for (const fn of foldChangeListeners) fn();
+          for (const fn of foldChangeListeners) fn(view);
         }
       },
     };
