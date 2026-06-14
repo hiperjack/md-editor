@@ -61,6 +61,10 @@ export type Settings = {
   showOutline: boolean;
   lang: LangSetting;
   theme: Theme;
+  /** 左アウトラインパネルの横幅(px)。150〜600 にクランプ。 */
+  outlineWidth: number;
+  /** エディタ内Mermaidプレビューの表示幅モード。fit=エディタ幅に縮小, native=原寸+横スクロール。 */
+  mermaidWidthMode: "fit" | "native";
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -72,10 +76,19 @@ const DEFAULT_SETTINGS: Settings = {
   showOutline: false,
   lang: "system",
   theme: "system",
+  outlineWidth: 250,
+  mermaidWidthMode: "fit",
 };
 
 const MIN_SIZE = 8;
 const MAX_SIZE = 48;
+const MIN_OUTLINE_WIDTH = 150;
+const MAX_OUTLINE_WIDTH = 600;
+
+function clampOutlineWidth(n: number): number {
+  return Math.max(MIN_OUTLINE_WIDTH, Math.min(MAX_OUTLINE_WIDTH, Math.round(n)));
+}
+
 const STORAGE_KEY = "mdedit.settings.v1";
 
 function loadFromStorage(): Settings {
@@ -120,6 +133,15 @@ function loadFromStorage(): Settings {
         parsed.theme === "system"
           ? parsed.theme
           : DEFAULT_SETTINGS.theme,
+      outlineWidth:
+        typeof parsed.outlineWidth === "number" &&
+        Number.isFinite(parsed.outlineWidth)
+          ? clampOutlineWidth(parsed.outlineWidth)
+          : DEFAULT_SETTINGS.outlineWidth,
+      mermaidWidthMode:
+        parsed.mermaidWidthMode === "fit" || parsed.mermaidWidthMode === "native"
+          ? parsed.mermaidWidthMode
+          : DEFAULT_SETTINGS.mermaidWidthMode,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -181,6 +203,8 @@ function applyToDom(): void {
   );
   root.style.setProperty("--editor-font-size", `${current.fontSize}px`);
   root.setAttribute("data-theme", effectiveTheme());
+  root.style.setProperty("--outline-w", `${current.outlineWidth}px`);
+  root.setAttribute("data-mermaid-width", current.mermaidWidthMode);
 }
 
 function notify(): void {
@@ -271,6 +295,23 @@ export const settings = {
   setTheme(v: Theme): void {
     if (v === current.theme) return;
     current = { ...current, theme: v };
+    saveToStorage(current);
+    applyToDom();
+    notify();
+  },
+
+  setOutlineWidth(v: number): void {
+    const next = clampOutlineWidth(v);
+    if (next === current.outlineWidth) return;
+    current = { ...current, outlineWidth: next };
+    saveToStorage(current);
+    applyToDom();
+    notify();
+  },
+
+  setMermaidWidthMode(v: "fit" | "native"): void {
+    if (v === current.mermaidWidthMode) return;
+    current = { ...current, mermaidWidthMode: v };
     saveToStorage(current);
     applyToDom();
     notify();
