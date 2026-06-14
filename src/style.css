@@ -407,6 +407,46 @@ body.is-resizing-outline {
   text-overflow: ellipsis;
 }
 
+.outline-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.outline-toggle,
+.outline-toggle-spacer {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 1.4em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  color: var(--fg-2);
+}
+
+.outline-toggle::before {
+  content: "▾";
+  font-size: 10px;
+  line-height: 1;
+}
+
+.outline-toggle.is-collapsed::before {
+  content: "▸";
+}
+
+.outline-toggle:hover {
+  color: var(--fg-0);
+}
+
+.outline-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .outline-item:hover {
   background: var(--tab-hover-bg);
   color: var(--fg-0);

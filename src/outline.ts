@@ -12,8 +12,13 @@ import type { EditorHost } from "./editor";
 import { store } from "./store";
 import { settings } from "./settings";
 import { t, onLangChange } from "./i18n";
+import {
+  toggleFold,
+  getHeadingFoldPositions,
+  onHeadingFoldChange,
+} from "./heading-fold";
 
-type Heading = { level: number; text: string; pos: number };
+type Heading = { level: number; text: string; pos: number; hasChildren: boolean };
 
 /** doc を走査して見出しを抽出する。pos は heading ノードの開始位置。 */
 function collectHeadings(doc: ProseNode): Heading[] {
@@ -24,11 +29,19 @@ function collectHeadings(doc: ProseNode): Heading[] {
         level: Number(node.attrs.level) || 1,
         text: node.textContent,
         pos,
+        hasChildren: false,
       });
       return false; // 見出しのインライン子は走査不要
     }
     return true;
   });
+  // 各見出しの直後に「より深いレベルの見出し」があれば子ありとみなす。
+  for (let i = 0; i < headings.length; i++) {
+    const next = headings[i + 1];
+    if (next && next.level > headings[i].level) {
+      headings[i].hasChildren = true;
+    }
+  }
   return headings;
 }
 
@@ -111,6 +124,10 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
   /** 現在スクロール監視中のコンテナと、その解除関数。 */
   let detachScroll: (() => void) | null = null;
 
+  // プレビュータブ用の表示のみ折りたたみ状態(見出しインデックスの集合)。
+  // ProseMirror が無く連動先が無いため、アウトライン内の表示だけを制御する。
+  const previewCollapsed = new Set<number>();
+
   /** heading 位置へジャンプし、エディタ上端に揃える。 */
   const jumpTo = (pos: number) => {
     const view = editor.getActiveView();
@@ -184,19 +201,57 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
     const headings = pane
       ? Array.from(pane.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6"))
       : [];
+    const levels = headings.map((h) => Number(h.tagName.slice(1)) || 1);
+    // 子有無(直後により深いレベルがあるか)。
+    const hasChild = levels.map((lv, i) => {
+      const nx = levels[i + 1];
+      return nx !== undefined && nx > lv;
+    });
+
     list.replaceChildren();
-    for (const h of headings) {
-      const level = Number(h.tagName.slice(1)) || 1;
+    let hideUntilLevel: number | null = null;
+    for (let i = 0; i < headings.length; i++) {
+      const h = headings[i];
+      const level = levels[i];
+      if (hideUntilLevel !== null && level <= hideUntilLevel) {
+        hideUntilLevel = null;
+      }
+      const hidden = hideUntilLevel !== null;
+      const isCollapsed = previewCollapsed.has(i);
+      if (isCollapsed && hideUntilLevel === null) hideUntilLevel = level;
+      if (hidden) continue;
+
       const li = document.createElement("li");
       li.className = `outline-item outline-level-${level}`;
-      li.textContent = h.textContent || t("outline.untitled");
-      li.title = li.textContent;
-      li.addEventListener("mousedown", (e) => {
+      if (hasChild[i]) {
+        const toggle = document.createElement("span");
+        toggle.className =
+          "outline-toggle" + (isCollapsed ? " is-collapsed" : "");
+        toggle.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (previewCollapsed.has(i)) previewCollapsed.delete(i);
+          else previewCollapsed.add(i);
+          renderPreviewOutline();
+        });
+        li.appendChild(toggle);
+      } else {
+        const spacer = document.createElement("span");
+        spacer.className = "outline-toggle-spacer";
+        li.appendChild(spacer);
+      }
+      const label = document.createElement("span");
+      label.className = "outline-label";
+      label.textContent = h.textContent || t("outline.untitled");
+      label.title = label.textContent;
+      label.addEventListener("mousedown", (e) => {
         e.preventDefault();
         h.scrollIntoView({ block: "start" });
       });
+      li.appendChild(label);
       list.appendChild(li);
     }
+
     const hasHeadings = headings.length > 0;
     list.hidden = !hasHeadings;
     empty.hidden = hasHeadings;
@@ -213,19 +268,62 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
     }
     const view = editor.getActiveView();
     const headings = view ? collectHeadings(view.state.doc) : [];
+    const collapsed = view
+      ? new Set(getHeadingFoldPositions(view.state))
+      : new Set<number>();
 
     list.replaceChildren();
+
+    // 折りたたまれた祖先配下の項目を隠すための追跡。
+    // hideUntilLevel に値がある間は「それより深いレベルの見出し」を非表示にする。
+    let hideUntilLevel: number | null = null;
+
     for (const h of headings) {
+      // 折りたたみ範囲を抜けたか判定(同レベル以上の見出しが来たら解除)。
+      if (hideUntilLevel !== null && h.level <= hideUntilLevel) {
+        hideUntilLevel = null;
+      }
+      const hidden = hideUntilLevel !== null;
+      // この見出し自身が折りたたまれているなら、配下を隠し始める。
+      const isCollapsed = collapsed.has(h.pos);
+      if (isCollapsed && hideUntilLevel === null) {
+        hideUntilLevel = h.level;
+      }
+      if (hidden) continue; // 折りたたまれた祖先の配下は描画しない
+
       const li = document.createElement("li");
       li.className = `outline-item outline-level-${h.level}`;
-      li.textContent = h.text || t("outline.untitled");
-      li.title = li.textContent;
       li.dataset.pos = String(h.pos);
-      li.addEventListener("mousedown", (e) => {
-        // フォーカス喪失を避けつつクリックでジャンプ
+
+      // 子を持つ見出しにだけトグル(▸/▾)を出す。
+      if (h.hasChildren) {
+        const toggle = document.createElement("span");
+        toggle.className =
+          "outline-toggle" + (isCollapsed ? " is-collapsed" : "");
+        toggle.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const v = editor.getActiveView();
+          if (v) toggleFold(v, h.pos);
+        });
+        li.appendChild(toggle);
+      } else {
+        // トグルの幅分のスペーサで字下げ位置を揃える。
+        const spacer = document.createElement("span");
+        spacer.className = "outline-toggle-spacer";
+        li.appendChild(spacer);
+      }
+
+      const label = document.createElement("span");
+      label.className = "outline-label";
+      label.textContent = h.text || t("outline.untitled");
+      label.title = label.textContent;
+      label.addEventListener("mousedown", (e) => {
         e.preventDefault();
         jumpTo(h.pos);
       });
+      li.appendChild(label);
+
       list.appendChild(li);
     }
 
@@ -266,6 +364,8 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
   };
   editor.onContentChange(schedule);
   store.subscribe(schedule);
+  // 折りたたみ(エディタ側トグル含む)が変わったらアウトラインを再描画する。
+  onHeadingFoldChange(schedule);
 
   return { refresh: render };
 }
