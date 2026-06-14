@@ -1313,15 +1313,9 @@ body.is-resizing-outline {
   display: block;
   margin: 0 auto;
   height: auto;
-}
-
-/* fit（既定）: エディタ幅に収まるよう縮小する。 */
-:root[data-mermaid-width="fit"]
-  .editor-pane
-  .preview-panel
-  .preview
-  .mermaid-preview
-  svg {
+  /* fit（既定）: エディタ幅に収まるよう縮小。data-mermaid-width 属性が未設定の
+     一瞬(初期化前)でも安全側(収まる)に倒すため、ベースルールに置く。
+     native はより高い詳細度のセレクタで max-width: none に上書きする。 */
   max-width: 100%;
 }
 
