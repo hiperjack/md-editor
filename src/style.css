@@ -456,7 +456,49 @@ body {
 #editor-host .milkdown .ProseMirror ul,
 #editor-host .milkdown .ProseMirror ol {
   margin: 0;
-  padding-left: 2em;
+  padding-left: 1em;
+}
+
+/*
+  見出しの折りたたみ（heading-fold.ts）。
+  - 見出しの左マージンにホバーで三角アイコンを出し、クリックで配下を畳む。
+  - 折りたたまれたブロックは .folded-hidden で非表示にする（保存内容は不変）。
+*/
+#editor-host .milkdown .ProseMirror .heading-fold {
+  position: relative;
+}
+#editor-host .milkdown .ProseMirror .heading-fold-toggle {
+  position: absolute;
+  left: -1.15em;
+  top: 0;
+  width: 1em;
+  height: 1.4em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  color: var(--crepe-color-on-background, #888);
+}
+#editor-host .milkdown .ProseMirror .heading-fold:hover .heading-fold-toggle,
+#editor-host .milkdown .ProseMirror .heading-fold-toggle.is-collapsed {
+  opacity: 0.55;
+}
+#editor-host .milkdown .ProseMirror .heading-fold-toggle:hover {
+  opacity: 0.9;
+}
+#editor-host .milkdown .ProseMirror .heading-fold-toggle::before {
+  content: "▾";
+  font-size: 0.72em;
+  line-height: 1;
+}
+#editor-host .milkdown .ProseMirror .heading-fold-toggle.is-collapsed::before {
+  content: "▸";
+}
+#editor-host .milkdown .ProseMirror .folded-hidden {
+  display: none;
 }
 
 /*

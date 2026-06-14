@@ -104,13 +104,40 @@ export async function exportActiveTabAsHtml(editor: EditorHost): Promise<void> {
   }
   const tab = store.getActive();
   if (!tab) return;
-  const markdown = editor.getMarkdown(tab.id);
+
+  // 出力対象の markdown と filePath（既定パス・mmd判定に使う）を決める。
+  // 通常の編集タブはその内容を、HTML出力プレビュー（export）タブは元ソースを使う。
+  let markdown: string | null = null;
+  let filePath: string | null = tab.filePath;
+
+  if (tab.kind === "preview") {
+    // 外部HTMLファイル（htmlfile）プレビューは出力対象外。
+    if (tab.previewMode !== "export") return;
+    // 元タブが同一ウィンドウに残っていれば現在の編集内容を優先し、
+    // 無ければ元ファイルをディスクから読み直す（refreshPreviewTabと同じ方針）。
+    if (tab.sourceTabId) {
+      const live = editor.getMarkdown(tab.sourceTabId);
+      if (live !== null) {
+        markdown = live;
+        const src = store
+          .getState()
+          .tabs.find((t) => t.id === tab.sourceTabId);
+        filePath = src ? src.filePath : tab.sourceFilePath ?? null;
+      }
+    }
+    if (markdown === null && tab.sourceFilePath) {
+      markdown = await invoke<string>("read_file", { path: tab.sourceFilePath });
+      filePath = tab.sourceFilePath;
+    }
+  } else {
+    markdown = editor.getMarkdown(tab.id);
+  }
   if (markdown === null) return;
 
   const picked = await saveDialog({
     title: t("export.dialogTitle"),
     filters: [{ name: "HTML", extensions: ["html"] }],
-    defaultPath: defaultHtmlPath(tab.filePath),
+    defaultPath: defaultHtmlPath(filePath),
   });
   if (!picked) return;
 
@@ -126,17 +153,17 @@ export async function exportActiveTabAsHtml(editor: EditorHost): Promise<void> {
 
   try {
     const body =
-      fileTypeOfPath(tab.filePath) === "mmd"
+      fileTypeOfPath(filePath) === "mmd"
         ? await renderMermaidDocumentBody(extractMermaidSource(markdown), settings, {
             onMermaidProgress,
           })
         : await renderDocumentBody(markdown, settings, { onMermaidProgress });
 
     progress.update(t("export.rendering"));
-    await embedLocalImages(body, tab.filePath);
+    await embedLocalImages(body, filePath);
 
     const html = buildStandaloneHtml({
-      title: baseNameWithoutExt(tab.filePath),
+      title: baseNameWithoutExt(filePath),
       settings,
       bodyHtml: body.innerHTML,
     });
@@ -234,6 +261,19 @@ export async function openHtmlFileTab(
   editor: EditorHost,
 ): Promise<void> {
   const name = baseNameWithoutExt(path);
+
+  // 起動直後（アイコンへのD&D等）に残る空タブは、プレビューを開いたら片付ける。
+  // openOrSwitch と同じ条件で「単一の空タブ」だけを対象にする。
+  const { tabs } = store.getState();
+  const startupEmptyId =
+    tabs.length === 1 &&
+    tabs[0].kind !== "preview" &&
+    tabs[0].filePath === null &&
+    tabs[0].diskContent === "" &&
+    !store.isDirty(tabs[0].id)
+      ? tabs[0].id
+      : null;
+
   store.addPreviewTab({
     title: `${t("preview.tabPrefix")}${name}`,
     srcDoc: content,
@@ -242,6 +282,11 @@ export async function openHtmlFileTab(
   });
   const created = store.getActive();
   if (created) await editor.show(created);
+
+  if (startupEmptyId) {
+    await editor.destroy(startupEmptyId);
+    store.removeTab(startupEmptyId);
+  }
 }
 
 /** プレビュータブを更新（再描画）できるか。 */

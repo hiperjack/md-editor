@@ -11,7 +11,7 @@ import { keymap } from "@milkdown/kit/prose/keymap";
 import { Plugin, TextSelection } from "@milkdown/kit/prose/state";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { GapCursor } from "@milkdown/kit/prose/gapcursor";
-import { exitCode, lift } from "@milkdown/kit/prose/commands";
+import { exitCode, joinBackward, lift } from "@milkdown/kit/prose/commands";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import {
   insertHardbreakCommand,
@@ -35,31 +35,12 @@ import { attachLineNumbers } from "./line-numbers";
 import { attachImageResolver } from "./image-resolver";
 import { editImageNodeAtPos, isImageNode } from "./image-edit";
 import { searchPlugin } from "./search-plugin";
+import { headingFoldPlugin } from "./heading-fold";
 import { fileTypeOfPath, wrapMermaidSource } from "./mmd";
 import { mermaidCodePreview } from "./mermaid-renderer";
 import { docTheme } from "./theme";
 import { ensureDocumentStyles, setHljsThemeStyle } from "./doc-styles";
 import { t } from "./i18n";
-
-/**
- * Smart Enter: Obsidian Live Preview に近い挙動にする。
- * - paragraph 内の Enter → hardbreak 挿入 (ソース上は1行追加)
- * - 直前が hardbreak なら paragraph 分割 (空行 + 新段落)
- * - list_item / code_block / heading / table 内はデフォルト挙動 (splitListItem 等)
- *
- * ProseMirror schema のノード名は preset-commonmark 準拠:
- *   - list_item, code_block (fence), heading, table*
- */
-const SMART_ENTER_GUARD_NODES = new Set([
-  "list_item",
-  "code_block",
-  "fence",
-  "heading",
-  "table",
-  "table_row",
-  "table_cell",
-  "table_header",
-]);
 
 // コードブロックの「プレビューのみ(隠す)」状態を出現順で取得する。
 // .cm-editor が非表示(offsetParent===null)＝「隠す」状態とみなす。
@@ -507,9 +488,8 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       },
     });
 
-    // Smart Enter: paragraph 内では Enter で hardbreak (1行改行)、
-    // 直前が hardbreak なら paragraph 分割 (空行 + 新段落)。
-    // list/code/heading/table は既定挙動を尊重。
+    // Enter は既定の段落分割 (一般的なエディタ挙動)。同じ段落内のソフト改行は
+    // Shift+Enter (hardbreak)。キーマップは後段の keymap({...}) で定義する。
     //
     // また、remark-breaks を組み込み、ソース markdown の単一 \n を hardbreak
     // として解釈する (Obsidian Live Preview 風: ソース1行=表示1行)。
@@ -763,43 +743,29 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     crepe.editor.config((ctx) => {
       ctx.update(prosePluginsCtx, (plugins) => [
         searchPlugin,
+        headingFoldPlugin,
         gapClickPlugin,
         codeBlockUnwrapPlugin,
         imageDoubleClickPlugin,
         imageWheelResizePlugin,
         imageBlockSizePlugin,
         keymap({
-          Enter: (state) => {
-            // GapCursor (block 間のカーソル) では default 挙動 (paragraph 挿入)
-            // に委譲する。ここで hardbreak を挿入すると不要な <br/> が混入する。
-            if (state.selection instanceof GapCursor) return false;
-            const { $from } = state.selection;
-            for (let d = $from.depth; d > 0; d--) {
-              const name = $from.node(d).type.name;
-              if (SMART_ENTER_GUARD_NODES.has(name)) return false;
-            }
-            // 空段落での Enter は默認の splitBlock に委譲して、
-            // 連続 Enter で末尾に空段落を追加できるようにする。
-            // (insertHardbreakCommand は空段落 → hardbreak → 直前 hardbreak
-            // 検出で paragraph 化、というループになり段落が増えない。)
-            const parent = $from.parent;
-            if (
-              parent.type.name === "paragraph" &&
-              parent.content.size === 0
-            ) {
-              return false;
-            }
+          /*
+            Enter は既定の段落分割 / リスト分割に委ねる (一般的なエディタ挙動)。
+            同じ段落内のソフト改行 (hardbreak) は Shift+Enter に割り当てる。
+            外部ファイル読込時の remark-breaks (単一 \n → hardbreak) は互換のため残す。
+          */
+          "Shift-Enter": () => {
             const commands = ctx.get(commandsCtx);
             return commands.call(insertHardbreakCommand.key);
           },
           /*
-            blockquote の先頭で Backspace を押したら引用を解除する。
-            Markdown 編集の慣習に合わせ、空白行作成や 1文字削除より引用解除を優先。
-            条件:
-             - 選択が空 (キャレットのみ)
-             - 親 paragraph の先頭 (parentOffset === 0)
-             - 祖先に blockquote がある
-            これらが揃ったときだけ ProseMirror 標準の lift を呼ぶ。
+            行頭 (キャレットのみ・parentOffset === 0) での Backspace の挙動を、
+            祖先ノードに応じて分岐させる。
+             - blockquote 先頭 → 引用解除 (lift)。Markdown 編集の慣習に合わせる。
+             - list_item 先頭 → Crepe 既定の「リスト解除」ではなく、標準の前方結合
+               (joinBackward: 直前の行/項目と結合) を行う。先頭にこれ以上前が無く
+               joinBackward が失敗する場合のみ、既定 (リスト解除) にフォールバックする。
           */
           Backspace: (state, dispatch) => {
             const { selection } = state;
@@ -807,14 +773,15 @@ export function createEditorHost(root: HTMLElement): EditorHost {
             const { $from } = selection;
             if ($from.parentOffset !== 0) return false;
             let inBlockquote = false;
+            let inListItem = false;
             for (let d = $from.depth; d > 0; d--) {
-              if ($from.node(d).type.name === "blockquote") {
-                inBlockquote = true;
-                break;
-              }
+              const name = $from.node(d).type.name;
+              if (name === "blockquote") inBlockquote = true;
+              if (name === "list_item") inListItem = true;
             }
-            if (!inBlockquote) return false;
-            return lift(state, dispatch);
+            if (inListItem) return joinBackward(state, dispatch);
+            if (inBlockquote) return lift(state, dispatch);
+            return false;
           },
         }),
         ...plugins,

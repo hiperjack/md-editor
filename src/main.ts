@@ -538,7 +538,13 @@ async function bootstrap(): Promise<void> {
 
     await appWin.listen<OpenFilePayload>("open-file", (event) => {
       const { path, content } = event.payload;
-      void openOrSwitch(path, content, editor);
+      // アプリアイコンへのD&D・関連付け起動など外部からのオープンでも、
+      // .html/.htm はウィンドウへのD&Dと同じくサンドボックスiframeのプレビューで開く。
+      if (/\.html?$/i.test(path)) {
+        void openHtmlFileTab(path, content, editor);
+      } else {
+        void openOrSwitch(path, content, editor);
+      }
     });
 
     await appWin.listen<string>("menu-action", (event) => {
