@@ -65,6 +65,8 @@ const ICONS: Record<string, string> = {
     "M3 3h18a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM9 3v18",
   settings:
     "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z",
+  // 折りたたみを全解除（chevrons-up-down: 上下へ開く＝展開）
+  expand_all: "M7 15l5 5 5-5M7 9l5-5 5 5",
 };
 
 const BUTTONS: ButtonSpec[] = [
@@ -97,8 +99,9 @@ const BUTTONS: ButtonSpec[] = [
   { key: "fmt_link", icon: ICONS.link, titleKey: "tb.link" },
   { key: "fmt_image", icon: ICONS.image, titleKey: "tb.image" },
   { key: "fmt_hr", icon: ICONS.hr, titleKey: "tb.hr" },
-  // 右端側のグループ: spacerの右に区切り→設定ボタンの順で並ぶ
+  // 右端側のグループ: spacerの右に区切り→全展開→設定ボタンの順で並ぶ
   { key: "sep", icon: "", titleKey: "", align: "right" },
+  { key: "view_expand_all", icon: ICONS.expand_all, titleKey: "tb.expand_all", align: "right" },
   { key: "view_font", icon: ICONS.settings, titleKey: "tb.settings", align: "right" },
 ];
 

@@ -38,7 +38,32 @@ export function attachLineNumbers(
   const inner = document.createElement("div");
   inner.className = "line-gutter-inner";
   gutter.appendChild(inner);
+  // ラベル幅の計測用（.line-no と同じフォント。画面外で offsetWidth だけ測る）。
+  const meas = document.createElement("span");
+  meas.setAttribute("aria-hidden", "true");
+  meas.style.cssText =
+    "position:absolute;top:-9999px;left:0;visibility:hidden;white-space:nowrap;" +
+    "font-variant-numeric:tabular-nums;font-size:12px;";
+  gutter.appendChild(meas);
   pane.insertBefore(gutter, pane.firstChild);
+
+  // 現在のガター幅(px)。最長ラベルに合わせて増減させ、同値なら再設定しない
+  // （--gutter-w 変更→再レイアウト→再計算 の無限ループを防ぐ）。
+  let curGutterW = GUTTER_WIDTH;
+  const fitGutter = (entries: Entry[]) => {
+    let maxLabel = "";
+    for (const e of entries) {
+      const s = String(e.line);
+      if (s.length > maxLabel.length) maxLabel = s;
+    }
+    meas.textContent = maxLabel || "0";
+    // padding-left(12) + padding-right(2) + 余白(2)
+    const want = Math.max(GUTTER_WIDTH, Math.ceil(meas.offsetWidth + 16));
+    if (want !== curGutterW) {
+      curGutterW = want;
+      pane.style.setProperty("--gutter-w", `${want}px`);
+    }
+  };
 
   let raf = 0;
   const schedule = () => {
@@ -64,6 +89,7 @@ export function attachLineNumbers(
       }
     })();
     const entries = collectEntries(pm, offset, source);
+    fitGutter(entries);
     render(inner, entries);
   };
 
@@ -104,7 +130,13 @@ export function attachLineNumbers(
   };
 }
 
-type Entry = { top: number; line: number | string; height: number };
+type Entry = {
+  top: number;
+  line: number | string;
+  height: number;
+  /** 折りたたみ中の見出し/リスト項目のエントリ（From-To 表示の起点）。 */
+  collapsed?: boolean;
+};
 type Ctx = { line: number };
 type SrcCtx = {
   srcIdx: number;
@@ -175,7 +207,35 @@ function collectEntries(
     ctx.domIdx++;
   }
 
+  applyFoldRanges(out, srcLines.length);
   return out;
+}
+
+/**
+ * 折りたたみ中の見出し/リスト項目のエントリを「From-To」表記にする。
+ * 折りたたみで隠れた行は行番号エントリを持たないため、次に見える行番号との
+ * 間が起点エントリの範囲（例: "10-123"）になる。
+ */
+function applyFoldRanges(out: Entry[], totalLines: number): void {
+  const lineOf = (e: Entry): number => {
+    const n = typeof e.line === "number" ? e.line : parseInt(String(e.line), 10);
+    return Number.isFinite(n) ? n : NaN;
+  };
+  for (let i = 0; i < out.length; i++) {
+    if (!out[i].collapsed) continue;
+    const from = lineOf(out[i]);
+    if (!Number.isFinite(from)) continue;
+    // 次に「from より大きい行番号」を持つエントリを探し、その手前までを範囲とする。
+    let to = totalLines;
+    for (let j = i + 1; j < out.length; j++) {
+      const ln = lineOf(out[j]);
+      if (Number.isFinite(ln) && ln > from) {
+        to = ln - 1;
+        break;
+      }
+    }
+    if (to > from) out[i].line = `${from}-${to}`;
+  }
 }
 
 function pushBlankLineEntry(
@@ -185,6 +245,9 @@ function pushBlankLineEntry(
 ): void {
   const prev = ctx.blocks[ctx.domIdx - 1] ?? null;
   const next = ctx.blocks[ctx.domIdx] ?? null;
+  // 折りたたみ領域内（直前ブロックが折りたたみ非表示）の空行は、隠れブロックの
+  // 位置を参照して誤った場所に出てしまう。エントリを出さず From-To 範囲に吸収させる。
+  if (prev && prev.closest(".folded-hidden")) return;
   let top: number;
   let height: number;
   if (prev && next) {
@@ -209,6 +272,23 @@ function pushBlankLineEntry(
   out.push({ top, line: ctx.srcIdx + 1, height });
 }
 
+/**
+ * フェンスコードブロックの閉じフェンス行 index（0始まり）を返す。
+ * - openIdx 行がフェンスでなければ -1。
+ * - 閉じフェンスが見つからなければ srcLines.length（末尾までコード扱い）。
+ */
+function findFenceEnd(srcLines: string[], openIdx: number): number {
+  const m = srcLines[openIdx]?.match(/^(\s*)([`~]{3,})/);
+  if (!m) return -1;
+  const ch = m[2][0];
+  const len = m[2].length;
+  const re = new RegExp("^\\s*\\" + ch + "{" + len + ",}\\s*$");
+  for (let i = openIdx + 1; i < srcLines.length; i++) {
+    if (re.test(srcLines[i])) return i;
+  }
+  return srcLines.length;
+}
+
 function walkBlockSrc(
   el: HTMLElement,
   ctx: SrcCtx,
@@ -216,23 +296,23 @@ function walkBlockSrc(
   offset: number,
 ): void {
   if (isCodeBlock(el)) {
-    pushAt(out, el, ctx.srcIdx + 1, offset);
-    ctx.srcIdx++;
-    const cmLines = Array.from(el.querySelectorAll<HTMLElement>(".cm-line"));
-    // CodeMirror はカーソル位置確保用の空 cm-line を末尾に挿入することがある。
-    // 実ソースには対応する行がないので末尾の空行は除外する。
-    while (
-      cmLines.length > 0 &&
-      (cmLines[cmLines.length - 1].textContent || "").length === 0
-    ) {
-      cmLines.pop();
+    const openIdx = ctx.srcIdx;
+    pushAt(out, el, openIdx + 1, offset); // 開きフェンス行
+    // 行数はソースの実数で進める。CodeMirror は長いコードを仮想化し DOM 上の
+    // .cm-line が表示中の分しか無く（かつスクロールでは再計算しない）ため、外側
+    // ガターで内部行を数えると不整合になる。内部行は CodeMirror 自身が持つ行番号に
+    // 任せ、外側は開き/閉じフェンスだけを示す。
+    const endIdx = findFenceEnd(ctx.srcLines, openIdx);
+    if (endIdx < 0) {
+      ctx.srcIdx = openIdx + 1; // フェンスでない（インデントコード等）
+      return;
     }
-    cmLines.forEach((cl) => {
-      pushAt(out, cl, ctx.srcIdx + 1, offset);
-      ctx.srcIdx++;
-    });
-    pushPhantomEntry(out, el, ctx.srcIdx + 1, offset, "bottom");
-    ctx.srcIdx++;
+    if (endIdx < ctx.srcLines.length) {
+      pushPhantomEntry(out, el, endIdx + 1, offset, "bottom"); // 閉じフェンス行
+      ctx.srcIdx = endIdx + 1;
+    } else {
+      ctx.srcIdx = endIdx; // 閉じフェンスが無い（末尾までコード）
+    }
     return;
   }
 
@@ -274,7 +354,12 @@ function walkBlockSrc(
   }
 
   // 段落・見出し・hr
+  const beforeLen = out.length;
   pushAt(out, el, ctx.srcIdx + 1, offset);
+  // 折りたたみ中の見出しは、隠れた行数を From-To で表すため起点として印を付ける。
+  if (out.length > beforeLen && el.classList.contains("is-collapsed")) {
+    out[out.length - 1].collapsed = true;
+  }
   ctx.srcIdx++;
   const brs = el.querySelectorAll<HTMLBRElement>('br[data-type="hardbreak"]');
   brs.forEach((br) => {
@@ -289,11 +374,38 @@ function walkLiSrc(
   out: Entry[],
   offset: number,
 ): void {
+  const beforeLen = out.length;
   pushAt(out, li, ctx.srcIdx + 1, offset);
+  // 折りたたみ中のリスト項目も From-To 表示の起点として印を付ける。
+  if (out.length > beforeLen && li.closest(".list-fold.is-collapsed")) {
+    out[out.length - 1].collapsed = true;
+  }
   ctx.srcIdx++;
+  // 項目本文の継続行（インデント継続＝hardbreak）も 1 行ずつ数える。
+  // 例:「- VSCode Marketplace」の次行にインデントされた URL があるケース。
+  // ネストリスト内の hardbreak は除外し、項目直下の本文だけを対象にする。
+  liContentHardbreaks(li).forEach((br) => {
+    pushAfterBreak(out, br, ctx.srcIdx + 1, offset);
+    ctx.srcIdx++;
+  });
   findNestedLists(li).forEach((nested) =>
     walkBlockSrc(nested, ctx, out, offset),
   );
+}
+
+/** li 直下の本文に含まれる hardbreak（ネストリスト内のものは除く）。 */
+function liContentHardbreaks(li: HTMLElement): HTMLBRElement[] {
+  return Array.from(
+    li.querySelectorAll<HTMLBRElement>('br[data-type="hardbreak"]'),
+  ).filter((br) => {
+    let el: HTMLElement | null = br.parentElement;
+    while (el && el !== li) {
+      const t = el.tagName.toLowerCase();
+      if (t === "ul" || t === "ol") return false;
+      el = el.parentElement;
+    }
+    return true;
+  });
 }
 
 function pushGapEntry(
@@ -341,8 +453,13 @@ function flattenTopLevel(pm: HTMLElement): HTMLElement[] {
   const out: HTMLElement[] = [];
 
   const visit = (el: HTMLElement) => {
+    // 折りたたみで隠れたブロック (display:none → 高さ0) も、ソース行との対応を
+    // 保つために列挙に含める。位置を持たないため行番号エントリは出ないが、
+    // srcIdx が正しく進み、後続の見える行に正しい番号が付く。
+    // テーブル等は外側ラッパにだけ folded-hidden が付き内側要素には付かないため、
+    // 祖先が折りたたまれている場合も（高さ0でも）対象に含める。
     const rect = el.getBoundingClientRect();
-    if (rect.height === 0) return;
+    if (rect.height === 0 && !el.closest(".folded-hidden")) return;
 
     if (isCodeBlock(el)) {
       out.push(el);
@@ -597,6 +714,9 @@ function getFirstLineRect(el: HTMLElement): DOMRect | null {
 function isCodeBlock(el: HTMLElement): boolean {
   const tag = el.tagName.toLowerCase();
   if (tag === "pre") return true;
+  // Crepe のコードブロックラッパ。折りたたみ等で非表示になると CodeMirror が
+  // アンマウントされ .cm-content が消えるため、ラッパのクラスでも判定する。
+  if (el.classList.contains("milkdown-code-block")) return true;
   if (el.classList.contains("cm-editor")) return true;
   if (el.querySelector(".cm-content") !== null) return true;
   return false;

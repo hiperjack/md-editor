@@ -9,6 +9,8 @@ import { setupTitle } from "./title";
 import { openAboutModal } from "./about-modal";
 import { createMenuBar, type TopMenu, type MenuEntry } from "./menu-bar";
 import { makeEditOps } from "./edit-ops";
+import { expandAllHeadingFolds } from "./heading-fold";
+import { expandAllListFolds } from "./list-fold";
 import { setupShortcuts } from "./shortcuts";
 import { createFindReplace } from "./find-replace";
 import { createOutlinePanel } from "./outline";
@@ -374,6 +376,12 @@ async function bootstrap(): Promise<void> {
     view_zoom_reset: () => settings.resetFontSize(),
     view_font: () => void openFontSettings(),
     view_outline: () => settings.toggleOutline(),
+    view_expand_all: () => {
+      const v = editor.getActiveView();
+      if (!v) return;
+      expandAllHeadingFolds(v);
+      expandAllListFolds(v);
+    },
   };
 
   // ヘルプメニューアクション
@@ -493,6 +501,7 @@ async function bootstrap(): Promise<void> {
         { type: "item", label: t("menu.zoomReset"), mnemonic: "R", accel: "Ctrl+0", run: viewActions.view_zoom_reset },
         { type: "sep" },
         { type: "item", label: t("menu.outline"), mnemonic: "L", accel: "Ctrl+Shift+O", run: viewActions.view_outline },
+        { type: "item", label: t("menu.expandAll"), mnemonic: "E", run: viewActions.view_expand_all },
         { type: "item", label: t("menu.settings"), mnemonic: "S", accel: "Ctrl+,", run: viewActions.view_font },
       ],
     },

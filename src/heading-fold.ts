@@ -27,6 +27,11 @@ function toggleFold(view: EditorView, headingPos: number): void {
   view.dispatch(view.state.tr.setMeta(foldKey, { toggle: headingPos }));
 }
 
+/** 見出しの折りたたみをすべて解除する。 */
+export function expandAllHeadingFolds(view: EditorView): void {
+  view.dispatch(view.state.tr.setMeta(foldKey, { clear: true }));
+}
+
 /** 三角アイコン（トグルボタン）の DOM を生成する。 */
 function makeToggle(
   view: EditorView,
@@ -108,8 +113,12 @@ export const headingFoldPlugin = new Plugin<FoldState>({
       // まず既存の折りたたみ位置を編集に追従させる。
       let collapsed = value.collapsed.map((pos) => tr.mapping.map(pos, -1));
 
-      const meta = tr.getMeta(foldKey) as { toggle?: number } | undefined;
-      if (meta && typeof meta.toggle === "number") {
+      const meta = tr.getMeta(foldKey) as
+        | { toggle?: number; clear?: boolean }
+        | undefined;
+      if (meta?.clear) {
+        collapsed = [];
+      } else if (meta && typeof meta.toggle === "number") {
         const target = meta.toggle;
         collapsed = collapsed.includes(target)
           ? collapsed.filter((p) => p !== target)

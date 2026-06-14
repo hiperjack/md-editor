@@ -421,6 +421,9 @@ body {
   inset: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  /* 行番号ガターの幅。長いラベル（折りたたみ範囲 1-145・表ヘッダ併記等）に合わせて
+     line-numbers.ts が実測で広げる。既定 44px。本文左パディングもこれに追従する。 */
+  --gutter-w: 44px;
 }
 
 #editor-pane-park {
@@ -445,7 +448,7 @@ body {
   top: 0;
   left: 0;
   height: 0;
-  width: 44px;
+  width: var(--gutter-w, 44px);
   pointer-events: none;
   user-select: none;
   font-family: var(--editor-font-family);
@@ -458,7 +461,7 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  width: 44px;
+  width: var(--gutter-w, 44px);
   will-change: transform;
   transform: translateZ(0);
   backface-visibility: hidden;
@@ -467,7 +470,7 @@ body {
 .line-no {
   position: absolute;
   left: 0;
-  width: 44px;
+  width: var(--gutter-w, 44px);
   /*
     左揃え。左に余白を取り、左（アウトライン）パネルとの間に間隔を確保する。
     テーブルの併記ラベル (例 156-157) は枠より広いが、左揃えなら本文側
@@ -494,9 +497,21 @@ body {
   --crepe-color-inline-code: var(--editor-code-color);
 }
 
+/*
+  Crepe 既定の .milkdown は height: 100%（=ビューポート高）固定のため、内容が
+  それを超えると、はみ出した部分がエディタ背景（.milkdown の箱）の外になり、
+  背後の薄い色が透ける。min-height で内容に追従させ、背景が全域を覆うようにする。
+*/
+#editor-host .milkdown {
+  min-height: 100%;
+  height: auto;
+}
+
 #editor-host .milkdown .ProseMirror {
   min-height: 100%;
-  padding: 0 64px 96px;
+  padding: 14px 64px 96px;
+  /* 左パディングはガター幅 + 隙間20px に追従（隙間に折りたたみ三角が入る）。 */
+  padding-left: calc(var(--gutter-w, 44px) + 20px);
   outline: none;
   font-family: var(--editor-font-family);
   font-size: var(--editor-font-size);
@@ -551,9 +566,14 @@ body {
 }
 #editor-host .milkdown .ProseMirror .heading-fold-toggle {
   position: absolute;
-  left: -1.15em;
+  /*
+    位置・サイズは px 固定にする。em だと大きい見出し（h1=2em 等）でオフセットが
+    膨らみ、左の行番号ガター(44px)に三角が食い込んでしまう。本文左パディング(64px)と
+    ガター(44px)の隙間に収める。
+  */
+  left: -18px;
   top: 0;
-  width: 1em;
+  width: 16px;
   height: 1.4em;
   display: inline-flex;
   align-items: center;
@@ -573,7 +593,7 @@ body {
 }
 #editor-host .milkdown .ProseMirror .heading-fold-toggle::before {
   content: "▾";
-  font-size: 0.72em;
+  font-size: 11px;
   line-height: 1;
 }
 #editor-host .milkdown .ProseMirror .heading-fold-toggle.is-collapsed::before {
@@ -584,15 +604,51 @@ body {
 }
 
 /*
+  リストの折りたたみ（list-fold.ts）。
+  配下にネストしたリストを持つ list_item にだけ三角アイコンを出す。
+*/
+#editor-host .milkdown .ProseMirror .list-fold {
+  position: relative;
+}
+#editor-host .milkdown .ProseMirror .list-fold-toggle {
+  position: absolute;
+  left: -0.95em;
+  top: 0.25em;
+  width: 0.9em;
+  height: 1.4em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  color: var(--crepe-color-on-background, #888);
+}
+#editor-host .milkdown .ProseMirror .list-fold:hover > .list-fold-toggle,
+#editor-host .milkdown .ProseMirror .list-fold-toggle.is-collapsed {
+  opacity: 0.55;
+}
+#editor-host .milkdown .ProseMirror .list-fold-toggle:hover {
+  opacity: 0.9;
+}
+#editor-host .milkdown .ProseMirror .list-fold-toggle::before {
+  content: "▾";
+  font-size: 0.66em;
+  line-height: 1;
+}
+#editor-host .milkdown .ProseMirror .list-fold-toggle.is-collapsed::before {
+  content: "▸";
+}
+
+/*
   Crepe既定の .label-wrapper は height: 32px 固定で、liのline-heightや
   marginを詰めても、この32pxが項目高の下限となって間延びの原因になる。
-  本文行送り(1.5em)に合わせて圧縮する。
-  さらに line-height の上半分 leading (~0.25em) ぶん下にずらして、
-  本文1行目のグリフ中心とラベル(bullet/number/checkbox) 中心を揃える。
+  本文行送り(1.5em)に合わせて圧縮すると、本文1行目のグリフ中心とラベル
+  (bullet/number/checkbox) 中心がちょうど揃う（translateによる微調整は不要）。
 */
 #editor-host .milkdown .milkdown-list-item-block li .label-wrapper {
   height: 1.5em;
-  transform: translateY(0.25em);
 }
 
 #editor-host .milkdown .milkdown-list-item-block li .label-wrapper .label {

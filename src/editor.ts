@@ -36,6 +36,7 @@ import { attachImageResolver } from "./image-resolver";
 import { editImageNodeAtPos, isImageNode } from "./image-edit";
 import { searchPlugin } from "./search-plugin";
 import { headingFoldPlugin } from "./heading-fold";
+import { listFoldPlugin } from "./list-fold";
 import { fileTypeOfPath, wrapMermaidSource } from "./mmd";
 import { mermaidCodePreview } from "./mermaid-renderer";
 import { docTheme } from "./theme";
@@ -744,6 +745,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       ctx.update(prosePluginsCtx, (plugins) => [
         searchPlugin,
         headingFoldPlugin,
+        listFoldPlugin,
         gapClickPlugin,
         codeBlockUnwrapPlugin,
         imageDoubleClickPlugin,
