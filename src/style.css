@@ -352,7 +352,7 @@ body {
 
 /* ── Outline panel (left sidebar) ─────────────── */
 #outline-panel {
-  flex: 0 0 250px;
+  flex: 0 0 var(--outline-w, 250px);
   min-height: 0;
   overflow-y: auto;
   background: var(--bg-1);
@@ -362,6 +362,32 @@ body {
 
 #outline-panel.is-visible {
   display: block;
+}
+
+/* 左パネルとエディタの間のドラッグ可能な仕切り。アウトライン表示中のみ出す。 */
+#outline-resizer {
+  flex: 0 0 6px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 2;
+  display: none; /* アウトライン非表示時は出さない */
+  touch-action: none;
+}
+
+#outline-resizer.is-visible {
+  display: block;
+}
+
+#outline-resizer:hover,
+#outline-resizer.is-dragging {
+  background: var(--accent);
+}
+
+/* ドラッグ中は本文側のテキスト選択・iframe等の干渉を抑止する */
+body.is-resizing-outline {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .outline-list {
