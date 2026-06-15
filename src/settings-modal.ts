@@ -15,8 +15,9 @@ import {
 import { renderDocumentBody } from "./render-pipeline";
 import { ensureDocumentStyles, setHljsThemeStyle } from "./doc-styles";
 import { onLangChange, t } from "./i18n";
+import { invoke } from "@tauri-apps/api/core";
 
-type SectionKey = "font" | "display" | "docTheme" | "language";
+type SectionKey = "font" | "display" | "docTheme" | "language" | "associations";
 
 export function openFontSettings(): Promise<void> {
   return new Promise((resolve) => {
@@ -76,12 +77,20 @@ export function openFontSettings(): Promise<void> {
     layout.appendChild(panelHost);
     dialog.appendChild(layout);
 
+    const isWindows =
+      typeof navigator !== "undefined" && navigator.userAgent.includes("Windows");
     const sections: { key: SectionKey; labelKey: string }[] = [
       { key: "font", labelKey: "settings.section.font" },
       { key: "display", labelKey: "settings.section.display" },
       { key: "docTheme", labelKey: "settings.section.docTheme" },
       { key: "language", labelKey: "settings.section.language" },
     ];
+    if (isWindows) {
+      sections.push({
+        key: "associations",
+        labelKey: "settings.section.associations",
+      });
+    }
 
     let active: SectionKey = "font";
     const navButtons = new Map<SectionKey, HTMLElement>();
@@ -113,6 +122,7 @@ export function openFontSettings(): Promise<void> {
       if (key === "font") wrap.appendChild(buildFontPanel());
       else if (key === "display") wrap.appendChild(buildDisplayPanel());
       else if (key === "docTheme") wrap.appendChild(buildDocThemePanel());
+      else if (key === "associations") wrap.appendChild(buildAssociationsPanel());
       else wrap.appendChild(buildLanguagePanel());
       return wrap;
     }
@@ -658,6 +668,107 @@ export function openFontSettings(): Promise<void> {
       note.className = "settings-note";
       note.textContent = t("settings.language.note");
       c.appendChild(note);
+
+      return c;
+    }
+
+    function buildAssociationsPanel(): HTMLElement {
+      const c = document.createElement("div");
+
+      const EXTS = ["md", "markdown", "mmd", "mermaid", "txt"];
+
+      const note = document.createElement("div");
+      note.className = "settings-note";
+      note.textContent = t("settings.assoc.note");
+      c.appendChild(note);
+
+      // 拡張子ごとの行: チェックボックス + ラベル + 状態バッジ
+      const checks = new Map<string, HTMLInputElement>();
+      const badges = new Map<string, HTMLElement>();
+
+      const statusLabel = (status: string): string => {
+        if (status === "default") return t("settings.assoc.status.default");
+        if (status === "registered") return t("settings.assoc.status.registered");
+        return t("settings.assoc.status.none");
+      };
+
+      for (const ext of EXTS) {
+        const row = document.createElement("label");
+        row.className = "settings-row settings-row-checkbox";
+        const check = document.createElement("input");
+        check.type = "checkbox";
+        check.className = "settings-input";
+        checks.set(ext, check);
+        const text = document.createElement("span");
+        text.textContent = `.${ext}`;
+        const badge = document.createElement("span");
+        badge.className = "settings-assoc-badge";
+        badge.textContent = statusLabel("none");
+        badges.set(ext, badge);
+        row.appendChild(check);
+        row.appendChild(text);
+        row.appendChild(badge);
+        c.appendChild(row);
+      }
+
+      // 状態取得して各バッジを更新する。
+      const refreshStatus = () => {
+        void invoke<{ ext: string; status: string }[]>(
+          "query_file_associations",
+          { exts: EXTS },
+        )
+          .then((list) => {
+            for (const { ext, status } of list) {
+              const badge = badges.get(ext);
+              if (badge) {
+                badge.textContent = statusLabel(status);
+                badge.dataset.status = status;
+              }
+            }
+          })
+          .catch((e) => console.error("query_file_associations failed:", e));
+      };
+
+      // ボタン群
+      const btnWrap = document.createElement("div");
+      btnWrap.className = "settings-row";
+
+      const registerBtn = document.createElement("button");
+      registerBtn.type = "button";
+      registerBtn.className = "modal-btn";
+      registerBtn.textContent = t("settings.assoc.register");
+      registerBtn.addEventListener("click", () => {
+        const selected = EXTS.filter((ext) => checks.get(ext)?.checked);
+        if (selected.length === 0) return;
+        registerBtn.disabled = true;
+        void invoke("register_file_associations", { exts: selected })
+          .then(() => {
+            refreshStatus();
+          })
+          .catch((e) => {
+            console.error("register_file_associations failed:", e);
+            window.alert(t("settings.assoc.failed"));
+          })
+          .finally(() => {
+            registerBtn.disabled = false;
+          });
+      });
+
+      const osBtn = document.createElement("button");
+      osBtn.type = "button";
+      osBtn.className = "modal-btn";
+      osBtn.textContent = t("settings.assoc.openOsSettings");
+      osBtn.addEventListener("click", () => {
+        void invoke("open_default_apps_settings").catch((e) =>
+          console.error("open_default_apps_settings failed:", e),
+        );
+      });
+
+      btnWrap.appendChild(registerBtn);
+      btnWrap.appendChild(osBtn);
+      c.appendChild(btnWrap);
+
+      refreshStatus();
 
       return c;
     }
