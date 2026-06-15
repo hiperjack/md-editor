@@ -49,7 +49,7 @@ pub fn extract_path_to_pending(app: &AppHandle, argv: &[String]) {
 }
 
 pub fn emit_open_file(app: &AppHandle, path: String) {
-    let content = match std::fs::read_to_string(&path) {
+    let content = match crate::commands::read_text_file(&path) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Failed to read {}: {}", path, e);

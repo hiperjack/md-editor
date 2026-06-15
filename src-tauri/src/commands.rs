@@ -4,9 +4,33 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::{FrontendReady, PendingPath};
 
+/// バイト列をテキストへデコードする。
+/// UTF-8（BOM有無）として妥当ならUTF-8、ダメなら Shift_JIS(CP932) とみなす。
+/// 日本語環境で多い SJIS ファイルを開けるようにするためのフォールバック。
+fn decode_bytes(bytes: &[u8]) -> String {
+    // UTF-8 BOM があれば除去して UTF-8 として扱う。
+    if let Some(rest) = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]) {
+        return String::from_utf8_lossy(rest).into_owned();
+    }
+    // 妥当な UTF-8 ならそのまま。
+    if let Ok(s) = std::str::from_utf8(bytes) {
+        return s.to_string();
+    }
+    // フォールバック: Shift_JIS としてデコード（不正バイトは置換文字に）。
+    let (cow, _had_errors) = encoding_rs::SHIFT_JIS.decode_without_bom_handling(bytes);
+    cow.into_owned()
+}
+
+/// テキストファイルを読む。UTF-8優先、ダメなら Shift_JIS として解釈する。
+/// 外部オープン（コマンド/起動引数/関連付け）の双方から使う共通入口。
+pub fn read_text_file(path: &str) -> Result<String, String> {
+    let bytes = fs::read(path).map_err(|e| format!("read_file({}): {}", path, e))?;
+    Ok(decode_bytes(&bytes))
+}
+
 #[tauri::command]
 pub fn read_file(path: String) -> Result<String, String> {
-    fs::read_to_string(&path).map_err(|e| format!("read_file({}): {}", path, e))
+    read_text_file(&path)
 }
 
 #[tauri::command]
@@ -175,4 +199,28 @@ pub fn frontend_ready(app: AppHandle) -> Result<(), String> {
         crate::startup::emit_open_file(&app, path);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decode_plain_utf8() {
+        assert_eq!(decode_bytes("こんにちは".as_bytes()), "こんにちは");
+    }
+
+    #[test]
+    fn decode_strips_utf8_bom() {
+        let mut bytes = vec![0xEF, 0xBB, 0xBF];
+        bytes.extend_from_slice("hi".as_bytes());
+        assert_eq!(decode_bytes(&bytes), "hi");
+    }
+
+    #[test]
+    fn decode_shift_jis_fallback() {
+        // Shift_JIS: "あいう" = 82 A0 / 82 A2 / 82 A4
+        let sjis = [0x82, 0xA0, 0x82, 0xA2, 0x82, 0xA4];
+        assert_eq!(decode_bytes(&sjis), "あいう");
+    }
 }
