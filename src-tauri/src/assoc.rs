@@ -49,6 +49,122 @@ pub fn parse_progid_value(reg_output: &str) -> Option<String> {
     None
 }
 
+use std::os::windows::process::CommandExt;
+use std::process::Command;
+use tauri::AppHandle;
+
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+fn reg() -> Command {
+    let mut c = Command::new("reg");
+    c.creation_flags(CREATE_NO_WINDOW);
+    c
+}
+
+/// 現在の実行ファイルパス文字列。
+fn exe_path() -> Result<String, String> {
+    std::env::current_exe()
+        .map_err(|e| format!("current_exe: {}", e))?
+        .to_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| "exe path is not valid UTF-8".to_string())
+}
+
+/// 1拡張子分のProgID＋OpenWithProgidsをHKCUへ書き込む。
+fn register_one(ext: &str, exe: &str) -> Result<(), String> {
+    let progid = progid_for_ext(ext);
+    let display = display_name_for_ext(ext);
+    let classes = format!("HKCU\\Software\\Classes\\{}", progid);
+    let cmd_key = format!("{}\\shell\\open\\command", classes);
+    // 実際に保存したい値: "<exe>" "%1"
+    let command_value = format!("\"{}\" \"%1\"", exe);
+    let ext_progids = format!("HKCU\\Software\\Classes\\.{}\\OpenWithProgids", ext);
+
+    let run = |args: &[&str]| -> Result<(), String> {
+        let status = reg()
+            .args(args)
+            .status()
+            .map_err(|e| format!("reg spawn: {}", e))?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(format!("reg failed ({:?}): {:?}", status.code(), args))
+        }
+    };
+
+    run(&["add", &classes, "/ve", "/d", display, "/f"])?;
+    run(&["add", &cmd_key, "/ve", "/d", &command_value, "/f"])?;
+    run(&["add", &ext_progids, "/v", &progid, "/t", "REG_NONE", "/f"])?;
+    Ok(())
+}
+
+/// 1拡張子分の状態を判定する。
+fn query_one(ext: &str) -> AssocStatus {
+    let progid = progid_for_ext(ext);
+    let status = {
+        // 1) UserChoice の ProgId が自ProgIDと一致 → default
+        let user_choice = format!(
+            "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\.{}\\UserChoice",
+            ext
+        );
+        let out = reg()
+            .args(["query", &user_choice, "/v", "ProgId"])
+            .output();
+        let is_default = match out {
+            Ok(o) if o.status.success() => {
+                let text = String::from_utf8_lossy(&o.stdout);
+                parse_progid_value(&text).as_deref() == Some(progid.as_str())
+            }
+            _ => false,
+        };
+        if is_default {
+            "default".to_string()
+        } else {
+            // 2) OpenWithProgids に自ProgIDが存在 → registered
+            let ext_progids = format!("HKCU\\Software\\Classes\\.{}\\OpenWithProgids", ext);
+            let exists = reg()
+                .args(["query", &ext_progids, "/v", &progid])
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false);
+            if exists {
+                "registered".to_string()
+            } else {
+                "none".to_string()
+            }
+        }
+    };
+    AssocStatus {
+        ext: ext.to_string(),
+        status,
+    }
+}
+
+#[tauri::command]
+pub fn query_file_associations(exts: Vec<String>) -> Result<Vec<AssocStatus>, String> {
+    Ok(exts.iter().map(|e| query_one(e)).collect())
+}
+
+#[tauri::command]
+pub fn register_file_associations(exts: Vec<String>) -> Result<(), String> {
+    let exe = exe_path()?;
+    for ext in &exts {
+        register_one(ext, &exe)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_default_apps_settings(_app: AppHandle) -> Result<(), String> {
+    // cmd /C start "" ms-settings:defaultapps（"" はウィンドウタイトル）
+    Command::new("cmd")
+        .args(["/C", "start", "", "ms-settings:defaultapps"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map_err(|e| format!("open ms-settings: {}", e))?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

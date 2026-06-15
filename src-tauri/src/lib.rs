@@ -49,6 +49,12 @@ pub fn run() {
             commands::list_recent_files,
             commands::open_external_url,
             commands::init_window_menu,
+            #[cfg(target_os = "windows")]
+            assoc::query_file_associations,
+            #[cfg(target_os = "windows")]
+            assoc::register_file_associations,
+            #[cfg(target_os = "windows")]
+            assoc::open_default_apps_settings,
             tabwin::stash_pending_tab,
             tabwin::take_pending_tab,
             tabwin::register_tabbar_rect,
