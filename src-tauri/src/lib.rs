@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::Manager;
 
+mod assoc;
 mod commands;
 mod i18n;
 mod recent;
