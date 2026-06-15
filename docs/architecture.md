@@ -1,309 +1,311 @@
-# mdedit アーキテクチャ / 設計メモ
+**English** | [日本語](./architecture.ja.md)
 
-このドキュメントは mdedit の技術的な詳細（機能の網羅的説明・技術スタック・全ショートカット・ディレクトリ構成・内部実装の設計メモ）をまとめたものです。ユーザー向けの概要は [README.md](../README.md) を参照してください。
+# mdedit Architecture & Design Notes
 
-mdedit は Tauri 2.x + Vite + TypeScript で構築された、複数ウィンドウ・複数タブのデスクトップ Markdown エディタです。Markdown（`.md` / `.markdown`）と Mermaid 単体ファイル（`.mmd` / `.mermaid`）を編集でき、HTML 出力・印刷（PDF 化）に対応します。`.md` / `.mmd` ファイルをダブルクリックすると、既存ウィンドウの新規タブで開きます。`.html` / `.htm` ファイルは（D&D・アプリアイコンへのドロップを含め）サンドボックス iframe の読み取り専用プレビュータブで開きます。
+This document collects the technical details of mdedit: an exhaustive feature description, the tech stack, the full list of keyboard shortcuts, the directory layout, and design notes on the internals. For a user-facing overview, see [README.md](../README.md).
 
-メニューバーは HTML で自前描画しており、`Alt+F`→`N`（新規タブ）のようなニーモニックによるキーボード操作に対応します。
+mdedit is a multi-window, multi-tab desktop Markdown editor built with Tauri 2.x + Vite + TypeScript. It edits Markdown (`.md` / `.markdown`) and standalone Mermaid files (`.mmd` / `.mermaid`), and supports HTML export and printing (to PDF). Double-clicking a `.md` / `.mmd` file opens it in a new tab in the existing window. `.html` / `.htm` files (including via drag-and-drop or dropping onto the app icon) open in a read-only preview tab backed by a sandboxed iframe.
 
-## 機能詳細
+The menu bar is drawn in HTML rather than natively, so it supports mnemonic keyboard operation such as `Alt+F`→`N` (new tab).
 
-- **WYSIWYG編集**: [Milkdown Crepe](https://milkdown.dev/) を採用。書式が反映された状態のまま編集でき、別ペインのプレビューは不要
-- **Mermaid 対応**:
-  - ` ```mermaid ` コードブロックをエディタ内でリアルタイムに図としてプレビュー
-  - `.mmd` / `.mermaid` 単体ファイルは「全体を1つの mermaid フェンスにラップした markdown」として開き、保存時にフェンスを外して素のソースに戻す
-  - 図をクリックすると拡大ビューアが開き、ホイールズーム・パン（手のひら）・テキスト選択モードの切替に対応
-  - エディタ内プレビューの表示幅を「エディタ幅に合わせる（縮小）」か「原寸（はみ出し時は横スクロール）」から選択可能（設定 → 表示 → Mermaid）
-  - 配色は表示テーマ連動（ダーク/ライト）。HTML 出力時は文書背景に連動。Mermaid コードブロックを既定で隠す設定も用意
-- **メニューバー（HTML 製・Alt 操作対応）**: ファイル / 編集 / 書式 / 表示 / ヘルプ。`Alt+<文字>` でメニューを開き、続けて項目のニーモニック文字で実行できる（例: `Alt+F`→`N` で新規タブ）。開いている間は ↑↓ で項目移動、←→ でメニュー切替、`Enter` 実行、`Esc` で閉じる。マウス操作（クリック開閉・ホバー切替）にも対応。各項目にショートカット表記を併記
-- **HTML プレビュータブ**:
-  - タブ右クリックまたは `Ctrl+Shift+V` で、HTML 出力と同一パイプラインのレンダリング結果を読み取り専用タブで表示（「見たまま出力される」ことを保証）
-  - `.html` / `.htm` ファイルはサンドボックス iframe の読み取り専用タブで表示（スクリプト無効・スタイル非干渉）
-  - HTML 出力プレビュー（Markdown 由来）を表示中に「HTML として出力」を押すと、元ソースから自己完結型 HTML を保存できる
-  - エディタとは独立した `Ctrl+ホイール` ズーム、文書幅は全幅表示
-  - プレビュータブ内の Mermaid 図もクリックで拡大ビューアを開ける
-  - 別ウィンドウへの切り離し・結合に対応
-- **見出しの折りたたみ**: 見出しにホバーすると左に三角アイコンが出て、クリックで配下のブロックを折りたたみ/展開できる（編集中の表示のみ・保存内容には影響しない）。左のアウトラインパネルと双方向連動し、どちらで折りたたんでも表示が一致する
-- **HTML 出力 / 印刷**: `Ctrl+Shift+E` で文書テーマを適用した HTML を出力。`Ctrl+P` で本文のみを印刷（ダイアログから PDF 保存も可能）。`.mmd` タブは図 1 枚を中央配置した単体 HTML になる
-- **文書テーマ**: フォント・行間・見出しスタイル・配色などを設定で調整し、プレビュー / 出力 / 印刷に反映。設定ダイアログはタブ構成（一般 / Mermaid / HTML プレビュー等）
-- **マルチウィンドウ**: タブをウィンドウ外へドラッグして新規ウィンドウ化（切り離し）、別ウィンドウのタブバーへドラッグして結合。結合元が1タブなら元ウィンドウは閉じる。ウィンドウ間で同じファイルの二重オープンを検知してポップアップ表示
-- **検索・置換**: `Ctrl+F` で検索バー、`Ctrl+H` で置換欄を展開。大文字小文字の区別 / 正規表現（`$1` 等のキャプチャ参照置換）/ 単語単位一致 / すべて置換に対応。ProseMirror ドキュメント上で動作し undo も効く
-- **見出しアウトライン**: 左サイドに見出し一覧パネル（`Ctrl+Shift+O` または左端のツールバーボタンでトグル、表示状態は永続化）。項目クリックで該当見出しへジャンプ（エディタ上端に整列）、スクロールに連動して現在地の見出しをハイライト。パネル幅は仕切りのドラッグで調整でき（永続化）、子見出しを持つ項目には展開/折りたたみトグル（▸/▾）が付き、エディタ本文の見出し折りたたみと双方向連動する。HTML プレビュータブのアウトラインにも対応
-- **シングルインスタンス**: `.md` / `.mmd` をダブルクリック → 既存ウィンドウの新規タブで開く
-- **タブ操作**: ドラッグで並び替え、ウィンドウ外で切り離し、別ウィンドウへ結合、ミドルクリックで閉じる、横長になれば横スクロール。タブ右クリックで専用メニュー（閉じる / 他を閉じる / 右側を閉じる / HTML プレビュー / 新規ウィンドウで開く / パスをコピー）
-- **最近使ったファイル**: ファイルメニューに最近開いたファイルを表示（設定でオン/オフ）。履歴や関連付け起動でファイルが見つからない場合はエラーを通知する
-- **未保存検知**: 「Milkdown 正規化後の文字列」を baseline にして比較。WYSIWYG特有の自動正規化による誤発火を回避
-- **GFM対応**: テーブル、タスクリスト、打ち消し線、GitHub アラート、目次（`[[toc]]`）、見出しアンカー（CommonMark + GFM プリセット）
-- **国際化**: 日本語 / 英語 / システム言語連動の切替（メニューバー・設定UI・確認ダイアログがすべて連動）
-- **テーマ**: ダーク / ライト / システム連動。`prefers-color-scheme` の動的変更にも追従
-- **コンテキストメニュー**: エディタ上で独自の右クリックメニュー（切り取り/コピー/貼り付け/すべて選択、選択中は太字・斜体・リンク、画像上は画像編集、検索）。エディタ以外では標準メニューを抑止
-- **画像の柔軟な扱い**:
-  - md ファイルとの相対パスで画像を表示（Tauri asset プロトコル経由）
-  - 慣例パス `<mdDir>/img/<basename>/<file>` を自動解決（フォールバックとして md 隣のファイルも試行）
-  - 画像ダブルクリックで URL → 代替テキスト → 幅(px) を編集（元サイズもプロンプトでヒント表示）
-  - 画像上で `Alt+ホイール` でピクセル幅をその場で拡縮（保存・再読込でサイズが維持される）
-  - HTML 出力時はローカル画像を data URI として埋め込み
-- **編集時のキー挙動**:
-  - `Enter` で新しい段落、`Shift+Enter` で段落内のソフト改行（一般的なエディタと同じ）
-  - 読み込み時はソースの単一改行を改行として表示（`remark-breaks`、Obsidian 等で作成したファイルとの互換）
-  - 引用ブロックの先頭で `Backspace` → 引用解除
-  - 箇条書き項目の先頭で `Backspace` → リスト解除ではなく前の行と結合（標準動作）
-- **フォント設定**: 本文・コード用フォントを別々に指定。コード文字色も任意指定（既定は本文色追従）
-- **ドラッグ&ドロップ**: `.md` / `.markdown` / `.mmd` / `.mermaid` / `.html` / `.htm` ファイルをウィンドウへ直接ドロップ（アプリアイコンへのドロップや関連付け起動にも対応。`.html` はプレビュータブで開く）
-- **行番号オーバーレイ**: WYSIWYGペインに行番号を重ねて表示
-- **設定プレビュー**: 設定ダイアログから「プレビュー」ボタンで適用前の見え方を試せる（キャンセルで元に戻る）
+## Features in detail
 
-## 技術スタック
+- **WYSIWYG editing**: Uses [Milkdown Crepe](https://milkdown.dev/). You edit with formatting already applied — no separate preview pane needed.
+- **Mermaid support**:
+  - ` ```mermaid ` code blocks are previewed as live diagrams inline within the editor
+  - Standalone `.mmd` / `.mermaid` files open as "Markdown with the whole file wrapped in a single mermaid fence", and on save the fence is stripped to restore the raw source
+  - Clicking a diagram opens a zoom viewer with wheel-zoom, pan (hand), and a text-selection mode toggle
+  - The inline preview width can be set to "fit editor width (shrink)" or "natural size (horizontal scroll on overflow)" (Settings → View → Mermaid)
+  - Colors follow the display theme (dark/light); on HTML export they follow the document background. There is also a setting to hide Mermaid code blocks by default
+- **Menu bar (HTML-based, Alt operation)**: File / Edit / Format / View / Help. Press `Alt+<letter>` to open a menu, then a item's mnemonic letter to run it (e.g. `Alt+F`→`N` for new tab). While open, ↑↓ move between items, ←→ switch menus, `Enter` runs, `Esc` closes. Mouse operation (click to open/close, hover to switch) is also supported. Each item also shows its shortcut.
+- **HTML preview tab**:
+  - Right-click a tab or press `Ctrl+Shift+V` to show, in a read-only tab, the result of the exact same pipeline used for HTML export (guaranteeing "what you see is what gets exported")
+  - `.html` / `.htm` files are shown in a read-only tab inside a sandboxed iframe (scripts disabled, styles isolated)
+  - While viewing an HTML export preview (derived from Markdown), pressing "Export as HTML" saves a self-contained HTML file from the original source
+  - Independent `Ctrl+wheel` zoom (separate from the editor); the document is shown full-width
+  - Mermaid diagrams inside the preview tab can also be clicked to open the zoom viewer
+  - Supports detaching to / merging into another window
+- **Heading folding**: Hovering a heading shows a triangle icon on its left; clicking folds/unfolds the blocks beneath it (display only while editing — it does not affect the saved content). It is two-way linked with the left outline panel, so folding in either place stays consistent.
+- **HTML export / printing**: `Ctrl+Shift+E` exports HTML with the document theme applied. `Ctrl+P` prints the body only (the dialog can save to PDF). An `.mmd` tab becomes a standalone HTML file with the single diagram centered.
+- **Document theme**: Font, line height, heading styles, colors, etc. can be adjusted in settings and are reflected in preview / export / print. The settings dialog is organized into tabs (General / Mermaid / HTML preview, etc.).
+- **Multi-window**: Drag a tab out of the window to create a new window (detach); drag it onto another window's tab bar to merge. If the source had only one tab, the source window closes. Opening the same file in multiple windows is detected and shown via a popup.
+- **Find & replace**: `Ctrl+F` opens the search bar, `Ctrl+H` expands the replace field. Supports case sensitivity, regular expressions (capture-reference replacement like `$1`), whole-word matching, and replace-all. It operates on the ProseMirror document, so undo works.
+- **Heading outline**: A heading-list panel on the left (toggle with `Ctrl+Shift+O` or the leftmost toolbar button; visibility is persisted). Clicking an item jumps to that heading (aligned to the top of the editor); the current heading is highlighted as you scroll. The panel width is adjustable by dragging the divider (persisted), items with child headings get an expand/collapse toggle (▸/▾), and it is two-way linked with the heading folding in the editor body. The outline also works in HTML preview tabs.
+- **Single instance**: Double-click a `.md` / `.mmd` → it opens in a new tab in the existing window.
+- **Tab operations**: Reorder by dragging, detach by dragging out of the window, merge into another window, close with middle-click, horizontal scroll when the tab strip gets long. Right-clicking a tab opens a dedicated menu (Close / Close others / Close to the right / HTML preview / Open in new window / Copy path).
+- **Recent files**: The File menu lists recently opened files (on/off in settings). If a file from history or a file-association launch can't be found, an error is reported.
+- **Unsaved-change detection**: Compares against a baseline of the "post-Milkdown-normalization string", avoiding false positives caused by WYSIWYG auto-normalization.
+- **GFM support**: Tables, task lists, strikethrough, GitHub alerts, table of contents (`[[toc]]`), heading anchors (CommonMark + GFM preset).
+- **Internationalization**: Switch between Japanese / English / follow-system language (the menu bar, settings UI, and confirmation dialogs all switch together).
+- **Themes**: Dark / light / follow-system. Also tracks dynamic changes to `prefers-color-scheme`.
+- **Context menu**: A custom right-click menu on the editor (cut/copy/paste/select-all; bold/italic/link when text is selected; image editing over an image; find). Outside the editor, the default menu is suppressed.
+- **Flexible image handling**:
+  - Displays images by path relative to the md file (via the Tauri asset protocol)
+  - Auto-resolves the conventional path `<mdDir>/img/<basename>/<file>` (falling back to a file next to the md)
+  - Double-click an image to edit URL → alt text → width (px) (the original size is hinted in the prompt)
+  - `Alt+wheel` over an image resizes its pixel width in place (the size is preserved across save/reload)
+  - On HTML export, local images are embedded as data URIs
+- **Editing key behavior**:
+  - `Enter` makes a new paragraph; `Shift+Enter` inserts a soft line break within a paragraph (same as common editors)
+  - On load, single line breaks in the source are shown as line breaks (`remark-breaks`, for compatibility with files made in Obsidian, etc.)
+  - `Backspace` at the start of a blockquote → un-quote
+  - `Backspace` at the start of a list item → merge with the previous line rather than removing the list (standard behavior)
+- **Font settings**: Specify body and code fonts separately. Code text color can also be set (defaults to following the body color).
+- **Drag & drop**: Drop `.md` / `.markdown` / `.mmd` / `.mermaid` / `.html` / `.htm` files directly onto the window (dropping onto the app icon and file-association launch are also supported; `.html` opens in a preview tab).
+- **Line-number overlay**: Line numbers are overlaid on the WYSIWYG pane.
+- **Settings preview**: A "Preview" button in the settings dialog lets you try the look before applying (Cancel reverts).
 
-| 層 | 採用 |
+## Tech stack
+
+| Layer | Choice |
 |---|---|
-| デスクトップフレームワーク | Tauri 2.x（Rust） |
-| フロントエンドビルド | Vite + TypeScript |
-| エディタ | [@milkdown/crepe](https://www.npmjs.com/package/@milkdown/crepe)（ProseMirror 系 WYSIWYG） |
-| Markdown 拡張（編集） | `@milkdown/kit` の commonmark / gfm preset、`remark-breaks` |
-| Markdown 拡張（出力） | `markdown-it`（anchor / toc / github-alerts / 自前タスクリスト）＋ `highlight.js` |
-| 図 | [Mermaid](https://mermaid.js.org/)（動的 import） |
-| ドラッグ並び替え | SortableJS（タブのドラッグは独自実装） |
-| 状態管理 | 自前ストア（外部ライブラリなし） |
+| Desktop framework | Tauri 2.x (Rust) |
+| Frontend build | Vite + TypeScript |
+| Editor | [@milkdown/crepe](https://www.npmjs.com/package/@milkdown/crepe) (ProseMirror-based WYSIWYG) |
+| Markdown extensions (editing) | `@milkdown/kit` commonmark / gfm preset, `remark-breaks` |
+| Markdown extensions (output) | `markdown-it` (anchor / toc / github-alerts / custom task lists) + `highlight.js` |
+| Diagrams | [Mermaid](https://mermaid.js.org/) (dynamic import) |
+| Drag reordering | SortableJS (tab dragging is custom-built) |
+| State management | Custom store (no external library) |
 
-UI フレームワーク（React/Vue）は不使用。状態の中心はストア、UI は関数生成する素朴な構造。
+No UI framework (React/Vue) is used. State lives in the store, and the UI is a plain structure produced by functions.
 
-## 動作要件
+## Requirements
 
-- Node.js 18 以上
-- Rust（Tauri 2.x の前提条件 / [Tauri 公式ガイド](https://v2.tauri.app/start/prerequisites/) 参照）
+- Node.js 18 or later
+- Rust (Tauri 2.x prerequisites / see the [Tauri official guide](https://v2.tauri.app/start/prerequisites/))
 
-## セットアップ
+## Setup
 
 ```bash
-# 依存パッケージのインストール
+# Install dependencies
 npm install
 
-# 開発モード（Vite + Tauri）
+# Development mode (Vite + Tauri)
 npm run tauri:dev
 
-# 型チェック
+# Type check
 npm run typecheck
 
-# プロダクションビルド（インストーラ生成）
+# Production build (generate installers)
 npm run tauri:build
 ```
 
-ビルド成果物：
-- バイナリ: `src-tauri/target/release/mdedit.exe`
-- インストーラ:
+Build artifacts:
+- Binary: `src-tauri/target/release/mdedit.exe`
+- Installers:
   - MSI: `src-tauri/target/release/bundle/msi/mdedit_<version>_x64_ja-JP.msi`
   - NSIS: `src-tauri/target/release/bundle/nsis/mdedit_<version>_x64-setup.exe`
 
-> クロスプラットフォーム配布は `.github/workflows/release.yml` が `v*` タグの push で自動ビルドします（Windows / macOS Intel+Apple Silicon / Linux）。`bundle.targets` は `"all"`、macOS はアドホック署名（`signingIdentity: "-"`）で各 OS のネイティブ形式（dmg / AppImage・deb 等）を出力します。
+> Cross-platform distribution is built automatically by `.github/workflows/release.yml` when a `v*` tag is pushed (Windows / macOS Intel + Apple Silicon / Linux). With `bundle.targets` set to `"all"` and macOS using ad-hoc signing (`signingIdentity: "-"`), each OS emits its native formats (dmg / AppImage / deb, etc.).
 
-## キーボードショートカット
+## Keyboard shortcuts
 
-### ファイル操作・出力
+### File operations & output
 
-| ショートカット | 動作 |
+| Shortcut | Action |
 |---|---|
-| `Ctrl+N` | 新規タブ |
-| `Ctrl+O` | ファイルを開く |
-| `Ctrl+S` | 保存 |
-| `Ctrl+Shift+S` / `F12` | 名前を付けて保存 |
-| `Ctrl+W` | タブを閉じる |
-| `Ctrl+Shift+E` | HTML として出力 |
-| `Ctrl+Shift+V` | HTML プレビュータブを開く |
-| `Ctrl+P` | 本文のみを印刷（PDF 保存可） |
-| `Ctrl+,` | 設定を開く |
+| `Ctrl+N` | New tab |
+| `Ctrl+O` | Open file |
+| `Ctrl+S` | Save |
+| `Ctrl+Shift+S` / `F12` | Save as |
+| `Ctrl+W` | Close tab |
+| `Ctrl+Shift+E` | Export as HTML |
+| `Ctrl+Shift+V` | Open HTML preview tab |
+| `Ctrl+P` | Print body only (PDF save available) |
+| `Ctrl+,` | Open settings |
 
-「編集」メニューには元に戻す（`Ctrl+Z`）/ やり直し（`Ctrl+Y`）/ 切り取り（`Ctrl+X`）/ コピー（`Ctrl+C`）/ 貼り付け（`Ctrl+V`）/ すべて選択（`Ctrl+A`）を用意。元に戻す/やり直しは ProseMirror の履歴、コピー/切り取りはクリップボード経由で動作する。
+The Edit menu provides Undo (`Ctrl+Z`) / Redo (`Ctrl+Y`) / Cut (`Ctrl+X`) / Copy (`Ctrl+C`) / Paste (`Ctrl+V`) / Select All (`Ctrl+A`). Undo/redo use the ProseMirror history; copy/cut go through the clipboard.
 
-### メニューバー（Alt 操作）
+### Menu bar (Alt operation)
 
-ネイティブメニューは廃止し、HTML 製メニューバーに置換している（WebView2 ではネイティブメニューの Alt ニーモニックが効かないため）。
+The native menu was removed and replaced with an HTML menu bar (because in WebView2 the Alt mnemonics of native menus don't work).
 
-| 操作 | 動作 |
+| Operation | Action |
 |---|---|
-| `Alt+F` / `Alt+E` / `Alt+O` / `Alt+V` / `Alt+H` | ファイル / 編集 / 書式 / 表示 / ヘルプ を開く |
-| 開いた後の文字キー | その項目のニーモニックを実行（例: `Alt+F`→`N` で新規タブ） |
-| `↑` / `↓` | 項目を移動 |
-| `←` / `→` | 隣のメニューへ切替 |
-| `Enter` / `Esc` | 実行 / 閉じる |
+| `Alt+F` / `Alt+E` / `Alt+O` / `Alt+V` / `Alt+H` | Open File / Edit / Format / View / Help |
+| Letter key after opening | Run that item's mnemonic (e.g. `Alt+F`→`N` for new tab) |
+| `↑` / `↓` | Move between items |
+| `←` / `→` | Switch to the adjacent menu |
+| `Enter` / `Esc` | Run / Close |
 
-### タブ操作
+### Tab operations
 
-| ショートカット | 動作 |
+| Shortcut | Action |
 |---|---|
-| `Ctrl+Tab` / `Ctrl+Shift+Tab` | 次 / 前のタブへ切替 |
-| `Ctrl+1`〜`Ctrl+9` | n 番目のタブへ切替 |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Switch to next / previous tab |
+| `Ctrl+1`–`Ctrl+9` | Switch to the n-th tab |
 
-タブのドラッグでの並び替え・ウィンドウ外への切り離し・別ウィンドウへの結合、右クリックメニューにも対応。
+Dragging to reorder, detaching out of the window, merging into another window, and the right-click menu are also supported.
 
-### 検索・置換
+### Find & replace
 
-| ショートカット | 動作 |
+| Shortcut | Action |
 |---|---|
-| `Ctrl+F` | 検索バーを開く |
-| `Ctrl+H` | 置換欄付きで検索バーを開く |
-| `Enter` / `Shift+Enter`（検索欄） | 次 / 前のマッチへ移動 |
-| `Esc`（検索バー） | 閉じてエディタに戻る |
+| `Ctrl+F` | Open the search bar |
+| `Ctrl+H` | Open the search bar with the replace field |
+| `Enter` / `Shift+Enter` (in the search field) | Go to next / previous match |
+| `Esc` (search bar) | Close and return to the editor |
 
-### 書式（ツールバーおよびメニュー）
+### Formatting (toolbar and menu)
 
-| ショートカット | 動作 |
+| Shortcut | Action |
 |---|---|
-| `Ctrl+B` | 太字 |
-| `Ctrl+I` | 斜体 |
-| `Ctrl+Shift+X` | 打ち消し |
-| `Ctrl+E` | インラインコード |
-| `Ctrl+Alt+1` 〜 `Ctrl+Alt+3` | 見出し1〜3 |
-| `Ctrl+K` | リンク |
+| `Ctrl+B` | Bold |
+| `Ctrl+I` | Italic |
+| `Ctrl+Shift+X` | Strikethrough |
+| `Ctrl+E` | Inline code |
+| `Ctrl+Alt+1` – `Ctrl+Alt+3` | Heading 1–3 |
+| `Ctrl+K` | Link |
 
-ツールバーには上記に加えて、左端にアウトライン表示トグル、続けてファイル操作（新規 / 開く / 保存 / 名前を付けて保存 / HTML 出力 / HTML プレビュー）、見出し（H1–H4）、リスト / 引用 / コードブロック / 表 / 画像 / 水平線 ボタンを配置。右端には設定（歯車）アイコン。
+In addition to the above, the toolbar has (from the left) the outline toggle, then file operations (New / Open / Save / Save As / Export HTML / HTML preview), headings (H1–H4), and list / quote / code block / table / image / horizontal-rule buttons. The settings (gear) icon is on the far right.
 
-### 表示・ズーム
+### View & zoom
 
-| ショートカット | 動作 |
+| Shortcut | Action |
 |---|---|
-| `Ctrl+=` / `Ctrl+ホイール↑` | フォントサイズ拡大（HTML プレビュータブ上ではそのプレビューを独立ズーム） |
-| `Ctrl+-` / `Ctrl+ホイール↓` | フォントサイズ縮小（同上） |
-| `Ctrl+0` | フォントサイズをリセット |
-| `Ctrl+Shift+O` | 見出しアウトラインパネルの表示/非表示 |
-| `Alt+ホイール`（画像上） | 画像ブロックのピクセル幅を拡縮 |
-| クリック（Mermaid 図） | 拡大ビューアを開く（ホイールズーム・パン・選択モード切替） |
+| `Ctrl+=` / `Ctrl+wheel up` | Increase font size (on an HTML preview tab, zooms that preview independently) |
+| `Ctrl+-` / `Ctrl+wheel down` | Decrease font size (same) |
+| `Ctrl+0` | Reset font size |
+| `Ctrl+Shift+O` | Show/hide the heading outline panel |
+| `Alt+wheel` (over an image) | Resize the image block's pixel width |
+| Click (a Mermaid diagram) | Open the zoom viewer (wheel-zoom / pan / selection-mode toggle) |
 
-### 編集
+### Editing
 
-| ショートカット | 動作 |
+| Shortcut | Action |
 |---|---|
-| `Enter` / `Shift+Enter` | 新しい段落 / 段落内のソフト改行 |
-| `Backspace`（引用先頭） | 引用ブロックを解除 |
-| `Backspace`（箇条書き項目の先頭） | 前の行と結合（リスト解除しない） |
-| `Enter`（コードブロック内末尾の空行で2回目） | コードブロックから抜ける |
-| 見出しホバーの三角アイコン | 配下を折りたたみ/展開（表示のみ） |
-| 画像ダブルクリック | URL / 代替テキスト / 幅(px) を編集 |
+| `Enter` / `Shift+Enter` | New paragraph / soft line break within a paragraph |
+| `Backspace` (start of a blockquote) | Remove the blockquote |
+| `Backspace` (start of a list item) | Merge with the previous line (does not remove the list) |
+| `Enter` (second time on a trailing empty line inside a code block) | Exit the code block |
+| Triangle icon on heading hover | Fold/unfold the contents below (display only) |
+| Double-click an image | Edit URL / alt text / width (px) |
 
-### 印刷・ブラウザ標準キーの扱い
+### Printing & handling of browser default keys
 
-WebView 標準のキー動作のうち、実害のあるもの・未提供のものを抑止または再割り当てしている。
+Among the WebView's default key behaviors, the harmful or unsupported ones are suppressed or reassigned.
 
-| ショートカット | 動作 |
+| Shortcut | Action |
 |---|---|
-| `Ctrl+P` | md 本文のみを印刷（ブラウザ標準の印刷ダイアログは抑止） |
-| `F12` | 名前を付けて保存（DevTools は抑止） |
-| `Ctrl+R` / `Ctrl+Shift+R` / `F5` / `Shift+F5` | 抑止（再読み込みによるタブ・未保存内容の消失を防ぐ） |
-| `Ctrl+Shift+I` | 抑止（DevTools inspect） |
+| `Ctrl+P` | Print the md body only (the browser's default print dialog is suppressed) |
+| `F12` | Save as (DevTools is suppressed) |
+| `Ctrl+R` / `Ctrl+Shift+R` / `F5` / `Shift+F5` | Suppressed (to prevent reloads from losing tabs / unsaved content) |
+| `Ctrl+Shift+I` | Suppressed (DevTools inspect) |
 
-## ディレクトリ構成
+## Directory layout
 
 ```
 md-editor/
-├── src/                         # フロントエンド（TypeScript）
-│   ├── main.ts                  # エントリポイント
-│   ├── editor.ts                # Milkdown Crepe 連携・タブ別エディタ管理・プレビュータブ生成
-│   ├── edit-ops.ts              # 編集メニューの実体（元に戻す/コピー/貼り付け等）
-│   ├── heading-fold.ts          # 見出しの折りたたみ（ProseMirror Decoration）
-│   ├── store.ts                 # タブ状態管理
-│   ├── tabs.ts                  # タブバーUI（並び替え・切り離し・結合・右クリック）
-│   ├── menu-bar.ts              # HTML メニューバー（Alt 操作・ドロップダウン）
-│   ├── toolbar.ts               # 書式・ファイル・出力・設定ツールバー
-│   ├── shortcuts.ts             # キーボードショートカット
-│   ├── actions.ts               # 開く / 保存 / 閉じる / ウィンドウ間移送 等のファイル操作
-│   ├── context-menu.ts          # 汎用コンテキストメニュー基盤
-│   ├── editor-context-menu.ts   # エディタ用の独自右クリックメニュー
-│   ├── find-replace.ts          # 検索・置換バー（UI＋オーケストレーション）
-│   ├── search-core.ts           # 検索の純粋ロジック（regex構築・マッチ・置換解決）
-│   ├── search-plugin.ts         # 検索マッチのハイライト（ProseMirror Decoration）
-│   ├── outline.ts               # 見出しアウトラインパネル（左サイドバー）
-│   ├── render-pipeline.ts       # markdown → 文書HTML の出力用レンダリング
-│   ├── exporter.ts              # HTML 出力・HTML プレビュータブ生成
-│   ├── print.ts                 # 本文限定の印刷（@media print）
-│   ├── mermaid-renderer.ts      # Mermaid を SVG にレンダリング（動的 import）
-│   ├── diagram-viewer.ts        # 図の拡大ビューア（ズーム・パン・選択モード）
-│   ├── mmd.ts                   # .mmd / .mermaid のフェンスラップ/アンラップ
-│   ├── doc-styles.ts            # 文書CSS・ハイライトテーマの供給/注入
-│   ├── theme.ts                 # 文書テーマ（フォント/配色/見出し等）と CSS 変数生成
-│   ├── embed-images.ts          # HTML 出力時のローカル画像 data URI 埋め込み
-│   ├── modal.ts                 # 確認ダイアログ
-│   ├── about-modal.ts           # バージョン情報（クリック可能な GitHub リンク）
-│   ├── progress.ts              # 進捗トースト（図の変換中など）
-│   ├── settings.ts              # フォント / 言語 / テーマ等の設定永続化
-│   ├── settings-modal.ts        # 設定UI（タブ構成・Preview ボタン付き）
-│   ├── line-numbers.ts          # 行番号オーバーレイ
-│   ├── blank-lines.ts           # 空行の保持処理
-│   ├── image-resolver.ts        # 画像 src の相対パス解決（asset URL 変換）
-│   ├── image-edit.ts            # 画像 URL/alt/幅 編集ダイアログ
-│   ├── i18n.ts                  # 多言語対応（ja/en）
-│   ├── title.ts                 # ウィンドウタイトル更新
-│   ├── styles/                  # 文書CSS・印刷CSS
+├── src/                         # Frontend (TypeScript)
+│   ├── main.ts                  # Entry point
+│   ├── editor.ts                # Milkdown Crepe integration, per-tab editor management, preview-tab creation
+│   ├── edit-ops.ts              # The actual Edit-menu operations (undo/copy/paste, etc.)
+│   ├── heading-fold.ts          # Heading folding (ProseMirror Decoration)
+│   ├── store.ts                 # Tab state management
+│   ├── tabs.ts                  # Tab bar UI (reorder / detach / merge / right-click)
+│   ├── menu-bar.ts              # HTML menu bar (Alt operation, dropdowns)
+│   ├── toolbar.ts               # Formatting / file / output / settings toolbar
+│   ├── shortcuts.ts             # Keyboard shortcuts
+│   ├── actions.ts               # File operations: open / save / close / cross-window transfer, etc.
+│   ├── context-menu.ts          # Generic context-menu foundation
+│   ├── editor-context-menu.ts   # The editor's custom right-click menu
+│   ├── find-replace.ts          # Find & replace bar (UI + orchestration)
+│   ├── search-core.ts           # Pure search logic (regex building / matching / replacement resolution)
+│   ├── search-plugin.ts         # Highlighting of search matches (ProseMirror Decoration)
+│   ├── outline.ts               # Heading outline panel (left sidebar)
+│   ├── render-pipeline.ts       # markdown → document HTML rendering for output
+│   ├── exporter.ts              # HTML export / HTML preview-tab creation
+│   ├── print.ts                 # Body-only printing (@media print)
+│   ├── mermaid-renderer.ts      # Renders Mermaid to SVG (dynamic import)
+│   ├── diagram-viewer.ts        # Diagram zoom viewer (zoom / pan / selection mode)
+│   ├── mmd.ts                   # Fence wrap/unwrap for .mmd / .mermaid
+│   ├── doc-styles.ts            # Supplies/injects document CSS and highlight themes
+│   ├── theme.ts                 # Document theme (font/color/headings, etc.) and CSS-variable generation
+│   ├── embed-images.ts          # Embeds local images as data URIs on HTML export
+│   ├── modal.ts                 # Confirmation dialog
+│   ├── about-modal.ts           # Version info (clickable GitHub link)
+│   ├── progress.ts              # Progress toast (e.g. while converting diagrams)
+│   ├── settings.ts              # Persistence of font / language / theme, etc.
+│   ├── settings-modal.ts        # Settings UI (tabbed, with a Preview button)
+│   ├── line-numbers.ts          # Line-number overlay
+│   ├── blank-lines.ts           # Blank-line preservation
+│   ├── image-resolver.ts        # Relative-path resolution for image src (asset URL conversion)
+│   ├── image-edit.ts            # Image URL/alt/width edit dialog
+│   ├── i18n.ts                  # Internationalization (ja/en)
+│   ├── title.ts                 # Window title updates
+│   ├── styles/                  # Document CSS / print CSS
 │   └── style.css
-├── src-tauri/                   # バックエンド（Rust）
+├── src-tauri/                   # Backend (Rust)
 │   ├── src/
 │   │   ├── main.rs
 │   │   ├── lib.rs
-│   │   ├── commands.rs          # フロントから呼ぶコマンド（最近ファイル取得・外部URL起動等）
-│   │   ├── recent.rs            # 最近使ったファイル
-│   │   ├── i18n.rs              # 言語状態の保持（メニューはフロントの HTML 側で描画）
-│   │   ├── tabwin.rs            # ウィンドウ間のタブ移送・結合・二重オープン検知
-│   │   └── startup.rs           # 起動引数 / シングルインスタンス処理
-│   ├── capabilities/            # Tauri 権限定義
-│   ├── icons/                   # アプリアイコン
+│   │   ├── commands.rs          # Commands called from the frontend (get recent files, launch external URLs, etc.)
+│   │   ├── recent.rs            # Recent files
+│   │   ├── i18n.rs              # Holds language state (the menu is drawn on the frontend HTML side)
+│   │   ├── tabwin.rs            # Cross-window tab transfer / merge / duplicate-open detection
+│   │   └── startup.rs           # Launch arguments / single-instance handling
+│   ├── capabilities/            # Tauri permission definitions
+│   ├── icons/                   # App icons
 │   ├── Cargo.toml
 │   └── tauri.conf.json
-├── scripts/                     # 補助スクリプト（アイコン透過処理など）
+├── scripts/                     # Helper scripts (icon transparency processing, etc.)
 ├── index.html
 ├── package.json
 ├── tsconfig.json
 └── vite.config.ts
 ```
 
-## 設計メモ
+## Design notes
 
-### 「保存確認が誤発火しない」設計
+### Designing so the "unsaved changes" prompt never misfires
 
-Milkdown Crepe は WYSIWYG エディタなので、ファイル読み込み時に内容が正規化される（例: 末尾改行の調整、リスト記号の統一など）。生のファイル内容と比較すると、ユーザーが何もしていなくても dirty 判定になってしまう。
+Because Milkdown Crepe is a WYSIWYG editor, content is normalized on load (e.g. adjusting trailing newlines, unifying list markers). Comparing against the raw file content would mark the document dirty even when the user did nothing.
 
-`editor.ts` ではこの問題を以下で回避している:
+`editor.ts` avoids this as follows:
 
-- 初回シリアライズ結果（`crepe.getMarkdown()`）を `baseline` として保持
-- `markdownUpdated` イベントで現在の markdown と baseline を比較し、`isDirty` を判定
-- 保存後は `baseline` を現在の markdown に再セット
+- Keeps the first serialization result (`crepe.getMarkdown()`) as the `baseline`
+- On each `markdownUpdated` event, compares the current markdown against the baseline to decide `isDirty`
+- After saving, resets the `baseline` to the current markdown
 
-### タブ別 EditorState の保持
+### Preserving per-tab EditorState
 
-各タブは独立した Crepe インスタンスを持つ。非アクティブなエディタは `#editor-pane-park` という退避用コンテナに DOM ごと移動させる。これは WebView2 が複数の合成レイヤを抱え込むと残像が出る問題を回避するためで、`display: none` ではなく親要素の付け替えで対応している。
+Each tab has its own Crepe instance. Inactive editors are moved, DOM and all, into a parking container called `#editor-pane-park`. This works around a WebView2 issue where holding multiple compositing layers leaves ghosting artifacts; rather than `display: none`, the parent element is reparented.
 
-### HTML 出力とプレビュータブの一致
+### Keeping HTML export and the preview tab identical
 
-HTML 出力と HTML プレビュータブは同一の `render-pipeline.ts` を通す。プレビュータブは Crepe を使わず、レンダリング済み HTML（`<main class="document">`）を読み取り専用で表示する。文書 CSS（`doc-styles.ts`）とハイライトテーマはプレビュー表示時に注入するため、別ウィンドウへ切り離しても背景・スタイルが欠落しない。これにより「プレビューで見た通りに出力される」ことを保証する。
+HTML export and the HTML preview tab go through the same `render-pipeline.ts`. The preview tab doesn't use Crepe; it shows the already-rendered HTML (`<main class="document">`) read-only. The document CSS (`doc-styles.ts`) and highlight theme are injected when the preview is shown, so the background and styles aren't lost even when detached to another window. This guarantees "it exports exactly as the preview looks".
 
-### Mermaid と図ビューア
+### Mermaid and the diagram viewer
 
-` ```mermaid ` ブロックと `.mmd` / `.mermaid` ファイルは `mermaid-renderer.ts` で SVG に変換する（Mermaid 本体は 1MB 超のため動的 import）。配色は表示テーマに連動（出力時は文書背景に連動）。図をクリックすると `diagram-viewer.ts` の拡大ビューアが開き、ホイールズーム・パン（手のひら）・テキスト選択モードを切り替えられる。エディタ内インライン図ではビューアから元コードへジャンプできる。
+` ```mermaid ` blocks and `.mmd` / `.mermaid` files are converted to SVG by `mermaid-renderer.ts` (Mermaid itself is over 1 MB, so it is dynamically imported). Colors follow the display theme (on export they follow the document background). Clicking a diagram opens the zoom viewer in `diagram-viewer.ts`, with wheel-zoom, pan (hand), and a text-selection mode toggle. For inline diagrams in the editor, the viewer can jump back to the source code.
 
-### ウィンドウ間のタブ移送
+### Cross-window tab transfer
 
-タブの内容（未保存分・baseline 込み、プレビュータブは HTML）を `tabwin.rs` の `TabPayload` で移送する。切り離しは新規 `WebviewWindow` を生成して pending マップ経由で受け渡し、結合は対象ウィンドウのタブバー矩形をヒットテストして転送する。移送元が1タブになったウィンドウは閉じる。同じファイルを複数ウィンドウで開こうとした場合は検知してポップアップを表示する。
+A tab's contents (including unsaved changes and the baseline; for preview tabs, the HTML) are transferred via `tabwin.rs`'s `TabPayload`. Detaching creates a new `WebviewWindow` and hands the payload over through a pending map; merging hit-tests the target window's tab-bar rectangle and forwards there. A window that drops to one tab after a transfer is closed. Attempting to open the same file in multiple windows is detected and shown via a popup.
 
-### 画像のピクセル幅指定
+### Specifying image pixel width
 
-`image-block` ノードの `ratio` 属性を「ピクセル幅」として再解釈している。`> 10` のとき明示的なピクセル幅、`≤ 10` のとき自動（natural fit）扱い。ratio 値は markdown の alt フィールドにシリアライズされるので、`![320](img.png)` の形で永続化される。alt が空 / 数値でなければ自動扱いに復帰。
+The `ratio` attribute of the `image-block` node is reinterpreted as "pixel width". When `> 10` it is an explicit pixel width; when `≤ 10` it is treated as automatic (natural fit). The ratio value is serialized into the markdown alt field, so it persists in the form `![320](img.png)`. If the alt is empty or non-numeric, it reverts to automatic.
 
-### 相対パス画像の解決
+### Resolving relative-path images
 
-Tauri の `assetProtocol` を有効化し、`convertFileSrc()` で WebView から読み込める URL に変換する。MutationObserver で `<img>` 要素を監視し、src が markdown 上の値（相対 / 絶対 / `file://`）の間は asset URL に書き換える。
+Tauri's `assetProtocol` is enabled, and `convertFileSrc()` converts paths into URLs the WebView can load. A MutationObserver watches `<img>` elements and rewrites the src to an asset URL while it equals the markdown value (relative / absolute / `file://`).
 
-ベアファイル名（ディレクトリ区切りなし）は `<mdDir>/img/<basename>/<file>` を優先試行し、`<img onerror>` でロード失敗したら `<mdDir>/<file>` にフォールバックする 2 段構え。HTML 出力時は `embed-images.ts` が解決済み画像を data URI として埋め込む。
+A bare file name (no directory separator) tries `<mdDir>/img/<basename>/<file>` first and, if loading fails (`<img onerror>`), falls back to `<mdDir>/<file>` — a two-stage approach. On HTML export, `embed-images.ts` embeds the resolved images as data URIs.
 
-### 検索・置換の方式
+### Find & replace approach
 
-DOM を直接書き換えず、ProseMirror のドキュメントモデル上で検索・置換する。textblock 単位で文字列を連結して `find-replace.ts` がマッチ位置を doc 位置へ変換し、`tr.insertText` で置換する。コードブロックも PM ノードとして同じ仕組みで扱え、状態の整合性と undo が保たれる。マッチのハイライトは `search-plugin.ts` の Decoration で描画。
+Rather than rewriting the DOM directly, find & replace operates on the ProseMirror document model. `find-replace.ts` concatenates strings per textblock, converts match positions to doc positions, and replaces with `tr.insertText`. Code blocks are handled the same way as PM nodes, preserving state consistency and undo. Match highlighting is drawn with a Decoration in `search-plugin.ts`.
 
-### アウトラインの現在地ハイライト
+### Current-location highlighting in the outline
 
-`outline.ts` はエディタのスクロールコンテナ（`.editor-pane`）の `scroll` を監視し、上端を越えた最後の見出しを「現在地」として `.is-current` を付与する（rAF スロットリング）。項目クリック時は PM 標準の `scrollIntoView`（下端寄せ）を使わず、見出し DOM を `scrollIntoView({ block: "start" })` で上端に整列させる。HTML プレビュータブでも同様にアウトラインを表示する。
+`outline.ts` watches the `scroll` of the editor's scroll container (`.editor-pane`) and marks the last heading that crossed the top edge as "current" with `.is-current` (rAF-throttled). When an item is clicked, instead of PM's default `scrollIntoView` (which aligns to the bottom), the heading DOM is aligned to the top with `scrollIntoView({ block: "start" })`. The same outline behavior applies in HTML preview tabs.
 
-### HTML メニューバー
+### HTML menu bar
 
-メニューは `menu-bar.ts` が HTML で描画する。Tauri + WebView2 では、エディタ（webview）にフォーカスがある間ネイティブメニューの Alt ニーモニックがメニュー側に届かないため、ネイティブメニューを廃止して自前のメニューバーに置き換えている。トップ項目・各項目のニーモニックは JS の `keydown`（capture）で処理し、`Alt+<文字>` でメニューを開き、開いている間は項目のニーモニック文字・矢印・Enter・Esc で操作する。各アクションは既存のフロント側アクション（ファイル/書式/表示/ヘルプ）と編集操作（`edit-ops.ts`）へ委譲する。最近のファイルは `list_recent_files` コマンドで取得して動的に組み立てる。
+The menu is drawn in HTML by `menu-bar.ts`. In Tauri + WebView2, while the editor (webview) has focus, the Alt mnemonics of a native menu don't reach the menu, so the native menu was removed and replaced with a custom menu bar. The mnemonics of the top items and each entry are handled with a JS `keydown` (capture); `Alt+<letter>` opens a menu, and while open it is operated with the item's mnemonic letter, arrows, Enter, and Esc. Each action delegates to the existing frontend actions (File/Format/View/Help) and edit operations (`edit-ops.ts`). Recent files are fetched via the `list_recent_files` command and assembled dynamically.
 
-### ブラウザ標準キーの抑止と再割り当て
+### Suppressing and reassigning browser default keys
 
-WebView2 は再読み込み（`Ctrl+R` / `F5`）やズーム、印刷などのブラウザ標準キーをそのまま処理する。特に再読み込みはフロントエンドを初期化してメモリ上のタブ状態を失わせ、`onCloseRequested` の未保存確認も発火しないため危険。`main.ts` の capture フェーズ keydown ハンドラでこれらを `preventDefault` し、再読み込み・DevTools(inspect) を抑止、`F12` を「名前を付けて保存」、`Ctrl+P` を `@media print` による本文限定印刷へ振り替えている。
+WebView2 processes browser default keys such as reload (`Ctrl+R` / `F5`), zoom, and print as-is. Reload in particular is dangerous: it reinitializes the frontend and loses in-memory tab state, and the `onCloseRequested` unsaved-changes check doesn't fire either. The capture-phase keydown handler in `main.ts` `preventDefault`s these, suppresses reload and DevTools (inspect), reassigns `F12` to "Save as", and reassigns `Ctrl+P` to body-only printing via `@media print`.

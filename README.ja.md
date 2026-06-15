@@ -64,7 +64,7 @@ Markdown を「記号を見ながら書く」のではなく、**仕上がりの
 | `Ctrl+B` / `Ctrl+I` / `Ctrl+K` | 太字 / 斜体 / リンク |
 | `Ctrl+,` | 設定を開く |
 
-全ショートカットの一覧は [docs/architecture.md](./docs/architecture.md) を参照してください。
+全ショートカットの一覧は [docs/architecture.ja.md](./docs/architecture.ja.md) を参照してください。
 
 ## ソースからビルドする
 
@@ -90,7 +90,7 @@ npm run tauri:build
 | エディタ | Milkdown Crepe（ProseMirror 系 WYSIWYG） |
 | 図 | Mermaid |
 
-設計の詳細・内部実装・ディレクトリ構成・全ショートカット一覧は [docs/architecture.md](./docs/architecture.md) にまとめています（日本語）。
+設計の詳細・内部実装・ディレクトリ構成・全ショートカット一覧は [docs/architecture.ja.md](./docs/architecture.ja.md) にまとめています。
 
 ## ライセンス
 

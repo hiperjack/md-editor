@@ -90,7 +90,7 @@ npm run tauri:build
 | Editor | Milkdown Crepe (ProseMirror-based WYSIWYG) |
 | Diagrams | Mermaid |
 
-Design details, internals, directory layout, and the full shortcut list are documented in [docs/architecture.md](./docs/architecture.md) (written in Japanese).
+Design details, internals, directory layout, and the full shortcut list are documented in [docs/architecture.md](./docs/architecture.md).
 
 ## License
 
