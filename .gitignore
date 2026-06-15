@@ -29,7 +29,9 @@ test-fixtures/
 test/
 
 # --- 設計メモ（ローカル参照のみ・ビルド不要） ---
-docs/
+# docs/architecture.md と docs/assets/ は公開ドキュメント。
+# superpowers の plans/specs だけはローカル参照なので無視する。
+docs/superpowers/
 
 # --- Claude Code 関連 ---
 .claude/

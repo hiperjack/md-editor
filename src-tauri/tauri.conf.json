@@ -54,6 +54,9 @@
         "role": "Editor"
       }
     ],
+    "macOS": {
+      "signingIdentity": "-"
+    },
     "windows": {
       "wix": {
         "language": "ja-JP"
