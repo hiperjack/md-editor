@@ -48,6 +48,11 @@ const DICT: Record<Lang, Record<string, string>> = {
     "settings.assoc.status.registered": "登録済み",
     "settings.assoc.status.none": "未登録",
     "settings.assoc.register": "選択した拡張子を登録",
+    "settings.assoc.unregister": "選択を登録解除",
+    "settings.assoc.selectAll": "全て選択",
+    "settings.assoc.deselectAll": "全て解除",
+    "settings.assoc.unregisterDefaultWarn":
+      "既定アプリになっている拡張子があります。Windowsの既定アプリ設定で既定を変更してください。このまま登録解除を続けますか？",
     "settings.assoc.openOsSettings": "Windowsの既定アプリ設定を開く",
     "settings.assoc.done": "登録しました。",
     "settings.assoc.failed": "登録に失敗しました。",
@@ -299,6 +304,11 @@ const DICT: Record<Lang, Record<string, string>> = {
     "settings.assoc.status.registered": "Registered",
     "settings.assoc.status.none": "Not registered",
     "settings.assoc.register": "Register selected extensions",
+    "settings.assoc.unregister": "Unregister selected",
+    "settings.assoc.selectAll": "Select all",
+    "settings.assoc.deselectAll": "Deselect all",
+    "settings.assoc.unregisterDefaultWarn":
+      "Some selected extensions are set as the default app. Please change the default in Windows default apps settings. Continue unregistering anyway?",
     "settings.assoc.openOsSettings": "Open Windows default apps settings",
     "settings.assoc.done": "Registered.",
     "settings.assoc.failed": "Registration failed.",

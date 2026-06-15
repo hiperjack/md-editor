@@ -685,6 +685,8 @@ export function openFontSettings(): Promise<void> {
       // 拡張子ごとの行: チェックボックス + ラベル + 状態バッジ
       const checks = new Map<string, HTMLInputElement>();
       const badges = new Map<string, HTMLElement>();
+      // 直近に取得した各拡張子の状態（登録解除時の「既定」判定に使う）。
+      const statuses = new Map<string, string>();
 
       const statusLabel = (status: string): string => {
         if (status === "default") return t("settings.assoc.status.default");
@@ -692,12 +694,36 @@ export function openFontSettings(): Promise<void> {
         return t("settings.assoc.status.none");
       };
 
+      // 全て選択/全て解除トグル。チェック状態に応じてラベルを切り替える。
+      const selectAllBtn = document.createElement("button");
+      selectAllBtn.type = "button";
+      selectAllBtn.className = "modal-btn";
+      const updateSelectAllLabel = () => {
+        const allChecked = EXTS.every((ext) => checks.get(ext)?.checked);
+        selectAllBtn.textContent = allChecked
+          ? t("settings.assoc.deselectAll")
+          : t("settings.assoc.selectAll");
+      };
+      selectAllBtn.addEventListener("click", () => {
+        const allChecked = EXTS.every((ext) => checks.get(ext)?.checked);
+        for (const ext of EXTS) {
+          const cb = checks.get(ext);
+          if (cb) cb.checked = !allChecked;
+        }
+        updateSelectAllLabel();
+      });
+      const selectAllRow = document.createElement("div");
+      selectAllRow.className = "settings-row";
+      selectAllRow.appendChild(selectAllBtn);
+      c.appendChild(selectAllRow);
+
       for (const ext of EXTS) {
         const row = document.createElement("label");
         row.className = "settings-row settings-row-checkbox";
         const check = document.createElement("input");
         check.type = "checkbox";
         check.className = "settings-input";
+        check.addEventListener("change", updateSelectAllLabel);
         checks.set(ext, check);
         const text = document.createElement("span");
         text.textContent = `.${ext}`;
@@ -710,6 +736,7 @@ export function openFontSettings(): Promise<void> {
         row.appendChild(badge);
         c.appendChild(row);
       }
+      updateSelectAllLabel();
 
       // 状態取得して各バッジを更新する。
       const refreshStatus = () => {
@@ -719,6 +746,7 @@ export function openFontSettings(): Promise<void> {
         )
           .then((list) => {
             for (const { ext, status } of list) {
+              statuses.set(ext, status);
               const badge = badges.get(ext);
               if (badge) {
                 badge.textContent = statusLabel(status);
@@ -754,6 +782,34 @@ export function openFontSettings(): Promise<void> {
           });
       });
 
+      const unregisterBtn = document.createElement("button");
+      unregisterBtn.type = "button";
+      unregisterBtn.className = "modal-btn";
+      unregisterBtn.textContent = t("settings.assoc.unregister");
+      unregisterBtn.addEventListener("click", () => {
+        const selected = EXTS.filter((ext) => checks.get(ext)?.checked);
+        if (selected.length === 0) return;
+        // 既定アプリになっている拡張子が含まれる場合は警告して確認を取る。
+        const hasDefault = selected.some(
+          (ext) => statuses.get(ext) === "default",
+        );
+        if (hasDefault && !window.confirm(t("settings.assoc.unregisterDefaultWarn"))) {
+          return;
+        }
+        unregisterBtn.disabled = true;
+        void invoke("unregister_file_associations", { exts: selected })
+          .then(() => {
+            refreshStatus();
+          })
+          .catch((e) => {
+            console.error("unregister_file_associations failed:", e);
+            window.alert(t("settings.assoc.failed"));
+          })
+          .finally(() => {
+            unregisterBtn.disabled = false;
+          });
+      });
+
       const osBtn = document.createElement("button");
       osBtn.type = "button";
       osBtn.className = "modal-btn";
@@ -765,6 +821,7 @@ export function openFontSettings(): Promise<void> {
       });
 
       btnWrap.appendChild(registerBtn);
+      btnWrap.appendChild(unregisterBtn);
       btnWrap.appendChild(osBtn);
       c.appendChild(btnWrap);
 

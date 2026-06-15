@@ -67,7 +67,45 @@ fn exe_path() -> Result<String, String> {
         .ok_or_else(|| "exe path is not valid UTF-8".to_string())
 }
 
-/// 1拡張子分のProgID＋OpenWithProgidsをHKCUへ書き込む。
+/// アプリの Capabilities キー。RegisteredApplications からここを指す。
+const CAPABILITIES_KEY: &str = "HKCU\\Software\\mdedit\\Capabilities";
+
+/// reg.exe を実行し、成功でなければエラーを返す。
+fn run_reg(args: &[&str]) -> Result<(), String> {
+    let status = reg()
+        .args(args)
+        .status()
+        .map_err(|e| format!("reg spawn: {}", e))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("reg failed ({:?}): {:?}", status.code(), args))
+    }
+}
+
+/// reg.exe を実行するが、キー/値が無い等の失敗は無視する（削除用）。
+fn run_reg_lenient(args: &[&str]) {
+    let _ = reg().args(args).status();
+}
+
+/// RegisteredApplications / Capabilities を登録し、設定アプリの既定アプリ一覧に
+/// mdedit を出す。`ms-settings:defaultapps?registeredAppUser=mdedit` の前提。
+fn ensure_app_registration() -> Result<(), String> {
+    run_reg(&[
+        "add", CAPABILITIES_KEY, "/v", "ApplicationName", "/d", "mdedit", "/f",
+    ])?;
+    run_reg(&[
+        "add", CAPABILITIES_KEY, "/v", "ApplicationDescription", "/d",
+        "Lightweight Markdown editor", "/f",
+    ])?;
+    run_reg(&[
+        "add", "HKCU\\Software\\RegisteredApplications", "/v", "mdedit", "/d",
+        "Software\\mdedit\\Capabilities", "/f",
+    ])?;
+    Ok(())
+}
+
+/// 1拡張子分のProgID＋OpenWithProgids＋Capabilitiesの関連付けをHKCUへ書き込む。
 fn register_one(ext: &str, exe: &str) -> Result<(), String> {
     let progid = progid_for_ext(ext);
     let display = display_name_for_ext(ext);
@@ -76,23 +114,27 @@ fn register_one(ext: &str, exe: &str) -> Result<(), String> {
     // 実際に保存したい値: "<exe>" "%1"
     let command_value = format!("\"{}\" \"%1\"", exe);
     let ext_progids = format!("HKCU\\Software\\Classes\\.{}\\OpenWithProgids", ext);
+    let dotted = format!(".{}", ext);
+    let fa_key = format!("{}\\FileAssociations", CAPABILITIES_KEY);
 
-    let run = |args: &[&str]| -> Result<(), String> {
-        let status = reg()
-            .args(args)
-            .status()
-            .map_err(|e| format!("reg spawn: {}", e))?;
-        if status.success() {
-            Ok(())
-        } else {
-            Err(format!("reg failed ({:?}): {:?}", status.code(), args))
-        }
-    };
-
-    run(&["add", &classes, "/ve", "/d", display, "/f"])?;
-    run(&["add", &cmd_key, "/ve", "/d", &command_value, "/f"])?;
-    run(&["add", &ext_progids, "/v", &progid, "/t", "REG_NONE", "/f"])?;
+    run_reg(&["add", &classes, "/ve", "/d", display, "/f"])?;
+    run_reg(&["add", &cmd_key, "/ve", "/d", &command_value, "/f"])?;
+    run_reg(&["add", &ext_progids, "/v", &progid, "/t", "REG_NONE", "/f"])?;
+    run_reg(&["add", &fa_key, "/v", &dotted, "/d", &progid, "/f"])?;
     Ok(())
+}
+
+/// 1拡張子分の登録を取り消す（キー/値が無くてもエラーにしない）。
+fn unregister_one(ext: &str) {
+    let progid = progid_for_ext(ext);
+    let classes = format!("HKCU\\Software\\Classes\\{}", progid);
+    let ext_progids = format!("HKCU\\Software\\Classes\\.{}\\OpenWithProgids", ext);
+    let dotted = format!(".{}", ext);
+    let fa_key = format!("{}\\FileAssociations", CAPABILITIES_KEY);
+
+    run_reg_lenient(&["delete", &ext_progids, "/v", &progid, "/f"]);
+    run_reg_lenient(&["delete", &classes, "/f"]);
+    run_reg_lenient(&["delete", &fa_key, "/v", &dotted, "/f"]);
 }
 
 /// 1拡張子分の状態を判定する。
@@ -145,6 +187,7 @@ pub fn query_file_associations(exts: Vec<String>) -> Result<Vec<AssocStatus>, St
 #[tauri::command]
 pub fn register_file_associations(exts: Vec<String>) -> Result<(), String> {
     let exe = exe_path()?;
+    ensure_app_registration()?;
     for ext in &exts {
         register_one(ext, &exe)?;
     }
@@ -152,10 +195,26 @@ pub fn register_file_associations(exts: Vec<String>) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn unregister_file_associations(exts: Vec<String>) -> Result<(), String> {
+    for ext in &exts {
+        unregister_one(ext);
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub fn open_default_apps_settings(_app: AppHandle) -> Result<(), String> {
-    // cmd /C start "" ms-settings:defaultapps（"" はウィンドウタイトル）
+    // 設定アプリに mdedit を出すための登録を保証してから、mdedit自身の
+    // 既定アプリページへジャンプする。
+    let _ = ensure_app_registration();
+    // cmd /C start "" "<uri>"（"" はウィンドウタイトル）
     Command::new("cmd")
-        .args(["/C", "start", "", "ms-settings:defaultapps"])
+        .args([
+            "/C",
+            "start",
+            "",
+            "ms-settings:defaultapps?registeredAppUser=mdedit",
+        ])
         .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .map_err(|e| format!("open ms-settings: {}", e))?;

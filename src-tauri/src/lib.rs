@@ -54,6 +54,8 @@ pub fn run() {
             #[cfg(target_os = "windows")]
             assoc::register_file_associations,
             #[cfg(target_os = "windows")]
+            assoc::unregister_file_associations,
+            #[cfg(target_os = "windows")]
             assoc::open_default_apps_settings,
             tabwin::stash_pending_tab,
             tabwin::take_pending_tab,
