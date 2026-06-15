@@ -1,56 +1,52 @@
-# --- Node / Vite ---
+# Dependencies & build output
 node_modules/
 dist/
 dist-ssr/
 *.local
 
-# --- Tauri / Rust ---
+# Tauri / Rust
 src-tauri/target/
 src-tauri/gen/
 src-tauri/WixTools/
 src-tauri/.cargo/
 
-# --- Logs & 開発成果物 ---
+# Logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Test & tooling output
 .playwright-mcp/
 playwright-report/
 test-results/
+test-fixtures/
+test/
 
-# --- 開発時のスクリーンショット・テスト fixture ---
+# Local screenshots / scratch
 md-stage*.png
 md-editor-stage*.png
 final-*.png
 スクリーンショット*.png
-test-fixtures/
-# 動作確認用の手元 markdown / 画像はコミットしない
-test/
 
-# --- 設計メモ（ローカル参照のみ・ビルド不要） ---
-# docs/architecture.md と docs/assets/ は公開ドキュメント。
-# superpowers の plans/specs だけはローカル参照なので無視する。
+# Local-only notes (not part of the published docs)
 docs/superpowers/
-
-# --- Claude Code 関連 ---
-.claude/
-# 作業引き継ぎ素材（ローカル記録のみ・成果物は本体へ反映済み）
 docs/mdedit-handoff-pack/
 
-# --- 環境変数・秘匿情報 ---
-.env
-.env.*
-!.env.example
-
-# --- エディタ / IDE ---
+# Editor / tooling config
+.claude/
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# --- OS ---
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# OS
 .DS_Store
 Thumbs.db
 ehthumbs.db
