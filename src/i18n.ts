@@ -40,6 +40,18 @@ const DICT: Record<Lang, Record<string, string>> = {
     "settings.language.system": "システムに合わせる",
     "settings.language.note":
       "OSのファイルダイアログ等、OSの言語設定に従う一部のテキストは切り替えられない場合があります。",
+    // 関連付け（Windows既定アプリ候補の登録）
+    "settings.section.associations": "関連付け",
+    "settings.assoc.note":
+      "選択した拡張子について、本アプリを「プログラムから開く」候補として登録します。実際に既定のアプリにするには、登録後に「Windowsの既定アプリ設定を開く」から選択してください（Windowsの仕様上、既定の切替はユーザー操作が必要です）。",
+    "settings.assoc.status.default": "既定",
+    "settings.assoc.status.registered": "登録済み",
+    "settings.assoc.status.none": "未登録",
+    "settings.assoc.register": "選択した拡張子を登録",
+    "settings.assoc.openOsSettings": "Windowsの既定アプリ設定を開く",
+    "settings.assoc.done": "登録しました。",
+    "settings.assoc.failed": "登録に失敗しました。",
+    "settings.assoc.winOnly": "この機能はWindowsでのみ利用できます。",
     // 確認ダイアログ
     "dlg.save.title": "保存しますか？",
     "dlg.save.body": "{filename} には未保存の変更があります。",
@@ -280,6 +292,17 @@ const DICT: Record<Lang, Record<string, string>> = {
     "settings.language.system": "Match system",
     "settings.language.note":
       "Some texts (e.g. native OS file dialogs) follow the OS language and may not switch.",
+    "settings.section.associations": "File Associations",
+    "settings.assoc.note":
+      "Registers this app as an \"Open with\" option for the selected extensions. To actually make it the default app, open Windows default apps settings after registering and choose it (Windows requires a user action to change defaults).",
+    "settings.assoc.status.default": "Default",
+    "settings.assoc.status.registered": "Registered",
+    "settings.assoc.status.none": "Not registered",
+    "settings.assoc.register": "Register selected extensions",
+    "settings.assoc.openOsSettings": "Open Windows default apps settings",
+    "settings.assoc.done": "Registered.",
+    "settings.assoc.failed": "Registration failed.",
+    "settings.assoc.winOnly": "This feature is available on Windows only.",
     "dlg.save.title": "Save changes?",
     "dlg.save.body": "{filename} has unsaved changes.",
     "dlg.save.save": "Save",
