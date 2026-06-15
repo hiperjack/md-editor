@@ -712,10 +712,6 @@ export function openFontSettings(): Promise<void> {
         }
         updateSelectAllLabel();
       });
-      const selectAllRow = document.createElement("div");
-      selectAllRow.className = "settings-row";
-      selectAllRow.appendChild(selectAllBtn);
-      c.appendChild(selectAllRow);
 
       for (const ext of EXTS) {
         const row = document.createElement("label");
@@ -757,9 +753,9 @@ export function openFontSettings(): Promise<void> {
           .catch((e) => console.error("query_file_associations failed:", e));
       };
 
-      // ボタン群
+      // ボタン群（全て選択・登録・解除・OS設定を1行に並べる）
       const btnWrap = document.createElement("div");
-      btnWrap.className = "settings-row";
+      btnWrap.className = "settings-assoc-actions";
 
       const registerBtn = document.createElement("button");
       registerBtn.type = "button";
@@ -820,6 +816,7 @@ export function openFontSettings(): Promise<void> {
         );
       });
 
+      btnWrap.appendChild(selectAllBtn);
       btnWrap.appendChild(registerBtn);
       btnWrap.appendChild(unregisterBtn);
       btnWrap.appendChild(osBtn);

@@ -47,8 +47,8 @@ const DICT: Record<Lang, Record<string, string>> = {
     "settings.assoc.status.default": "既定",
     "settings.assoc.status.registered": "登録済み",
     "settings.assoc.status.none": "未登録",
-    "settings.assoc.register": "選択した拡張子を登録",
-    "settings.assoc.unregister": "選択を登録解除",
+    "settings.assoc.register": "登録",
+    "settings.assoc.unregister": "解除",
     "settings.assoc.selectAll": "全て選択",
     "settings.assoc.deselectAll": "全て解除",
     "settings.assoc.unregisterDefaultWarn":
@@ -303,8 +303,8 @@ const DICT: Record<Lang, Record<string, string>> = {
     "settings.assoc.status.default": "Default",
     "settings.assoc.status.registered": "Registered",
     "settings.assoc.status.none": "Not registered",
-    "settings.assoc.register": "Register selected extensions",
-    "settings.assoc.unregister": "Unregister selected",
+    "settings.assoc.register": "Register",
+    "settings.assoc.unregister": "Unregister",
     "settings.assoc.selectAll": "Select all",
     "settings.assoc.deselectAll": "Deselect all",
     "settings.assoc.unregisterDefaultWarn":

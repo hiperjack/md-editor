@@ -1480,3 +1480,11 @@ body.is-resizing-outline {
   background: rgba(34, 139, 34, 0.18);
 }
 
+/* 関連付けセクションの操作ボタン行（全て選択・登録・解除・OS設定を1行に） */
+.settings-assoc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+
