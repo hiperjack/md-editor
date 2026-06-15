@@ -35,6 +35,8 @@ docs/superpowers/
 
 # --- Claude Code 関連 ---
 .claude/
+# 作業引き継ぎ素材（ローカル記録のみ・成果物は本体へ反映済み）
+docs/mdedit-handoff-pack/
 
 # --- 環境変数・秘匿情報 ---
 .env
