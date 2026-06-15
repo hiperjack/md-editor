@@ -1462,3 +1462,21 @@ body.is-resizing-outline {
   font-size: 12px;
 }
 
+/* 関連付けセクションの状態バッジ */
+.settings-assoc-badge {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--badge-bg, rgba(127, 127, 127, 0.18));
+  color: inherit;
+  white-space: nowrap;
+}
+.settings-assoc-badge[data-status="default"] {
+  background: rgba(29, 78, 216, 0.18);
+  color: #1d4ed8;
+}
+.settings-assoc-badge[data-status="registered"] {
+  background: rgba(34, 139, 34, 0.18);
+}
+
