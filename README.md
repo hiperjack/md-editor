@@ -1,95 +1,97 @@
+**English** | [日本語](./README.ja.md)
+
 # mdedit
 
-**軽量・無料・オープンソースの WYSIWYG Markdown エディタ。**
-書式が反映されたまま編集でき、Mermaid 図のインラインプレビューと「見たまま」の HTML 出力に対応します。有料化した Typora の代替を探している人にも向いています。
+**A lightweight, free, open-source WYSIWYG Markdown editor.**
+Edit with formatting applied as you type, preview Mermaid diagrams inline, and export to HTML exactly as it looks on screen. A solid alternative if you're looking to replace the now-paid Typora.
 
 ![GitHub release](https://img.shields.io/github/v/release/hiperjack/md-editor)
 ![License](https://img.shields.io/github/license/hiperjack/md-editor)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 
-<!-- 最重要: 起動〜編集の様子が伝わる GIF を 1 枚（docs/assets/demo.gif） -->
-![mdedit のデモ](./docs/assets/demo.gif)
+<!-- Most important: a single GIF showing launch-to-edit (docs/assets/demo.gif) -->
+![mdedit demo](./docs/assets/demo.gif)
 
-## mdedit とは
+## What is mdedit?
 
-Markdown を「記号を見ながら書く」のではなく、**仕上がりの見た目のまま編集できる**デスクトップアプリです。プレビュー用の別ペインを行き来する必要がなく、書いたものがそのまま文書になります。Mermaid による図、HTML やPDFへの書き出し、複数ウィンドウ・タブでの作業にも対応しています。
+A desktop app that lets you **edit Markdown in its finished, rendered form** instead of staring at raw syntax. There's no separate preview pane to jump back and forth to — what you write is the document. It also supports Mermaid diagrams, export to HTML and PDF, and working across multiple windows and tabs.
 
-## なぜ mdedit か
+## Why mdedit?
 
-- **書いたまま見える** — 太字や見出し、リストが反映された状態で直接編集できます（WYSIWYG）。プレビューの往復が不要です。
-- **図がそのまま描ける** — コードに書いた Mermaid がリアルタイムで図になり、クリックで拡大できます。図だけのファイル（`.mmd` / `.mermaid`）も開けます。
-- **見たまま出力できる** — 編集画面とまったく同じ見た目で HTML に書き出し、PDF にも印刷できます。
-- **軽くて速い** — Tauri 製のため、インストーラが小さく起動も軽快です。
-- **日本語で使える** — 日本語・英語に対応し、ダーク／ライトのテーマを切り替えられます。
+- **See it as you write it** — Edit directly with bold, headings, and lists already rendered (WYSIWYG). No round trips to a preview pane.
+- **Diagrams just work** — Mermaid you write in a code block becomes a live diagram in real time, and you can click to zoom. Diagram-only files (`.mmd` / `.mermaid`) open too.
+- **Export what you see** — Export to HTML with the exact same look as the editor, and print to PDF.
+- **Light and fast** — Built with Tauri, so the installer is small and startup is quick.
+- **Bilingual** — Japanese and English UI, with switchable dark / light themes.
 
-## スクリーンショット
+## Screenshots
 
-| WYSIWYG 編集 | Mermaid プレビュー | HTML 出力 |
+| WYSIWYG editing | Mermaid preview | HTML export |
 |---|---|---|
-| ![編集画面](./docs/assets/edit.png) | ![Mermaid プレビュー](./docs/assets/mermaid.png) | ![HTML 出力](./docs/assets/export.png) |
+| ![Editing](./docs/assets/edit.png) | ![Mermaid preview](./docs/assets/mermaid.png) | ![HTML export](./docs/assets/export.png) |
 
-## ダウンロード
+## Download
 
-最新版は [Releases](https://github.com/hiperjack/md-editor/releases) から入手できます。
+Get the latest version from [Releases](https://github.com/hiperjack/md-editor/releases).
 
-| OS | 形式 |
+| OS | Format |
 |---|---|
-| Windows | `.msi` または `.exe`（インストーラ） |
+| Windows | `.msi` or `.exe` (installer) |
 | macOS | `.dmg` |
-| Linux | `.AppImage` または `.deb` |
+| Linux | `.AppImage` or `.deb` |
 
-> **Windows で警告が出る場合:** 現在のビルドはコード署名をしていないため、起動時に「Windows によって PC が保護されました」と表示されることがあります。［詳細情報］→［実行］で起動できます（署名証明書の導入は検討中です）。
+> **If Windows shows a warning:** the current build is not code-signed, so you may see "Windows protected your PC" on launch. Click **More info** → **Run anyway** to start it (a signing certificate is under consideration).
 
-> **macOS で「壊れているため開けません」と出る場合:** アドホック署名のため、初回は Finder でアプリを右クリック →［開く］で起動してください。
+> **If macOS says the app "is damaged and can't be opened":** the build uses ad-hoc signing, so on first launch right-click the app in Finder and choose **Open**.
 
-## 使い方の基本
+## Basic usage
 
-- `.md` / `.markdown` ファイルをダブルクリックすると、エディタの新しいタブで開きます。
-- `.mmd` / `.mermaid` ファイルは図として開き、保存時に元のソース形式へ戻します。
-- `.html` ファイルは、読み取り専用のプレビュータブで表示します。
-- タブはドラッグで並べ替えられ、ウィンドウの外へ出すと別ウィンドウになります。
+- Double-click a `.md` / `.markdown` file to open it in a new tab in the editor.
+- `.mmd` / `.mermaid` files open as a diagram and are saved back to their original source format.
+- `.html` files open in a read-only preview tab.
+- Tabs can be reordered by dragging, and dragging one out of the window creates a new window.
 
-## よく使うショートカット
+## Common shortcuts
 
-| ショートカット | 動作 |
+| Shortcut | Action |
 |---|---|
-| `Ctrl+N` / `Ctrl+O` / `Ctrl+S` | 新規タブ / 開く / 保存 |
-| `Ctrl+Shift+E` | HTML として出力 |
-| `Ctrl+Shift+V` | HTML プレビュータブを開く |
-| `Ctrl+P` | 印刷（PDF 保存も可能） |
-| `Ctrl+F` / `Ctrl+H` | 検索 / 置換 |
-| `Ctrl+Shift+O` | 見出しアウトラインの表示切替 |
-| `Ctrl+B` / `Ctrl+I` / `Ctrl+K` | 太字 / 斜体 / リンク |
-| `Ctrl+,` | 設定を開く |
+| `Ctrl+N` / `Ctrl+O` / `Ctrl+S` | New tab / Open / Save |
+| `Ctrl+Shift+E` | Export as HTML |
+| `Ctrl+Shift+V` | Open HTML preview tab |
+| `Ctrl+P` | Print (PDF save available) |
+| `Ctrl+F` / `Ctrl+H` | Find / Replace |
+| `Ctrl+Shift+O` | Toggle heading outline |
+| `Ctrl+B` / `Ctrl+I` / `Ctrl+K` | Bold / Italic / Link |
+| `Ctrl+,` | Open settings |
 
-全ショートカットの一覧は [docs/architecture.md](./docs/architecture.md) を参照してください。
+See [docs/architecture.md](./docs/architecture.md) for the full list of shortcuts.
 
-## ソースからビルドする
+## Build from source
 
-**必要なもの:** Node.js 18 以上、Rust（[Tauri の前提条件](https://v2.tauri.app/start/prerequisites/)を参照）。
+**Requirements:** Node.js 18 or later, and Rust (see the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)).
 
 ```bash
-# 依存パッケージのインストール
+# Install dependencies
 npm install
 
-# 開発モードで起動
+# Run in development mode
 npm run tauri:dev
 
-# インストーラを生成
+# Build installers
 npm run tauri:build
 ```
 
-## 技術スタック
+## Tech stack
 
-| 層 | 採用技術 |
+| Layer | Technology |
 |---|---|
-| デスクトップ基盤 | Tauri 2.x（Rust） |
-| フロントエンド | Vite + TypeScript（UI フレームワーク不使用） |
-| エディタ | Milkdown Crepe（ProseMirror 系 WYSIWYG） |
-| 図 | Mermaid |
+| Desktop framework | Tauri 2.x (Rust) |
+| Frontend | Vite + TypeScript (no UI framework) |
+| Editor | Milkdown Crepe (ProseMirror-based WYSIWYG) |
+| Diagrams | Mermaid |
 
-設計の詳細・内部実装・ディレクトリ構成・全ショートカット一覧は [docs/architecture.md](./docs/architecture.md) にまとめています。
+Design details, internals, directory layout, and the full shortcut list are documented in [docs/architecture.md](./docs/architecture.md) (written in Japanese).
 
-## ライセンス
+## License
 
 [MIT License](./LICENSE)
