@@ -6,9 +6,6 @@
 
 use serde::Serialize;
 
-/// 設定画面で扱う拡張子（先頭ドット無し）。
-pub const SUPPORTED_EXTS: &[&str] = &["md", "markdown", "mmd", "mermaid", "txt"];
-
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct AssocStatus {
     pub ext: String,
