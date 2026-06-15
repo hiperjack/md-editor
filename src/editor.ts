@@ -369,7 +369,9 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     if (!entry) return;
     requestAnimationFrame(() => {
       const pm = entry.container.querySelector<HTMLElement>(".ProseMirror");
-      pm?.focus();
+      // フォーカス時の自動スクロール（キャレット=先頭へ飛ぶ）を抑止する。
+      // メニュー経由で設定を開く際に編集中位置が先頭へ飛ぶのを防ぐ。
+      pm?.focus({ preventScroll: true });
     });
   };
 
