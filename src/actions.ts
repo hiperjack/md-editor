@@ -7,6 +7,8 @@ import { confirmSave, confirmDuplicate, confirmDuplicateWindow } from "./modal";
 import type { EditorHost } from "./editor";
 import { fileTypeOfPath, extractMermaidSource } from "./mmd";
 import { openHtmlFileTab } from "./exporter";
+import { showProgress } from "./progress";
+import { t } from "./i18n";
 
 const MD_FILTERS = [
   { name: "Markdown", extensions: ["md", "markdown"] },
@@ -51,6 +53,32 @@ async function addRecent(path: string): Promise<void> {
   }
 }
 
+/**
+ * md タブ限定で、貼り付け画像を img/<md名>/ へ書き出してから markdown を取り直す。
+ * 失敗があればトーストで通知する（保存自体は続行）。
+ * @returns 永続化後の最新 markdown（書換が無ければ元の値と同じ）。
+ */
+async function persistImagesThenGetMarkdown(
+  tabId: string,
+  path: string,
+  editor: EditorHost,
+  fallbackMarkdown: string,
+): Promise<string> {
+  if (fileTypeOfPath(path) !== "md") return fallbackMarkdown;
+  try {
+    const res = await editor.persistImages(tabId, path);
+    if (res.failed > 0) {
+      const toast = showProgress(
+        t("save.imagesFailed").replace("{count}", String(res.failed)),
+      );
+      setTimeout(() => toast.close(), 4000);
+    }
+  } catch (e) {
+    console.warn("persistImages failed:", e);
+  }
+  return editor.getMarkdown(tabId) ?? fallbackMarkdown;
+}
+
 export async function saveTab(
   tabId: string,
   editor: EditorHost,
@@ -77,7 +105,8 @@ export async function saveTab(
     path = picked;
   }
 
-  const content = contentForDisk(markdown, path);
+  const finalMarkdown = await persistImagesThenGetMarkdown(tabId, path, editor, markdown);
+  const content = contentForDisk(finalMarkdown, path);
   await writeFile(path, content);
   store.markSaved(tabId, path, content);
   editor.resetBaseline(tabId);
@@ -109,7 +138,8 @@ export async function saveTabAs(
   if (!picked) return false;
 
   const prevType = fileTypeOfPath(tab.filePath);
-  const content = contentForDisk(markdown, picked);
+  const finalMarkdown = await persistImagesThenGetMarkdown(tabId, picked, editor, markdown);
+  const content = contentForDisk(finalMarkdown, picked);
   await writeFile(picked, content);
   store.markSaved(tabId, picked, content);
   editor.resetBaseline(tabId);

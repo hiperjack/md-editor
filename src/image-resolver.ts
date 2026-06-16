@@ -73,6 +73,19 @@ function isBareFilename(src: string): boolean {
 }
 
 /**
+ * md ファイルパスから、貼り付け画像の保存先ディレクトリを返す。
+ * 解決規約（ベアファイル名 → <mdDir>/img/<md名>/file）と同じ基準。
+ * mdFilePath が無い、または親ディレクトリが取れない場合は null。
+ */
+export function imageDirForMdPath(mdFilePath: string | null): string | null {
+  if (!mdFilePath) return null;
+  const baseDir = dirname(mdFilePath);
+  if (!baseDir) return null;
+  const stem = basenameWithoutExt(mdFilePath);
+  return joinPath(baseDir, "img/" + stem);
+}
+
+/**
  * markdown 上の画像 src を、絶対ファイルパスの候補（優先順）に解決する。
  * HTML出力時の data URI 埋め込み（Rustでのファイル読み込み）用。
  *

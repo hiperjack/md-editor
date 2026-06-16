@@ -40,6 +40,7 @@ pub fn run() {
             commands::read_file,
             commands::write_file,
             commands::read_file_base64,
+            commands::write_file_base64,
             commands::load_settings,
             commands::save_settings,
             commands::frontend_ready,
