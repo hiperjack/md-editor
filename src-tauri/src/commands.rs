@@ -104,6 +104,54 @@ pub fn read_file_base64(path: String) -> Result<String, String> {
     Ok(base64_encode(&bytes))
 }
 
+/// 自前 base64 デコード（標準アルファベット・パディング必須）。
+fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
+    fn val(c: u8) -> Option<u8> {
+        match c {
+            b'A'..=b'Z' => Some(c - b'A'),
+            b'a'..=b'z' => Some(c - b'a' + 26),
+            b'0'..=b'9' => Some(c - b'0' + 52),
+            b'+' => Some(62),
+            b'/' => Some(63),
+            _ => None,
+        }
+    }
+    // 空白・改行は無視する。
+    let bytes: Vec<u8> = s.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
+    if bytes.len() % 4 != 0 {
+        return Err("base64: invalid length".to_string());
+    }
+    let mut out = Vec::with_capacity(bytes.len() / 4 * 3);
+    for chunk in bytes.chunks(4) {
+        let pad = chunk.iter().filter(|&&b| b == b'=').count();
+        let mut n = 0u32;
+        for (i, &c) in chunk.iter().enumerate() {
+            let v = if c == b'=' { 0 } else { val(c).ok_or("base64: invalid char")? };
+            n |= (v as u32) << (18 - 6 * i);
+        }
+        out.push((n >> 16) as u8);
+        if pad < 2 {
+            out.push((n >> 8) as u8);
+        }
+        if pad < 1 {
+            out.push(n as u8);
+        }
+    }
+    Ok(out)
+}
+
+/// base64 で受け取ったバイト列をファイルへ書き込む（貼り付け画像の永続化用）。
+#[tauri::command]
+pub fn write_file_base64(path: String, base64: String) -> Result<(), String> {
+    let bytes = base64_decode(&base64)?;
+    if let Some(parent) = Path::new(&path).parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).map_err(|e| format!("create dir: {}", e))?;
+        }
+    }
+    fs::write(&path, bytes).map_err(|e| format!("write_file_base64({}): {}", path, e))
+}
+
 #[tauri::command]
 pub fn add_recent_file(app: AppHandle, path: String) -> Result<(), String> {
     crate::recent::add(&app, path);
@@ -222,5 +270,18 @@ mod tests {
         // Shift_JIS: "あいう" = 82 A0 / 82 A2 / 82 A4
         let sjis = [0x82, 0xA0, 0x82, 0xA2, 0x82, 0xA4];
         assert_eq!(decode_bytes(&sjis), "あいう");
+    }
+
+    #[test]
+    fn base64_roundtrip() {
+        let data: Vec<u8> = (0u8..=255).collect();
+        let encoded = base64_encode(&data);
+        let decoded = base64_decode(&encoded).expect("decode ok");
+        assert_eq!(decoded, data);
+    }
+
+    #[test]
+    fn base64_decode_rejects_bad_length() {
+        assert!(base64_decode("AAA").is_err());
     }
 }
