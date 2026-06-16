@@ -1243,8 +1243,8 @@ body.is-resizing-outline {
   background: var(--border);
 }
 
-/* 印刷（Ctrl+P）はエディタDOMではなく、非表示 iframe に流し込んだ
-   自己完結HTMLを印刷する方式（print.ts / print-doc.ts）。 */
+/* 印刷（Ctrl+P）はエディタDOMではなく #print-root に描画した文書を
+   印刷する方式に変更した。印刷スタイルは styles/print.css を参照。 */
 
 /* ===== HTML出力・印刷・文書テーマ（v1.1） ===== */
 

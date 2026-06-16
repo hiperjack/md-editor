@@ -2,7 +2,7 @@ import { message } from "@tauri-apps/plugin-dialog";
 import { store } from "./store";
 import { askPrintOrientation } from "./modal";
 import type { EditorHost } from "./editor";
-import { docTheme } from "./theme";
+import { docTheme, docThemeCssVars, docModifierClasses } from "./theme";
 import {
   renderDocumentBody,
   renderMermaidDocumentBody,
@@ -10,67 +10,32 @@ import {
 } from "./render-pipeline";
 import { fileTypeOfPath, extractMermaidSource } from "./mmd";
 import { embedLocalImages } from "./embed-images";
-import { buildStandaloneHtml } from "./exporter";
-import { buildPrintDocument } from "./print-doc";
+import { ensureDocumentStyles, setHljsThemeStyle } from "./doc-styles";
 import { showProgress } from "./progress";
 import { t } from "./i18n";
 
 /**
  * F2: PDF出力（Ctrl+P → 印刷ダイアログ → Microsoft Print to PDF）。
  *
- * HTML出力と同一パイプラインで自己完結HTMLを組み立て、それを「非表示の
- * iframe」に流し込んで iframe 側で印刷する。メインウィンドウを print
- * メディアにしないため、印刷ダイアログ表示中もエディタ本体は設定テーマの
- * 配色・UIのまま背後に残る（以前はメインに @media print が適用され、
- * 背景が白く反転していた）。
- * これにより「HTML出力とPDFの見た目が一致する」ことも引き続き保証する。
+ * エディタDOMを直接印刷するのではなく、HTML出力と同一のパイプラインで
+ * #print-root に文書を描画してから window.print() を呼ぶ。
+ * これにより「HTML出力とPDFの見た目が一致する」ことを保証する。
+ * 印刷スタイルは styles/print.css（A4余白・改ページ制御・UI非表示）。
  */
 
 let printing = false;
 
-/** ファイルパスから拡張子を除いた名前（PDFの既定ファイル名・文書タイトル用）。 */
-function baseNameWithoutExt(filePath: string | null): string {
-  if (!filePath) return "Untitled";
-  const i = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
-  const base = i >= 0 ? filePath.slice(i + 1) : filePath;
-  const dot = base.lastIndexOf(".");
-  return dot > 0 ? base.slice(0, dot) : base;
-}
+const PAGE_RULE_ID = "print-page-rule";
 
-/**
- * 印刷用HTMLを非表示 iframe に読み込み、印刷ダイアログを開く。
- * iframe は画面外に配置し（display:none では印刷されないため）、
- * ダイアログが閉じた後に破棄する。
- */
-async function printViaIframe(html: string): Promise<void> {
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("aria-hidden", "true");
-  // display:none / visibility:hidden は印刷対象から外れるため、画面外配置にする。
-  iframe.style.cssText =
-    "position:absolute;width:0;height:0;border:0;left:-9999px;top:0;";
-  document.body.appendChild(iframe);
-  try {
-    await new Promise<void>((resolve, reject) => {
-      iframe.addEventListener("load", () => resolve(), { once: true });
-      iframe.addEventListener(
-        "error",
-        () => reject(new Error("print iframe load failed")),
-        { once: true },
-      );
-      iframe.srcdoc = html;
-    });
-    // レイアウト確定を待ってから印刷する。
-    await new Promise<void>((r) =>
-      requestAnimationFrame(() => requestAnimationFrame(() => r())),
-    );
-    const win = iframe.contentWindow;
-    if (!win) throw new Error("print iframe has no contentWindow");
-    win.focus();
-    // print() は印刷ダイアログが閉じるまでブロックする。
-    win.print();
-  } finally {
-    iframe.remove();
+/** 印刷の用紙サイズと向きを @page ルールとして注入する（縦/横の出し分け）。 */
+function setPrintPageRule(orientation: "portrait" | "landscape"): void {
+  let style = document.getElementById(PAGE_RULE_ID) as HTMLStyleElement | null;
+  if (!style) {
+    style = document.createElement("style");
+    style.id = PAGE_RULE_ID;
+    document.head.appendChild(style);
   }
+  style.textContent = `@page { size: A4 ${orientation}; margin: 20mm 18mm; }`;
 }
 
 export async function printActiveTab(editor: EditorHost): Promise<void> {
@@ -103,19 +68,30 @@ export async function printActiveTab(editor: EditorHost): Promise<void> {
           })
         : await renderDocumentBody(markdown, settings, { onMermaidProgress });
 
-    // iframe では相対パス画像を解決できないため data URI 化する。
+    // #print-root では相対パス画像を解決できないため data URI 化する
     await embedLocalImages(body, tab.filePath);
 
-    // HTML出力と同一の自己完結HTMLを組み立て、印刷CSS（@page・改ページ等）を注入する。
-    const standalone = buildStandaloneHtml({
-      title: baseNameWithoutExt(tab.filePath),
-      settings,
-      bodyHtml: body.innerHTML,
-    });
-    const printable = buildPrintDocument(standalone, orientation);
+    ensureDocumentStyles();
+    setHljsThemeStyle(settings.theme.highlightTheme);
 
+    let root = document.getElementById("print-root");
+    if (!root) {
+      root = document.createElement("div");
+      root.id = "print-root";
+      document.body.appendChild(root);
+    }
+    root.replaceChildren();
+    const main = document.createElement("main");
+    main.className = ["document", ...docModifierClasses(settings)].join(" ");
+    main.setAttribute("style", docThemeCssVars(settings.theme));
+    main.innerHTML = body.innerHTML;
+    root.appendChild(main);
+
+    setPrintPageRule(orientation);
     progress.close();
-    await printViaIframe(printable);
+    document.body.classList.add("printing-doc");
+    // window.print() は印刷ダイアログが閉じるまでブロックする
+    window.print();
   } catch (e) {
     console.error("printActiveTab failed:", e);
     progress.close();
@@ -124,6 +100,8 @@ export async function printActiveTab(editor: EditorHost): Promise<void> {
       { kind: "error" },
     );
   } finally {
+    document.body.classList.remove("printing-doc");
+    document.getElementById("print-root")?.replaceChildren();
     printing = false;
   }
 }

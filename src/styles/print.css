@@ -1,8 +1,74 @@
 /*
- * 印刷スタイルはメインウィンドウには適用しない。
+ * PDF出力（Ctrl+P → Microsoft Print to PDF）用の印刷スタイル。
  *
- * 印刷は print.ts が非表示 iframe に自己完結HTMLを流し込み、iframe 側で
- * 行う（印刷CSS・@page は src/print-doc.ts が iframe 内文書へ注入する）。
- * 以前ここにあった @media print 規則はメインウィンドウを print メディアに
- * してしまい、印刷ダイアログ表示中に背景が白く反転する原因だったため撤去した。
+ * 印刷はエディタDOMではなく、HTML出力と同一パイプラインで #print-root に
+ * 描画した文書を対象にする（print.ts が body.printing-doc を付与して制御）。
+ * これにより「HTML出力とPDFの見た目が一致する」ことを保証する。
  */
+
+/* 画面上では印刷用コンテナを常に隠す */
+#print-root {
+  display: none;
+}
+
+@media print {
+  /* 印刷実行中はアプリUIを丸ごと隠し、印刷用文書だけを見せる */
+  body.printing-doc #app,
+  body.printing-doc #editor-pane-park {
+    display: none !important;
+  }
+
+  body.printing-doc #print-root {
+    display: block !important;
+  }
+
+  body.printing-doc,
+  body.printing-doc html {
+    height: auto !important;
+    overflow: visible !important;
+    /* 背景色は強制しない。WebView2 では印刷ダイアログ表示中、画面が print
+       メディアで再描画されるため、白を強制すると背後のエディタが白く反転する。
+       テーマ色 (var(--bg-0)) のまま残す。紙面は Chromium 既定で背景色を
+       印刷しない (print-color-adjust: economy) ため、テーマ色でも白で出力される
+       （下の print-color-adjust: exact を付けた要素だけが背景色を保持する）。 */
+  }
+
+  #print-root .document {
+    /* 文書背景も強制しない。画面では文書テーマの背景 (var(--doc-bg)) で
+       読みやすく表示し、紙面では背景非出力で白になる。 */
+    max-width: none;
+    padding: 0;
+  }
+
+  /* A4前提のページ設定。用紙サイズと向き（縦/横）は print.ts が
+     #print-page-rule の @page ルールとして動的に注入する。 */
+
+  /* 改ページ制御 */
+  #print-root h1,
+  #print-root h2,
+  #print-root h3 {
+    break-after: avoid;
+  }
+  /* コード・表・図・コールアウトの分断を防ぐ。
+     1ページに収まらない長大ブロックには効かない（仕様上の制約として許容）。 */
+  #print-root pre,
+  #print-root table,
+  #print-root figure,
+  #print-root .markdown-alert {
+    break-inside: avoid;
+  }
+  #print-root p {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* 背景色が意味を持つ要素は印刷時も色を保持する */
+  #print-root pre,
+  #print-root code,
+  #print-root .markdown-alert,
+  #print-root thead th,
+  #print-root nav.table-of-contents {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
