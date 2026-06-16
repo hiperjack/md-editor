@@ -5,8 +5,8 @@
 **A lightweight, free, open-source WYSIWYG Markdown editor.**
 Edit with formatting applied as you type, preview Mermaid diagrams inline, and export to HTML exactly as it looks on screen. A solid alternative if you're looking to replace the now-paid Typora.
 
-![GitHub release](https://img.shields.io/github/v/release/hiperjack/md-editor)
-![License](https://img.shields.io/github/license/hiperjack/md-editor)
+![GitHub release](https://badgen.net/github/release/hiperjack/md-editor)
+![License](https://badgen.net/github/license/hiperjack/md-editor)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 
 <!-- Most important: a single GIF showing launch-to-edit (docs/assets/demo.gif) -->

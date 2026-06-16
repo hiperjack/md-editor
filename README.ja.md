@@ -5,8 +5,8 @@
 **軽量・無料・オープンソースの WYSIWYG Markdown エディタ。**
 書式が反映されたまま編集でき、Mermaid 図のインラインプレビューと「見たまま」の HTML 出力に対応します。有料化した Typora の代替を探している人にも向いています。
 
-![GitHub release](https://img.shields.io/github/v/release/hiperjack/md-editor)
-![License](https://img.shields.io/github/license/hiperjack/md-editor)
+![GitHub release](https://badgen.net/github/release/hiperjack/md-editor)
+![License](https://badgen.net/github/license/hiperjack/md-editor)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 
 <!-- 最重要: 起動〜編集の様子が伝わる GIF を 1 枚（docs/assets/demo.gif） -->
