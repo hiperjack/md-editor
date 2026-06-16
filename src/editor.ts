@@ -32,7 +32,8 @@ import "@milkdown/crepe/theme/frame-dark.css";
 import { store, type Tab } from "./store";
 import { remarkBlankLines } from "./blank-lines";
 import { attachLineNumbers } from "./line-numbers";
-import { attachImageResolver } from "./image-resolver";
+import { attachImageResolver, imageDirForMdPath } from "./image-resolver";
+import { persistEmbeddedImages, type PersistResult } from "./image-persist";
 import { editImageNodeAtPos, isImageNode } from "./image-edit";
 import { searchPlugin } from "./search-plugin";
 import { headingFoldPlugin } from "./heading-fold";
@@ -296,6 +297,8 @@ export type EditorHost = {
   runOnActive: (fn: (editor: Editor) => void) => void;
   /** アクティブタブの ProseMirror View を取得（検索/置換用）。無ければ null。 */
   getActiveView: () => EditorView | null;
+  /** タブ内の貼り付け画像(data:/blob:)を <mdDir>/img/<md名>/ へ書き出し、参照をベアファイル名へ書換える。 */
+  persistImages: (tabId: string, mdFilePath: string) => Promise<PersistResult>;
   /** いずれかのタブの内容が変わったら通知（アウトライン等の再構築用）。 */
   onContentChange: (fn: (tabId: string) => void) => () => void;
 };
@@ -1120,6 +1123,24 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         return null;
       }
       return view;
+    },
+
+    async persistImages(tabId: string, mdFilePath: string): Promise<PersistResult> {
+      const entry = editors.get(tabId);
+      if (!entry || !entry.crepe) return { written: 0, failed: 0 };
+      const imgDir = imageDirForMdPath(mdFilePath);
+      if (!imgDir) return { written: 0, failed: 0 };
+      let view: EditorView | null = null;
+      try {
+        entry.crepe.editor.action((ctx) => {
+          view = ctx.get(editorViewCtx) as EditorView;
+        });
+      } catch (e) {
+        console.warn("persistImages: getView failed:", e);
+        return { written: 0, failed: 0 };
+      }
+      if (!view) return { written: 0, failed: 0 };
+      return persistEmbeddedImages(view, imgDir, new Date());
     },
 
     onContentChange(fn) {
