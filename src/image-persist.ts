@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { EditorView } from "@milkdown/kit/prose/view";
+import { isImageNode } from "./image-edit";
 
 /**
  * 貼り付け画像（data:/blob:）を保存時にディスクへ書き出し、
@@ -50,8 +51,6 @@ export function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-const IMAGE_NODE_NAMES = new Set<string>(["image", "image-block"]);
-
 function isEmbeddedSrc(src: string): boolean {
   return src.startsWith("data:") || src.startsWith("blob:");
 }
@@ -91,9 +90,10 @@ export async function persistEmbeddedImages(
 ): Promise<PersistResult> {
   const targets: { pos: number; src: string }[] = [];
   view.state.doc.descendants((node, pos) => {
-    if (IMAGE_NODE_NAMES.has(node.type.name)) {
+    if (isImageNode(node)) {
       const src = (node.attrs.src ?? "") as string;
       if (isEmbeddedSrc(src)) targets.push({ pos, src });
+      return false; // 画像ノード内に画像ノードは存在しない
     }
     return true;
   });
@@ -123,7 +123,7 @@ export async function persistEmbeddedImages(
     let tr = view.state.tr;
     for (const r of rewrites) {
       const node = tr.doc.nodeAt(r.pos);
-      if (!node || !IMAGE_NODE_NAMES.has(node.type.name)) continue;
+      if (!node || !isImageNode(node)) continue;
       tr = tr.setNodeMarkup(r.pos, undefined, { ...node.attrs, src: r.filename });
     }
     view.dispatch(tr);
