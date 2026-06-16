@@ -121,9 +121,18 @@ fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
     if bytes.len() % 4 != 0 {
         return Err("base64: invalid length".to_string());
     }
-    let mut out = Vec::with_capacity(bytes.len() / 4 * 3);
-    for chunk in bytes.chunks(4) {
+    let n_chunks = bytes.len() / 4;
+    let mut out = Vec::with_capacity(n_chunks * 3);
+    for (ci, chunk) in bytes.chunks(4).enumerate() {
         let pad = chunk.iter().filter(|&&b| b == b'=').count();
+        // '=' は最終チャンクの末尾1〜2文字のみ許可する。
+        let is_last = ci + 1 == n_chunks;
+        if pad > 0 && !is_last {
+            return Err("base64: misplaced padding".to_string());
+        }
+        if pad > 2 || chunk[0] == b'=' || chunk[1] == b'=' || (pad == 1 && chunk[2] == b'=') {
+            return Err("base64: invalid padding".to_string());
+        }
         let mut n = 0u32;
         for (i, &c) in chunk.iter().enumerate() {
             let v = if c == b'=' { 0 } else { val(c).ok_or("base64: invalid char")? };
@@ -283,5 +292,21 @@ mod tests {
     #[test]
     fn base64_decode_rejects_bad_length() {
         assert!(base64_decode("AAA").is_err());
+    }
+
+    #[test]
+    fn base64_decode_rejects_bad_padding() {
+        assert!(base64_decode("====").is_err());
+        assert!(base64_decode("A===").is_err());
+        assert!(base64_decode("=AAA").is_err());
+        assert!(base64_decode("AA=A").is_err());
+    }
+
+    #[test]
+    fn base64_decode_handles_padding_lengths() {
+        for data in [vec![1u8], vec![1u8, 2], vec![1u8, 2, 3]] {
+            let enc = base64_encode(&data);
+            assert_eq!(base64_decode(&enc).unwrap(), data, "roundtrip for {:?}", data);
+        }
     }
 }
