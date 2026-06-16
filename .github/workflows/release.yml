@@ -67,3 +67,26 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+      # Windows 向け Portable 版（インストール不要）。exe + README + LICENSE を zip 化し、
+      # 同じタグの Release に添付する。タグ push 時のみ実行。
+      - name: build Windows portable zip
+        if: matrix.platform == 'windows-latest' && startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $staging = "mdedit_${version}_x64_portable"
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+          Copy-Item "src-tauri/target/release/mdedit.exe" "$staging/"
+          Copy-Item "README.md"    "$staging/"
+          Copy-Item "README.ja.md" "$staging/"
+          Copy-Item "LICENSE"      "$staging/"
+          Compress-Archive -Path "$staging/*" -DestinationPath "$staging.zip" -Force
+          "PORTABLE_ZIP=$staging.zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: upload portable zip to release
+        if: matrix.platform == 'windows-latest' && startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload ${{ github.ref_name }} "$env:PORTABLE_ZIP" --clobber
