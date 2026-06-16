@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { extForMime, makeImageFilename, parseDataUri } from "./image-persist";
+import { imageDirForMdPath } from "./image-resolver";
 
 describe("extForMime", () => {
   it("maps known mimes", () => {
@@ -28,5 +29,17 @@ describe("parseDataUri", () => {
   it("returns null for non-data uri", () => {
     expect(parseDataUri("blob:abc")).toBeNull();
     expect(parseDataUri("foo.png")).toBeNull();
+  });
+});
+
+describe("imageDirForMdPath", () => {
+  it("returns <dir>/img/<stem> for windows path", () => {
+    expect(imageDirForMdPath("C:\\docs\\note.md")).toBe("C:\\docs\\img\\note");
+  });
+  it("returns <dir>/img/<stem> for posix path", () => {
+    expect(imageDirForMdPath("/home/u/note.markdown")).toBe("/home/u/img/note");
+  });
+  it("returns null when path is null", () => {
+    expect(imageDirForMdPath(null)).toBeNull();
   });
 });
