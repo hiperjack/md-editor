@@ -5,7 +5,7 @@ import { resolveImagePathCandidates } from "./image-resolver";
  * レンダリング済み文書内のローカル画像を data URI に変換して埋め込む。
  *
  * - HTML出力: 出力ファイルを単体配布しても画像が表示される（自己完結）
- * - PDF印刷: WebView上の #print-root では相対パスが解決できないため必須
+ * - PDF印刷: 印刷用 iframe では相対パスが解決できないため必須
  *
  * http(s)/data: のsrcはそのまま。読み込みに失敗した候補は次の候補へ
  * フォールバックし、全滅したら元のsrcを残す。

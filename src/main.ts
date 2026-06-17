@@ -206,12 +206,8 @@ async function bootstrap(): Promise<void> {
         return;
       }
 
-      // Ctrl+P: 文書テーマを適用した印刷（print.ts）。WebView2標準の印刷は抑止。
-      if (key === "p") {
-        e.preventDefault();
-        fileActions.file_print?.();
-        return;
-      }
+      // 注: Ctrl+P（印刷）は shortcuts.ts で一本化して処理する。
+      // ここでも拾うと file_print が二重に呼ばれ、印刷が二重起動するため拾わない。
     },
     { capture: true },
   );
