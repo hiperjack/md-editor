@@ -206,8 +206,15 @@ async function bootstrap(): Promise<void> {
         return;
       }
 
+      // Ctrl+J: ブラウザ標準のダウンロード表示を抑止（アプリでは未使用）。
+      if (key === "j") {
+        e.preventDefault();
+        return;
+      }
+
       // 注: Ctrl+P（印刷）は shortcuts.ts で一本化して処理する。
       // ここでも拾うと file_print が二重に呼ばれ、印刷が二重起動するため拾わない。
+      // Ctrl+Shift+P（標準のシステム印刷）の抑止も shortcuts.ts 側で行う。
     },
     { capture: true },
   );

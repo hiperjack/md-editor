@@ -49,10 +49,11 @@ export function setupShortcuts(
         return;
       }
 
-      // 印刷（Ctrl+P）。WebView2標準の印刷を抑止して独自印刷へ。
-      if (!e.shiftKey && e.key.toLowerCase() === "p") {
+      // 印刷。Ctrl+P は独自印刷。Ctrl+Shift+P（Chromium標準のシステム印刷）は
+      // エディタ画面そのものを印刷してしまうため抑止のみ（何もしない）。
+      if (e.key.toLowerCase() === "p") {
         e.preventDefault();
-        fileActions.file_print?.();
+        if (!e.shiftKey) fileActions.file_print?.();
         return;
       }
 
