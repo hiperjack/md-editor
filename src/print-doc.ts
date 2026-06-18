@@ -26,7 +26,9 @@ export const PRINT_MEDIA_CSS = `@media print {
   .document { background: transparent !important; max-width: none; padding: 0; }
   .document h1, .document h2, .document h3 { break-after: avoid; }
   .document pre, .document table, .document figure, .document .markdown-alert { break-inside: avoid; }
-  .document p { orphans: 3; widows: 3; }
+  /* orphans/widows は指定しない。3行未満の短い段落（例: "aa" だけの文書）で
+     Chromium/WebView2 の印刷プレビュー組版がループしてプレビューが生成されない
+     既知の不具合を避けるため。重要ブロックの分断回避は break-inside で担保する。 */
   .document pre, .document code, .document .markdown-alert, .document thead th, .document nav.table-of-contents {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
