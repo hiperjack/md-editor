@@ -69,16 +69,29 @@ async function printViaIframe(html: string): Promise<void> {
     );
     iframe.srcdoc = html;
   });
-  // レイアウト確定を待ってから印刷する。
-  await new Promise<void>((r) =>
-    requestAnimationFrame(() => requestAnimationFrame(() => r())),
-  );
-
   const win = iframe.contentWindow;
   if (!win) {
     iframe.remove();
     throw new Error("print iframe has no contentWindow");
   }
+
+  // 印刷プレビューの初回生成が「印刷準備が整う前の文書」をつかんでループし、
+  // プレビューが回り続ける問題への対策。フォント読込・レイアウト確定を待ってから
+  // print() する（短い文書／見出し無しの文書で起きやすい）。
+  try {
+    // 文書側のフォント読み込み完了を待つ（API 非対応環境は無視）。
+    await (win.document as Document & { fonts?: FontFaceSet }).fonts?.ready;
+  } catch {
+    /* noop */
+  }
+  // 強制リフローでレイアウトを確定させる。
+  void win.document.body?.offsetHeight;
+  // レンダリング（描画）の落ち着きを待ってから印刷する。
+  await new Promise<void>((r) =>
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => setTimeout(r, 200)),
+    ),
+  );
 
   await new Promise<void>((resolve) => {
     let done = false;
