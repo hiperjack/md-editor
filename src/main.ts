@@ -200,9 +200,9 @@ async function bootstrap(): Promise<void> {
         return;
       }
 
-      // DevTools を開くブラウザ標準キー（Ctrl+Shift+I / Ctrl+Shift+J / Ctrl+Shift+C）を抑止。
-      // ※ Shift 付きのみ。Ctrl+C（コピー）等は対象外。
-      if (e.shiftKey && (key === "i" || key === "j" || key === "c")) {
+      // DevTools を開くブラウザ標準キー（Ctrl+Shift+J / Ctrl+Shift+C）を抑止。
+      // ※ Ctrl+Shift+I はソース表示トグルに再割り当て（shortcuts.ts で処理）。
+      if (e.shiftKey && (key === "j" || key === "c")) {
         e.preventDefault();
         return;
       }
@@ -321,6 +321,15 @@ async function bootstrap(): Promise<void> {
         await openHtmlPreviewTab(editor);
       })();
     },
+    onToggleSource: (id) => {
+      // 右クリックしたタブをアクティブにしてからソース表示をトグルする。
+      void (async () => {
+        store.setActive(id);
+        const a = store.getActive();
+        if (a) await editor.show(a);
+        editor.toggleSourceMode(id);
+      })();
+    },
     onRefreshPreview: (id) => void refreshPreviewTab(id, editor),
     canRefreshPreview: (id) => {
       const tab = store.getState().tabs.find((t) => t.id === id);
@@ -380,6 +389,10 @@ async function bootstrap(): Promise<void> {
     view_zoom_reset: () => settings.resetFontSize(),
     view_font: () => void openFontSettings(),
     view_outline: () => settings.toggleOutline(),
+    view_source: () => {
+      const a = store.getActive();
+      if (a) editor.toggleSourceMode(a.id);
+    },
     view_expand_all: () => {
       const v = editor.getActiveView();
       if (!v) return;
@@ -505,6 +518,7 @@ async function bootstrap(): Promise<void> {
         { type: "item", label: t("menu.zoomReset"), mnemonic: "R", accel: "Ctrl+0", run: viewActions.view_zoom_reset },
         { type: "sep" },
         { type: "item", label: t("menu.outline"), mnemonic: "L", accel: "Ctrl+Shift+O", run: viewActions.view_outline },
+        { type: "item", label: t("menu.source"), mnemonic: "U", accel: "Ctrl+Shift+I", run: viewActions.view_source },
         { type: "item", label: t("menu.expandAll"), mnemonic: "E", run: viewActions.view_expand_all },
         { type: "item", label: t("menu.settings"), mnemonic: "S", accel: "Ctrl+,", run: viewActions.view_font },
       ],

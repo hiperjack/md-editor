@@ -1,11 +1,12 @@
 import { commandsCtx, editorViewCtx } from "@milkdown/kit/core";
 import type { Editor } from "@milkdown/kit/core";
-import { NodeSelection } from "@milkdown/kit/prose/state";
+import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { insertImageCommand } from "@milkdown/kit/preset/commonmark";
 
 import { t } from "./i18n";
+import { convertImageBlockToInline } from "./editor";
 
 /**
  * Crepe で画像として扱われるノード名一覧。
@@ -166,21 +167,77 @@ function buildPromptInputFor(
 }
 
 /**
+ * 既存画像の「横に」インライン画像を追加する。
+ * - NodeSelection が image-block → インライン段落へ変換してから、その画像の直後へ追加
+ * - NodeSelection が inline image → その直後へ追加
+ * - カーソルが画像行の段落内 → カーソル位置へ追加
+ * 画像間は半角スペース1個で区切る。
+ */
+export function insertImageBeside(
+  view: EditorView,
+  src: string,
+  alt: string,
+): void {
+  const schema = view.state.schema;
+  const imageType = schema.nodes.image;
+  if (!imageType) return;
+
+  let sel = view.state.selection;
+
+  // image-block 選択時はインライン段落へ変換し、選択をその画像ノードに張り直す
+  if (sel instanceof NodeSelection && sel.node.type.name === "image-block") {
+    const paraStart = convertImageBlockToInline(view, sel.from);
+    if (paraStart == null) return;
+    const imgPos = paraStart + 1; // 段落の開きトークンの次がインライン image
+    view.dispatch(
+      view.state.tr.setSelection(NodeSelection.create(view.state.doc, imgPos)),
+    );
+    sel = view.state.selection;
+  }
+
+  // 挿入位置: inline image を選択中ならその直後、そうでなければカーソル位置
+  const insertPos =
+    sel instanceof NodeSelection ? sel.to : view.state.selection.to;
+
+  const space = schema.text(" ");
+  const img = imageType.create({ src, alt: alt ?? "" });
+  const tr = view.state.tr.insert(insertPos, [space, img]);
+  // カーソルを追加画像の直後へ
+  const after = insertPos + space.nodeSize + img.nodeSize;
+  tr.setSelection(TextSelection.create(tr.doc, after));
+  view.dispatch(tr.scrollIntoView());
+  view.focus();
+}
+
+/** 現在の選択/カーソルが既存画像（block/inline）に係っているか。 */
+export function isAtExistingImage(view: EditorView): boolean {
+  const sel = view.state.selection;
+  if (sel instanceof NodeSelection && isImageNode(sel.node)) return true;
+  // 段落内に inline image を含むか（画像行）
+  const parent = sel.$from.parent;
+  let hasImage = false;
+  parent.forEach((c) => {
+    if (c.type.name === "image") hasImage = true;
+  });
+  return hasImage;
+}
+
+/**
  * ツールバー / メニューから「画像」アクションが押されたときのエントリポイント。
- * 選択が画像ノードなら更新、そうでなければ挿入。
+ * 既存画像に係っている場合は「横に追加」、そうでなければ新規挿入。
+ * 既存画像の「編集」はダブルクリック経由（editImageNodeAtPos）に集約。
  */
 export function imageActionFromMenu(editor: Editor): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
-    const found = findSelectedImage(view);
-    if (found) {
-      const input = buildPromptInputFor(view, found.pos, found.node);
-      const result = promptForImage(input);
+    // 既存画像に係っている場合は「横に追加」
+    if (isAtExistingImage(view)) {
+      const result = promptForImage({ src: "", caption: "" });
       if (!result) return;
-      applyImageEdit(view, found.pos, result);
+      insertImageBeside(view, result.src, result.caption);
       return;
     }
-    // 新規挿入: 幅プロンプトはなし（ノードが image (inline) として作られるため）
+    // それ以外は新規挿入（従来どおり）
     const result = promptForImage({ src: "", caption: "" });
     if (!result) return;
     ctx.get(commandsCtx).call(insertImageCommand.key, {

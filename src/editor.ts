@@ -8,7 +8,8 @@ import {
   remarkStringifyOptionsCtx,
 } from "@milkdown/kit/core";
 import { keymap } from "@milkdown/kit/prose/keymap";
-import { Plugin, TextSelection } from "@milkdown/kit/prose/state";
+import { Plugin, TextSelection, NodeSelection } from "@milkdown/kit/prose/state";
+import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { GapCursor } from "@milkdown/kit/prose/gapcursor";
 import { exitCode, joinBackward, lift } from "@milkdown/kit/prose/commands";
@@ -43,6 +44,14 @@ import { mermaidCodePreview } from "./mermaid-renderer";
 import { docTheme } from "./theme";
 import { ensureDocumentStyles, setHljsThemeStyle } from "./doc-styles";
 import { t } from "./i18n";
+import { replaceAll } from "@milkdown/kit/utils";
+import { createSourcePane, type SourcePane } from "./source-mode";
+import {
+  formatImageAlt,
+  NBSP,
+  INDENT_NBSP,
+  countLeadingNbsp,
+} from "./image-row";
 
 // コードブロックの「プレビューのみ(隠す)」状態を出現順で取得する。
 // .cm-editor が非表示(offsetParent===null)＝「隠す」状態とみなす。
@@ -209,6 +218,83 @@ export function createCodeBlockFromSelection(view: EditorView): boolean {
   return true;
 }
 
+// 段落が「画像行」（インライン image を1個以上含み、画像と空白テキストのみ）か判定する。
+function isImageRowParagraph(node: ProseNode): boolean {
+  if (node.type.name !== "paragraph") return false;
+  let hasImage = false;
+  let ok = true;
+  node.forEach((child) => {
+    if (child.type.name === "image") hasImage = true;
+    else if (child.isText) {
+      // NBSP(インデント)と半角スペース(画像区切り)のみ許容
+      if ((child.text ?? "").replace(/[\u00A0 ]/g, "") !== "") ok = false;
+    } else ok = false;
+  });
+  return hasImage && ok;
+}
+
+// image-block（ブロック画像）を「インライン image 1個を内容とする段落」へ変換する。
+// src と幅（ratio>閾値なら alt=幅）を引き継ぐ。変換後の段落の開始位置を返す（失敗時 null）。
+export function convertImageBlockToInline(
+  view: EditorView,
+  pos: number,
+): number | null {
+  const node = view.state.doc.nodeAt(pos);
+  if (!node || node.type.name !== "image-block") return null;
+  const schema = view.state.schema;
+  const paragraphType = schema.nodes.paragraph;
+  const imageType = schema.nodes.image;
+  if (!paragraphType || !imageType) return null;
+  const ratio = Number(node.attrs.ratio) || 0;
+  const alt = ratio > 10 ? String(Math.round(ratio)) : "";
+  const inlineImage = imageType.create({ src: node.attrs.src ?? "", alt });
+  const paragraph = paragraphType.create(null, inlineImage);
+  view.dispatch(view.state.tr.replaceWith(pos, pos + node.nodeSize, paragraph));
+  return pos; // 置換後、段落はこの位置から始まる
+}
+
+/**
+ * 画像行の先頭インデントを ±1 段する（delta=+1 で字下げ、-1 で戻す）。
+ * - 空選択・行頭(parentOffset===0)かつ段落が画像行のときに作用
+ * - image-block を NodeSelection 中なら先にインライン段落へ変換（その後の再押下で字下げ可）
+ * - それ以外は false を返し、リスト/コードブロック等の既定 Tab を妨げない
+ */
+function indentImageRow(
+  state: EditorState,
+  dispatch: ((tr: Transaction) => void) | undefined,
+  view: EditorView | null,
+  delta: 1 | -1,
+): boolean {
+  const sel = state.selection;
+
+  // image-block を選択中: インライン段落へ変換（次回操作でインデント可能に）
+  if (sel instanceof NodeSelection && sel.node.type.name === "image-block") {
+    if (!view) return false;
+    convertImageBlockToInline(view, sel.from);
+    return true;
+  }
+
+  if (!sel.empty) return false;
+  const { $from } = sel;
+  if ($from.parentOffset !== 0) return false;
+  const parent = $from.parent;
+  if (!isImageRowParagraph(parent)) return false;
+
+  const paraStart = $from.start(); // 段落内容の開始位置
+  if (delta > 0) {
+    const tr = state.tr.insertText(NBSP.repeat(INDENT_NBSP), paraStart);
+    if (dispatch) dispatch(tr.scrollIntoView());
+    return true;
+  }
+  const first = parent.firstChild;
+  const lead = first && first.isText ? countLeadingNbsp(first.text ?? "") : 0;
+  if (lead <= 0) return false;
+  const remove = Math.min(lead, INDENT_NBSP);
+  const tr = state.tr.delete(paraStart, paraStart + remove);
+  if (dispatch) dispatch(tr.scrollIntoView());
+  return true;
+}
+
 /** ハイライトなしのプレーンテキスト言語を作る（言語ピッカー登録用）。 */
 function plainTextLanguage(
   name: string,
@@ -261,6 +347,10 @@ type EditorEntry = {
   baseline: string;
   detachLineNumbers: () => void;
   detachImageResolver: () => void;
+  /** ソースモード中か。 */
+  sourceMode: boolean;
+  /** ソースモード中の CodeMirror ペイン。非ソース時は null。 */
+  sourcePane: SourcePane | null;
 };
 
 export type EditorHost = {
@@ -301,6 +391,16 @@ export type EditorHost = {
   persistImages: (tabId: string, mdFilePath: string) => Promise<PersistResult>;
   /** いずれかのタブの内容が変わったら通知（アウトライン等の再構築用）。 */
   onContentChange: (fn: (tabId: string) => void) => () => void;
+  /** 指定タブの WYSIWYG ⇄ ソース編集 をトグルする（preview タブでは無効）。 */
+  toggleSourceMode: (tabId: string) => void;
+  /** 指定タブが現在ソースモードかを返す。 */
+  isSourceMode: (tabId: string) => boolean;
+  /**
+   * ソースモード中、文書順 index 番目の見出し行へスクロールする。
+   * 非ソース時・該当なしは false。コードフェンス内の # 行は見出しに数えない
+   * （アウトライン側の見出し抽出と整合させるため）。
+   */
+  scrollSourceToHeading: (tabId: string, headingIndex: number) => boolean;
 };
 
 export function createEditorHost(root: HTMLElement): EditorHost {
@@ -330,6 +430,10 @@ export function createEditorHost(root: HTMLElement): EditorHost {
   };
 
   const destroyEntry = async (entry: EditorEntry) => {
+    if (entry.sourcePane) {
+      entry.sourcePane.destroy();
+      entry.sourcePane = null;
+    }
     entry.detachLineNumbers();
     entry.detachImageResolver();
     if (entry.crepe) {
@@ -370,6 +474,11 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     if (!activeId) return;
     const entry = editors.get(activeId);
     if (!entry) return;
+    if (entry.sourceMode && entry.sourcePane) {
+      const pane = entry.sourcePane;
+      requestAnimationFrame(() => pane.focus());
+      return;
+    }
     requestAnimationFrame(() => {
       const pm = entry.container.querySelector<HTMLElement>(".ProseMirror");
       // フォーカス時の自動スクロール（キャレット=先頭へ飛ぶ）を抑止する。
@@ -407,6 +516,8 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       baseline: "",
       detachLineNumbers: () => {},
       detachImageResolver: () => {},
+      sourceMode: false,
+      sourcePane: null,
     };
   };
 
@@ -560,7 +671,48 @@ export function createEditorHost(root: HTMLElement): EditorHost {
             const blockEl = target.closest(
               ".milkdown-image-block",
             ) as HTMLElement | null;
-            if (!blockEl) return false;
+            if (!blockEl) {
+              // インライン画像（横並び行の各画像）の拡縮: 幅は alt(数値) に保存
+              const coordsInline = view.posAtCoords({
+                left: event.clientX,
+                top: event.clientY,
+              });
+              if (!coordsInline || coordsInline.inside < 0) return false;
+              const inlineNode = view.state.doc.nodeAt(coordsInline.inside);
+              if (!inlineNode || inlineNode.type.name !== "image") return false;
+              event.preventDefault();
+              event.stopPropagation();
+              const idom = view.nodeDOM(coordsInline.inside);
+              const inlineImg =
+                idom instanceof HTMLImageElement
+                  ? idom
+                  : idom instanceof HTMLElement
+                    ? idom.querySelector("img")
+                    : null;
+              const storedAlt = Number(inlineNode.attrs.alt) || 0;
+              const base =
+                storedAlt > IMG_PX_THRESHOLD
+                  ? storedAlt
+                  : Math.round(
+                      inlineImg?.clientWidth || inlineImg?.naturalWidth || 320,
+                    );
+              const f = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+              const nextW = Math.max(
+                IMG_PX_MIN,
+                Math.min(IMG_PX_MAX, Math.round(base * f)),
+              );
+              if (inlineImg) {
+                inlineImg.style.width = `${nextW}px`;
+                inlineImg.style.height = "auto";
+              }
+              view.dispatch(
+                view.state.tr.setNodeMarkup(coordsInline.inside, undefined, {
+                  ...inlineNode.attrs,
+                  alt: String(nextW),
+                }),
+              );
+              return true;
+            }
             const coords = view.posAtCoords({
               left: event.clientX,
               top: event.clientY,
@@ -615,6 +767,25 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       view(editorView) {
         const apply = () => {
           editorView.state.doc.descendants((node, pos) => {
+            if (node.type.name === "image") {
+              const idom = editorView.nodeDOM(pos);
+              const iimg =
+                idom instanceof HTMLImageElement
+                  ? idom
+                  : idom instanceof HTMLElement
+                    ? idom.querySelector("img")
+                    : null;
+              if (iimg) {
+                const w = Number(node.attrs.alt) || 0;
+                if (w > IMG_PX_THRESHOLD) {
+                  iimg.style.width = `${w}px`;
+                  iimg.style.height = "auto";
+                } else if (iimg.style.width) {
+                  iimg.style.width = "";
+                }
+              }
+              return true;
+            }
             if (node.type.name !== "image-block") return true;
             const dom = editorView.nodeDOM(pos);
             if (!(dom instanceof HTMLElement)) return true;
@@ -665,6 +836,66 @@ export function createEditorHost(root: HTMLElement): EditorHost {
           update: apply,
           destroy: () => observer.disconnect(),
         };
+      },
+    });
+
+    /*
+      画像の貼り付けを「現在行のカーソル位置にインライン画像」として挿入する。
+      Crepe 既定は image-block（次行のブロック画像）になり、前後にカーソルを
+      置けず横並びにもできないため、ここで横取りしてインライン image を入れる。
+      data: URL は保存時に image-persist がファイル化する。複数画像は横並びで挿入。
+    */
+    const imagePastePlugin = new Plugin({
+      props: {
+        handleDOMEvents: {
+          // Crepe 既定の貼り付け（image-block 化）より先に DOM の paste を捕まえる。
+          // 本プラグインはプラグイン配列の先頭側にあるため最初に呼ばれる。
+          paste(view, event) {
+            const dt = (event as ClipboardEvent).clipboardData;
+            if (!dt) return false;
+            const files = Array.from(dt.files).filter((f) =>
+              f.type.startsWith("image/"),
+            );
+            if (files.length === 0) return false;
+            // インライン挿入はテキスト位置にのみ可能。それ以外は既定に委ねる。
+            if (!(view.state.selection instanceof TextSelection)) return false;
+            const imageType = view.state.schema.nodes.image;
+            if (!imageType) return false;
+            event.preventDefault();
+            Promise.all(
+              files.map(
+                (f) =>
+                  new Promise<string>((resolve, reject) => {
+                    const r = new FileReader();
+                    r.onload = () => resolve(String(r.result));
+                    r.onerror = () => reject(r.error);
+                    r.readAsDataURL(f);
+                  }),
+              ),
+            )
+              .then((urls) => {
+                const schema = view.state.schema;
+                const nodes: ProseNode[] = [];
+                urls.forEach((url, i) => {
+                  if (i > 0) nodes.push(schema.text(" "));
+                  nodes.push(imageType.create({ src: url, alt: "" }));
+                });
+                // 段落をまたぐ選択にインラインを replaceWith すると例外になるため、
+                // 同一ブロック内のときだけ範囲置換し、それ以外はカーソル位置へ挿入する。
+                const sel = view.state.selection;
+                const from = sel.from;
+                const to = sel.$from.sameParent(sel.$to) ? sel.to : sel.from;
+                const tr = view.state.tr.replaceWith(from, to, nodes);
+                const size = nodes.reduce((n, node) => n + node.nodeSize, 0);
+                const after = Math.min(from + size, tr.doc.content.size);
+                tr.setSelection(TextSelection.create(tr.doc, after));
+                view.dispatch(tr.scrollIntoView());
+                view.focus();
+              })
+              .catch((e) => console.error("image paste failed:", e));
+            return true;
+          },
+        },
       },
     });
 
@@ -756,6 +987,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         imageDoubleClickPlugin,
         imageWheelResizePlugin,
         imageBlockSizePlugin,
+        imagePastePlugin,
         keymap({
           /*
             Enter は既定の段落分割 / リスト分割に委ねる (一般的なエディタ挙動)。
@@ -790,6 +1022,10 @@ export function createEditorHost(root: HTMLElement): EditorHost {
             if (inBlockquote) return lift(state, dispatch);
             return false;
           },
+          Tab: (state, dispatch, view) =>
+            indentImageRow(state, dispatch, view ?? null, +1),
+          "Shift-Tab": (state, dispatch, view) =>
+            indentImageRow(state, dispatch, view ?? null, -1),
         }),
         ...plugins,
       ]);
@@ -827,38 +1063,17 @@ export function createEditorHost(root: HTMLElement): EditorHost {
           }) as never,
           /*
             画像の出力ハンドラ。
-            image-block (= paragraph 内に image 単独で含まれるパターン) の
-            alt はピクセル幅。`![320.00](img.png)` ではなく `![320](img.png)` と
-            整数で出力する。インライン画像は alt をそのまま (ユーザー入力) 出す。
+            数値 alt は px 幅、その他はそのまま（インライン/ブロック共通規約）。
+            formatImageAlt が閾値判定・整数変換を行う。
           */
-          image: ((node: unknown, parent: unknown) => {
+          image: ((node: unknown) => {
             const n = node as {
               url?: string;
               alt?: string | null;
               title?: string | null;
             };
-            const p = parent as
-              | { type?: string; children?: unknown[] }
-              | null
-              | undefined;
-            const isBlockImage =
-              !!p &&
-              p.type === "paragraph" &&
-              Array.isArray(p.children) &&
-              p.children.length === 1 &&
-              n.alt != null &&
-              Number.isFinite(Number(n.alt));
-
-            let altOut: string;
-            if (isBlockImage) {
-              const w = Math.round(Number(n.alt));
-              // 閾値以下 (レガシー/未設定 ratio=1 等) は alt を空にして
-              // クリーンな ![](url) に統一する。
-              altOut = w > IMG_PX_THRESHOLD ? String(w) : "";
-            } else {
-              altOut = n.alt ?? "";
-            }
-            const safeAlt = altOut.replace(/]/g, "\\]");
+            // 数値 alt は px 幅、その他はそのまま（インライン/ブロック共通規約）
+            const safeAlt = formatImageAlt(n.alt).replace(/]/g, "\\]");
             const url = n.url ?? "";
             const titlePart =
               n.title != null && n.title !== ""
@@ -927,6 +1142,8 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       baseline,
       detachLineNumbers,
       detachImageResolver,
+      sourceMode: false,
+      sourcePane: null,
     };
 
     crepe.on((listener) => {
@@ -985,7 +1202,11 @@ export function createEditorHost(root: HTMLElement): EditorHost {
 
     getMarkdown(tabId: string) {
       const entry = editors.get(tabId);
-      if (!entry || !entry.crepe) return null;
+      if (!entry) return null;
+      if (entry.sourceMode && entry.sourcePane) {
+        return entry.sourcePane.getText();
+      }
+      if (!entry.crepe) return null;
       return entry.crepe.getMarkdown();
     },
 
@@ -997,7 +1218,12 @@ export function createEditorHost(root: HTMLElement): EditorHost {
 
     resetBaseline(tabId: string) {
       const entry = editors.get(tabId);
-      if (!entry || !entry.crepe) return;
+      if (!entry) return;
+      if (entry.sourceMode && entry.sourcePane) {
+        entry.baseline = entry.sourcePane.getText();
+        return;
+      }
+      if (!entry.crepe) return;
       entry.baseline = entry.crepe.getMarkdown();
     },
 
@@ -1060,6 +1286,9 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         if (tab.kind === "preview") continue;
         const entry = editors.get(tab.id);
         if (!entry || !entry.crepe) continue;
+        // ソースモード中のタブは生テキスト編集中。Mermaidは描画されておらず、
+        // 作り直すとソース編集が失われるためスキップする。
+        if (entry.sourceMode) continue;
         const md = entry.crepe.getMarkdown();
         // ```mermaid / ~~~mermaid を含むタブだけ作り直す
         if (!/(?:^|\n)[ \t]*(?:`{3,}|~{3,})[ \t]*mermaid\b/i.test(md)) continue;
@@ -1090,6 +1319,69 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       }
     },
 
+    toggleSourceMode(tabId: string) {
+      const entry = editors.get(tabId);
+      if (!entry || !entry.crepe) return; // preview タブは対象外
+      if (!entry.sourceMode) {
+        // WYSIWYG → ソース
+        const text = entry.crepe.getMarkdown();
+        const pane = createSourcePane(text, (t) => {
+          store.setDirty(tabId, t !== entry.baseline);
+          for (const fn of contentListeners) fn(tabId);
+        });
+        entry.sourcePane = pane;
+        entry.sourceMode = true;
+        entry.container.classList.add("source-mode");
+        entry.container.appendChild(pane.dom);
+        requestAnimationFrame(() => pane.focus());
+      } else {
+        // ソース → WYSIWYG
+        const text = entry.sourcePane?.getText() ?? "";
+        entry.sourcePane?.destroy();
+        entry.sourcePane = null;
+        entry.sourceMode = false;
+        entry.container.classList.remove("source-mode");
+        // 編集テキストを Crepe ドキュメントへ反映（markdownUpdated が dirty を再計算）
+        try {
+          entry.crepe.editor.action(replaceAll(text));
+        } catch (e) {
+          console.error("replaceAll on source exit failed:", e);
+        }
+        focusActive();
+      }
+    },
+
+    isSourceMode(tabId: string) {
+      return !!editors.get(tabId)?.sourceMode;
+    },
+
+    scrollSourceToHeading(tabId: string, headingIndex: number) {
+      const entry = editors.get(tabId);
+      if (!entry || !entry.sourceMode || !entry.sourcePane) return false;
+      // 注: ATX 見出し（#）のみ数える。本エディタは setext 見出し（=== / ---）を
+      // 出力しないため通常は整合するが、外部由来の setext 見出しを含む文書では
+      // アウトライン側の番号とずれる可能性がある（既知の制約）。
+      const lines = entry.sourcePane.getText().split("\n");
+      let inFence = false;
+      let count = -1;
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // ```／~~~ フェンスの開閉を追跡し、コード内の # は見出しに数えない。
+        if (/^\s{0,3}(```|~~~)/.test(line)) {
+          inFence = !inFence;
+          continue;
+        }
+        if (!inFence && /^\s{0,3}#{1,6}\s/.test(line)) {
+          count++;
+          if (count === headingIndex) {
+            entry.sourcePane.scrollToLine(i + 1);
+            return true;
+          }
+        }
+      }
+      return false;
+    },
+
     focus: focusActive,
 
     runOnActive(fn) {
@@ -1097,6 +1389,9 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       if (!id) return;
       const entry = editors.get(id);
       if (!entry || !entry.crepe) return;
+      // ソースモード中は WYSIWYG が非表示。隠れた Crepe を操作しても見えず、
+      // 退出時の replaceAll で破棄されるだけなので、整形系コマンドは無効化する。
+      if (entry.sourceMode) return;
       // Crepe.editor は内部のMilkdown Editorインスタンス
       try {
         fn(entry.crepe.editor);
@@ -1113,6 +1408,9 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       if (!id) return null;
       const entry = editors.get(id);
       if (!entry || !entry.crepe) return null;
+      // ソースモード中は WYSIWYG の view を返さない（コードブロック化や検索が
+      // 隠れた doc に作用するのを防ぐ。呼び出し側は null で no-op になる）。
+      if (entry.sourceMode) return null;
       let view: EditorView | null = null;
       try {
         entry.crepe.editor.action((ctx) => {
@@ -1128,6 +1426,9 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     async persistImages(tabId: string, mdFilePath: string): Promise<PersistResult> {
       const entry = editors.get(tabId);
       if (!entry || !entry.crepe) return { written: 0, failed: 0 };
+      // ソースモード中は生テキストを保存するため、Crepe ドキュメント側の
+      // 画像永続化は行わない（行うと書換が失われる/不要なファイル生成になる）。
+      if (entry.sourceMode) return { written: 0, failed: 0 };
       const imgDir = imageDirForMdPath(mdFilePath);
       if (!imgDir) return { written: 0, failed: 0 };
       let view: EditorView | null = null;
