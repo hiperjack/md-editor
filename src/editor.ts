@@ -665,7 +665,48 @@ export function createEditorHost(root: HTMLElement): EditorHost {
             const blockEl = target.closest(
               ".milkdown-image-block",
             ) as HTMLElement | null;
-            if (!blockEl) return false;
+            if (!blockEl) {
+              // インライン画像（横並び行の各画像）の拡縮: 幅は alt(数値) に保存
+              const coordsInline = view.posAtCoords({
+                left: event.clientX,
+                top: event.clientY,
+              });
+              if (!coordsInline || coordsInline.inside < 0) return false;
+              const inlineNode = view.state.doc.nodeAt(coordsInline.inside);
+              if (!inlineNode || inlineNode.type.name !== "image") return false;
+              event.preventDefault();
+              event.stopPropagation();
+              const idom = view.nodeDOM(coordsInline.inside);
+              const inlineImg =
+                idom instanceof HTMLImageElement
+                  ? idom
+                  : idom instanceof HTMLElement
+                    ? idom.querySelector("img")
+                    : null;
+              const storedAlt = Number(inlineNode.attrs.alt) || 0;
+              const base =
+                storedAlt > IMG_PX_THRESHOLD
+                  ? storedAlt
+                  : Math.round(
+                      inlineImg?.clientWidth || inlineImg?.naturalWidth || 320,
+                    );
+              const f = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+              const nextW = Math.max(
+                IMG_PX_MIN,
+                Math.min(IMG_PX_MAX, Math.round(base * f)),
+              );
+              if (inlineImg) {
+                inlineImg.style.width = `${nextW}px`;
+                inlineImg.style.height = "auto";
+              }
+              view.dispatch(
+                view.state.tr.setNodeMarkup(coordsInline.inside, undefined, {
+                  ...inlineNode.attrs,
+                  alt: String(nextW),
+                }),
+              );
+              return true;
+            }
             const coords = view.posAtCoords({
               left: event.clientX,
               top: event.clientY,
@@ -720,6 +761,25 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       view(editorView) {
         const apply = () => {
           editorView.state.doc.descendants((node, pos) => {
+            if (node.type.name === "image") {
+              const idom = editorView.nodeDOM(pos);
+              const iimg =
+                idom instanceof HTMLImageElement
+                  ? idom
+                  : idom instanceof HTMLElement
+                    ? idom.querySelector("img")
+                    : null;
+              if (iimg) {
+                const w = Number(node.attrs.alt) || 0;
+                if (w > IMG_PX_THRESHOLD) {
+                  iimg.style.width = `${w}px`;
+                  iimg.style.height = "auto";
+                } else if (iimg.style.width) {
+                  iimg.style.width = "";
+                }
+              }
+              return true;
+            }
             if (node.type.name !== "image-block") return true;
             const dom = editorView.nodeDOM(pos);
             if (!(dom instanceof HTMLElement)) return true;
