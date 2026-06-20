@@ -227,7 +227,7 @@ function isImageRowParagraph(node: ProseNode): boolean {
     if (child.type.name === "image") hasImage = true;
     else if (child.isText) {
       // NBSP(インデント)と半角スペース(画像区切り)のみ許容
-      if ((child.text ?? "").replace(/[  ]/g, "") !== "") ok = false;
+      if ((child.text ?? "").replace(/[\u00A0 ]/g, "") !== "") ok = false;
     } else ok = false;
   });
   return hasImage && ok;
