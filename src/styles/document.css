@@ -58,6 +58,19 @@
   padding-left: 0.5em;
 }
 
+/* 塗りつぶし帯（docx 参考）: H1=濃い背景＋白文字＋左ボーダー / H2=下罫線 */
+.document.heading-filled h1 {
+  background: var(--doc-accent-strong);
+  color: #fff;
+  padding: 0.35em 0.7em;
+  border-left: 6px solid var(--doc-accent);
+  border-radius: 3px;
+}
+.document.heading-filled h2 {
+  border-bottom: 2px solid var(--doc-accent-soft);
+  padding-bottom: 0.2em;
+}
+
 /* 見出し番号（CSSカウンタ、h1〜h3対象） */
 .document.numbered-headings { counter-reset: doc-h1; }
 .document.numbered-headings h1 {

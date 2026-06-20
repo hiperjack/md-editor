@@ -11,7 +11,7 @@ import { emit, listen } from "@tauri-apps/api/event";
  */
 
 export type DocFontId = "yu-gothic" | "meiryo" | "biz-ud" | "noto-sans";
-export type HeadingStyle = "none" | "underline" | "left-border";
+export type HeadingStyle = "none" | "underline" | "left-border" | "filled";
 export type HighlightTheme = "github" | "atom-one-dark" | "vs";
 /** Mermaid図の配色。"system" はOSのライト/ダーク設定に追従する。 */
 export type MermaidColorScheme = "system" | "light" | "dark";
@@ -142,7 +142,10 @@ export function validateDocSettings(raw: unknown): DocSettings {
       ? clamp(Math.round(t.lineHeight * 10) / 10, LINE_HEIGHT_MIN, LINE_HEIGHT_MAX)
       : d.theme.lineHeight;
   const headingStyle =
-    t.headingStyle === "none" || t.headingStyle === "underline" || t.headingStyle === "left-border"
+    t.headingStyle === "none" ||
+    t.headingStyle === "underline" ||
+    t.headingStyle === "left-border" ||
+    t.headingStyle === "filled"
       ? t.headingStyle
       : d.theme.headingStyle;
   const highlightTheme =
@@ -226,6 +229,16 @@ function rgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+/** hex を黒方向へ amount(0..1) 分暗くする。塗りつぶし見出しの帯背景に使う。 */
+function darken(hex: string, amount: number): string {
+  const { r, g, b } = hexToRgb(hex);
+  const f = (c: number) =>
+    Math.round(c * (1 - amount))
+      .toString(16)
+      .padStart(2, "0");
+  return `#${f(r)}${f(g)}${f(b)}`;
+}
+
 /**
  * テーマからCSSカスタムプロパティ宣言を生成する。
  * document.css はすべてこの変数を参照する。派生色（罫線・縞・コード背景）も
@@ -237,6 +250,7 @@ export function docThemeCssVars(theme: DocTheme): string {
     `--doc-font-size: ${theme.fontSize}px;`,
     `--doc-line-height: ${theme.lineHeight};`,
     `--doc-accent: ${theme.accentColor};`,
+    `--doc-accent-strong: ${darken(theme.accentColor, 0.4)};`,
     `--doc-accent-soft: ${rgba(theme.accentColor, 0.5)};`,
     `--doc-accent-bg: ${rgba(theme.accentColor, 0.08)};`,
     `--doc-text: ${theme.textColor};`,
@@ -254,6 +268,7 @@ export function docModifierClasses(settings: DocSettings): string[] {
   const cls: string[] = [];
   if (settings.theme.headingStyle === "underline") cls.push("heading-underline");
   if (settings.theme.headingStyle === "left-border") cls.push("heading-left-border");
+  if (settings.theme.headingStyle === "filled") cls.push("heading-filled");
   if (settings.decorations.headingNumbers) cls.push("numbered-headings");
   if (settings.decorations.stripedTables) cls.push("striped-tables");
   return cls;
