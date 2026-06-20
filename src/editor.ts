@@ -40,6 +40,7 @@ import { searchPlugin } from "./search-plugin";
 import { headingFoldPlugin } from "./heading-fold";
 import { listFoldPlugin } from "./list-fold";
 import { fileTypeOfPath, wrapMermaidSource } from "./mmd";
+import { attachPreviewFold } from "./preview-fold";
 import { ensureBlankLineBeforeTables } from "./md-normalize";
 import { mermaidCodePreview } from "./mermaid-renderer";
 import { docTheme } from "./theme";
@@ -508,6 +509,8 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       ensureDocumentStyles();
       setHljsThemeStyle(docTheme.get().theme.highlightTheme);
       container.innerHTML = tab.previewHtml ?? "";
+      // 見出し折りたたみ（表示のみ）を取り付ける。
+      attachPreviewFold(container);
     }
     parkEl.appendChild(container);
     return {
