@@ -1295,6 +1295,9 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       if (!id) return;
       const entry = editors.get(id);
       if (!entry || !entry.crepe) return;
+      // ソースモード中は WYSIWYG が非表示。隠れた Crepe を操作しても見えず、
+      // 退出時の replaceAll で破棄されるだけなので、整形系コマンドは無効化する。
+      if (entry.sourceMode) return;
       // Crepe.editor は内部のMilkdown Editorインスタンス
       try {
         fn(entry.crepe.editor);
@@ -1311,6 +1314,9 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       if (!id) return null;
       const entry = editors.get(id);
       if (!entry || !entry.crepe) return null;
+      // ソースモード中は WYSIWYG の view を返さない（コードブロック化や検索が
+      // 隠れた doc に作用するのを防ぐ。呼び出し側は null で no-op になる）。
+      if (entry.sourceMode) return null;
       let view: EditorView | null = null;
       try {
         entry.crepe.editor.action((ctx) => {
