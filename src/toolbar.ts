@@ -15,7 +15,6 @@ import { toggleStrikethroughCommand, insertTableCommand } from "@milkdown/kit/pr
 import { type EditorHost, createCodeBlockFromSelection } from "./editor";
 import { imageActionFromMenu } from "./image-edit";
 import { t, onLangChange } from "./i18n";
-import { store } from "./store";
 
 type Action = () => void;
 
@@ -160,10 +159,8 @@ export function makeToolbarActions(editor: EditorHost): Record<string, Action> {
       ),
     // 画像ノードが選択中なら src/alt を編集、そうでなければ新規挿入。
     fmt_image: () => editor.runOnActive(imageActionFromMenu),
-    view_source: () => {
-      const activeId = store.getActive()?.id;
-      if (activeId) editor.toggleSourceMode(activeId);
-    },
+    // view_source（ソース表示トグル）は main.ts の viewActions 側で定義し、
+    // ツールバーにはマージ済みアクションとして渡される。
   };
 }
 

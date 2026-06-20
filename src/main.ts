@@ -380,6 +380,10 @@ async function bootstrap(): Promise<void> {
     view_zoom_reset: () => settings.resetFontSize(),
     view_font: () => void openFontSettings(),
     view_outline: () => settings.toggleOutline(),
+    view_source: () => {
+      const a = store.getActive();
+      if (a) editor.toggleSourceMode(a.id);
+    },
     view_expand_all: () => {
       const v = editor.getActiveView();
       if (!v) return;
@@ -505,6 +509,7 @@ async function bootstrap(): Promise<void> {
         { type: "item", label: t("menu.zoomReset"), mnemonic: "R", accel: "Ctrl+0", run: viewActions.view_zoom_reset },
         { type: "sep" },
         { type: "item", label: t("menu.outline"), mnemonic: "L", accel: "Ctrl+Shift+O", run: viewActions.view_outline },
+        { type: "item", label: t("menu.source"), mnemonic: "U", accel: "Ctrl+Shift+I", run: viewActions.view_source },
         { type: "item", label: t("menu.expandAll"), mnemonic: "E", run: viewActions.view_expand_all },
         { type: "item", label: t("menu.settings"), mnemonic: "S", accel: "Ctrl+,", run: viewActions.view_font },
       ],
