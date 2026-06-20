@@ -6,7 +6,14 @@
  */
 
 export type MenuItem =
-  | { type: "item"; label: string; action: () => void; disabled?: boolean }
+  | {
+      type: "item";
+      label: string;
+      action: () => void;
+      disabled?: boolean;
+      /** 右側に淡色で表示するショートカット表記（例: "F5", "Ctrl+P"）。 */
+      shortcut?: string;
+    }
   | { type: "separator" };
 
 let rootEl: HTMLElement | null = null;
@@ -53,7 +60,16 @@ export function showContextMenu(x: number, y: number, items: MenuItem[]): void {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "context-menu__item";
-    btn.textContent = item.label;
+    const labelSpan = document.createElement("span");
+    labelSpan.className = "context-menu__label";
+    labelSpan.textContent = item.label;
+    btn.appendChild(labelSpan);
+    if (item.shortcut) {
+      const accel = document.createElement("span");
+      accel.className = "context-menu__accel";
+      accel.textContent = item.shortcut;
+      btn.appendChild(accel);
+    }
     if (item.disabled) {
       btn.disabled = true;
     } else {

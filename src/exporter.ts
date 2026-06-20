@@ -97,6 +97,37 @@ ${bodyHtml}
  * アクティブタブの内容（保存前の編集中内容を含む）をHTMLとして出力する。
  * .mmd タブはSVG1枚を中央配置した単体HTMLになる。
  */
+/**
+ * タブの出力対象 markdown と filePath（既定パス・mmd判定用）を決める。
+ * 通常タブはその内容を、export プレビュータブは元ソース（同一ウィンドウの編集内容
+ * 優先、無ければ元ファイルをディスクから読み直す）を返す。htmlfile プレビューや
+ * 解決不可の場合は markdown = null。印刷（print.ts）とHTML出力で共用する。
+ */
+export async function resolveTabMarkdown(
+  editor: EditorHost,
+  tab: Tab,
+): Promise<{ markdown: string | null; filePath: string | null }> {
+  let filePath: string | null = tab.filePath;
+  if (tab.kind !== "preview") {
+    return { markdown: editor.getMarkdown(tab.id), filePath };
+  }
+  if (tab.previewMode !== "export") return { markdown: null, filePath };
+  let markdown: string | null = null;
+  if (tab.sourceTabId) {
+    const live = editor.getMarkdown(tab.sourceTabId);
+    if (live !== null) {
+      markdown = live;
+      const src = store.getState().tabs.find((t) => t.id === tab.sourceTabId);
+      filePath = src ? src.filePath : tab.sourceFilePath ?? null;
+    }
+  }
+  if (markdown === null && tab.sourceFilePath) {
+    markdown = await invoke<string>("read_file", { path: tab.sourceFilePath });
+    filePath = tab.sourceFilePath;
+  }
+  return { markdown, filePath };
+}
+
 export async function exportActiveTabAsHtml(editor: EditorHost): Promise<void> {
   if (!isTauriContext()) {
     console.warn("exportActiveTabAsHtml: Tauri context not available");

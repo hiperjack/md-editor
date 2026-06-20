@@ -40,6 +40,7 @@ import { searchPlugin } from "./search-plugin";
 import { headingFoldPlugin } from "./heading-fold";
 import { listFoldPlugin } from "./list-fold";
 import { fileTypeOfPath, wrapMermaidSource } from "./mmd";
+import { ensureBlankLineBeforeTables } from "./md-normalize";
 import { mermaidCodePreview } from "./mermaid-renderer";
 import { docTheme } from "./theme";
 import { ensureDocumentStyles, setHljsThemeStyle } from "./doc-styles";
@@ -574,11 +575,15 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     // .mmd（Mermaid単体ファイル）は、全体を1つの ```mermaid フェンスにラップして
     // 編集する。保存時に actions.ts がアンラップする。移送タブ（override）は
     // ラップ済みのmarkdownを引き継いでいるので再ラップしない。
-    const initialValue =
+    // リスト/段落の直後に空行なしで置かれた表を remark が段落テキストとして
+    // 取り込み（→ ソース往復で `|` が `\|` にエスケープされ崩れる）のを防ぐため、
+    // 入力段階で表の直前に空行を補う。mmd ラップはフェンス内なので影響しない。
+    const initialValue = ensureBlankLineBeforeTables(
       override?.content ??
-      (fileTypeOfPath(tab.filePath) === "mmd"
-        ? wrapMermaidSource(tab.diskContent)
-        : tab.diskContent);
+        (fileTypeOfPath(tab.filePath) === "mmd"
+          ? wrapMermaidSource(tab.diskContent)
+          : tab.diskContent),
+    );
 
     const crepe = new Crepe({
       root: container,
@@ -1343,7 +1348,9 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         entry.container.classList.remove("source-mode");
         // 編集テキストを Crepe ドキュメントへ反映（markdownUpdated が dirty を再計算）
         try {
-          entry.crepe.editor.action(replaceAll(text));
+          entry.crepe.editor.action(
+            replaceAll(ensureBlankLineBeforeTables(text)),
+          );
         } catch (e) {
           console.error("replaceAll on source exit failed:", e);
         }

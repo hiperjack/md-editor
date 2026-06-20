@@ -10,7 +10,7 @@ import {
 } from "./render-pipeline";
 import { fileTypeOfPath, extractMermaidSource } from "./mmd";
 import { embedLocalImages } from "./embed-images";
-import { buildStandaloneHtml } from "./exporter";
+import { buildStandaloneHtml, resolveTabMarkdown } from "./exporter";
 import { buildPrintDocument } from "./print-doc";
 import { showProgress } from "./progress";
 import { t } from "./i18n";
@@ -104,7 +104,8 @@ export async function printActiveTab(editor: EditorHost): Promise<void> {
   try {
     const tab = store.getActive();
     if (!tab) return;
-    const markdown = editor.getMarkdown(tab.id);
+    // preview タブは元ソースを解決する（HTML出力と同じロジックを共用）。
+    const { markdown, filePath } = await resolveTabMarkdown(editor, tab);
     if (markdown === null) return;
 
     // 印刷の向き（縦/横）を選ぶ。キャンセルなら印刷しない。
@@ -123,18 +124,18 @@ export async function printActiveTab(editor: EditorHost): Promise<void> {
 
     try {
       const body =
-        fileTypeOfPath(tab.filePath) === "mmd"
+        fileTypeOfPath(filePath) === "mmd"
           ? await renderMermaidDocumentBody(extractMermaidSource(markdown), settings, {
               onMermaidProgress,
             })
           : await renderDocumentBody(markdown, settings, { onMermaidProgress });
 
       // iframe では相対パス画像を解決できないため data URI 化する。
-      await embedLocalImages(body, tab.filePath);
+      await embedLocalImages(body, filePath);
 
       // HTML出力と同一の自己完結HTMLを組み立て、印刷CSS（@page・改ページ等）を注入する。
       const standalone = buildStandaloneHtml({
-        title: baseNameWithoutExt(tab.filePath),
+        title: baseNameWithoutExt(filePath),
         settings,
         bodyHtml: body.innerHTML,
       });

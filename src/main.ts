@@ -180,8 +180,19 @@ async function bootstrap(): Promise<void> {
       // 再読み込み（Ctrl+R / Ctrl+Shift+R / F5 / Shift+F5）。
       // リロードするとタブ状態がメモリごとリセットされ、未保存内容が
       // 無警告で失われる（onCloseRequested も発火しない）ため抑止する。
+      // ただしプレビュータブ上の単独 F5 は、そのプレビューの「更新」に割り当てる。
       if (key === "f5" || (mod && key === "r")) {
         e.preventDefault();
+        if (key === "f5" && !e.shiftKey && !mod) {
+          const active = store.getActive();
+          if (
+            active &&
+            active.kind === "preview" &&
+            canRefreshPreviewTab(active, editor)
+          ) {
+            void refreshPreviewTab(active.id, editor);
+          }
+        }
         return;
       }
 
@@ -328,6 +339,15 @@ async function bootstrap(): Promise<void> {
         const a = store.getActive();
         if (a) await editor.show(a);
         editor.toggleSourceMode(id);
+      })();
+    },
+    onPrint: (id) => {
+      // 右クリックしたタブをアクティブにしてから印刷する（印刷はアクティブタブ対象）。
+      void (async () => {
+        store.setActive(id);
+        const a = store.getActive();
+        if (a) await editor.show(a);
+        fileActions.file_print?.();
       })();
     },
     onRefreshPreview: (id) => void refreshPreviewTab(id, editor),
@@ -562,14 +582,44 @@ async function bootstrap(): Promise<void> {
         const tab = tabId
           ? store.getState().tabs.find((t) => t.id === tabId)
           : null;
+        // 右クリックしたプレビューをアクティブにしてから印刷/出力を実行する
+        // （印刷・HTML出力はアクティブタブを対象にするため）。
+        const activateThenRun = (fn: () => void) => {
+          void (async () => {
+            if (tabId) {
+              store.setActive(tabId);
+              const a = store.getActive();
+              if (a) await editor.show(a);
+            }
+            fn();
+          })();
+        };
+        // 印刷・HTML出力は「export プレビュー」でのみ有効（外部HTMLファイルは対象外）。
+        const exportable = !!tab && tab.previewMode === "export";
         const items: MenuItem[] = [
           {
             type: "item",
             label: t("previewcm.refresh"),
+            shortcut: "F5",
             disabled: !tab || !canRefreshPreviewTab(tab, editor),
             action: () => {
               if (tabId) void refreshPreviewTab(tabId, editor);
             },
+          },
+          { type: "separator" },
+          {
+            type: "item",
+            label: t("menu.print"),
+            shortcut: "Ctrl+P",
+            disabled: !exportable,
+            action: () => activateThenRun(() => fileActions.file_print?.()),
+          },
+          {
+            type: "item",
+            label: t("menu.exportHtml"),
+            shortcut: "Ctrl+Shift+E",
+            disabled: !exportable,
+            action: () => activateThenRun(() => fileActions.file_export_html?.()),
           },
         ];
         showContextMenu(e.clientX, e.clientY, items);
