@@ -214,6 +214,53 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
     updateCurrent();
   };
 
+  /** 表示中のプレビューペイン（スクロールコンテナ）。 */
+  const activePreviewPane = (): HTMLElement | null =>
+    document.querySelector<HTMLElement>(
+      "#editor-host .editor-pane.preview-pane",
+    );
+
+  /** プレビューのスクロール位置から、現在地の見出しを .is-current でハイライト。 */
+  const updateCurrentPreview = () => {
+    const pane = activePreviewPane();
+    const items = Array.from(list.children) as HTMLElement[];
+    if (!pane || items.length === 0) return;
+    const headings = getPreviewHeadings();
+    const containerTop = pane.getBoundingClientRect().top;
+    const THRESHOLD = 8; // 上端をわずかに越えた見出しを現在地とみなす
+
+    let currentIdx = 0;
+    for (let i = 0; i < items.length; i++) {
+      const hi = Number(items[i].dataset.index);
+      const dom = headings[hi];
+      if (!dom) continue;
+      const top = dom.getBoundingClientRect().top - containerTop;
+      if (top <= THRESHOLD) currentIdx = i;
+      else break;
+    }
+    items.forEach((it, i) => it.classList.toggle("is-current", i === currentIdx));
+  };
+
+  /** プレビューペインのスクロールを監視し、現在地ハイライトを更新する。 */
+  const attachPreviewScrollSpy = () => {
+    detachScroll?.();
+    detachScroll = null;
+    const pane = activePreviewPane();
+    if (!pane) return;
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        updateCurrentPreview();
+      });
+    };
+    pane.addEventListener("scroll", onScroll, { passive: true });
+    detachScroll = () => pane.removeEventListener("scroll", onScroll);
+    updateCurrentPreview();
+  };
+
   /**
    * プレビュータブ用: HTML見出しからアウトラインを作る。
    * 折りたたみ状態はプレビュー本文（preview-fold.ts の pv-collapsed）と共有し、
@@ -244,6 +291,7 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
 
       const li = document.createElement("li");
       li.className = `outline-item outline-level-${level}`;
+      li.dataset.index = String(i); // getPreviewHeadings() のインデックス（現在地判定用）
       if (hasChild[i]) {
         const toggle = document.createElement("span");
         toggle.className =
@@ -275,9 +323,8 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
     const hasHeadings = headings.length > 0;
     list.hidden = !hasHeadings;
     empty.hidden = hasHeadings;
-    // プレビューはProseMirror非依存のためスクロール監視は張らない
-    detachScroll?.();
-    detachScroll = null;
+    // プレビューペインのスクロールを監視して現在地をハイライトする。
+    attachPreviewScrollSpy();
   };
 
   const render = () => {
