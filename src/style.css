@@ -1506,3 +1506,8 @@ body.is-resizing-outline {
   font-size: 14px;
 }
 
+
+/* 画像行（インライン画像を含む段落）: 横並び・幅不足で折り返し。 */
+#editor-host .milkdown .ProseMirror p img {
+  vertical-align: top;
+}
