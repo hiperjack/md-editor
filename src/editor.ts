@@ -43,6 +43,8 @@ import { mermaidCodePreview } from "./mermaid-renderer";
 import { docTheme } from "./theme";
 import { ensureDocumentStyles, setHljsThemeStyle } from "./doc-styles";
 import { t } from "./i18n";
+import { replaceAll } from "@milkdown/kit/utils";
+import { createSourcePane, type SourcePane } from "./source-mode";
 
 // コードブロックの「プレビューのみ(隠す)」状態を出現順で取得する。
 // .cm-editor が非表示(offsetParent===null)＝「隠す」状態とみなす。
@@ -261,6 +263,10 @@ type EditorEntry = {
   baseline: string;
   detachLineNumbers: () => void;
   detachImageResolver: () => void;
+  /** ソースモード中か。 */
+  sourceMode: boolean;
+  /** ソースモード中の CodeMirror ペイン。非ソース時は null。 */
+  sourcePane: SourcePane | null;
 };
 
 export type EditorHost = {
@@ -301,6 +307,10 @@ export type EditorHost = {
   persistImages: (tabId: string, mdFilePath: string) => Promise<PersistResult>;
   /** いずれかのタブの内容が変わったら通知（アウトライン等の再構築用）。 */
   onContentChange: (fn: (tabId: string) => void) => () => void;
+  /** 指定タブの WYSIWYG ⇄ ソース編集 をトグルする（preview タブでは無効）。 */
+  toggleSourceMode: (tabId: string) => void;
+  /** 指定タブが現在ソースモードかを返す。 */
+  isSourceMode: (tabId: string) => boolean;
 };
 
 export function createEditorHost(root: HTMLElement): EditorHost {
@@ -330,6 +340,10 @@ export function createEditorHost(root: HTMLElement): EditorHost {
   };
 
   const destroyEntry = async (entry: EditorEntry) => {
+    if (entry.sourcePane) {
+      entry.sourcePane.destroy();
+      entry.sourcePane = null;
+    }
     entry.detachLineNumbers();
     entry.detachImageResolver();
     if (entry.crepe) {
@@ -370,6 +384,10 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     if (!activeId) return;
     const entry = editors.get(activeId);
     if (!entry) return;
+    if (entry.sourceMode && entry.sourcePane) {
+      requestAnimationFrame(() => entry.sourcePane?.focus());
+      return;
+    }
     requestAnimationFrame(() => {
       const pm = entry.container.querySelector<HTMLElement>(".ProseMirror");
       // フォーカス時の自動スクロール（キャレット=先頭へ飛ぶ）を抑止する。
@@ -407,6 +425,8 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       baseline: "",
       detachLineNumbers: () => {},
       detachImageResolver: () => {},
+      sourceMode: false,
+      sourcePane: null,
     };
   };
 
@@ -927,6 +947,8 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       baseline,
       detachLineNumbers,
       detachImageResolver,
+      sourceMode: false,
+      sourcePane: null,
     };
 
     crepe.on((listener) => {
@@ -985,7 +1007,11 @@ export function createEditorHost(root: HTMLElement): EditorHost {
 
     getMarkdown(tabId: string) {
       const entry = editors.get(tabId);
-      if (!entry || !entry.crepe) return null;
+      if (!entry) return null;
+      if (entry.sourceMode && entry.sourcePane) {
+        return entry.sourcePane.getText();
+      }
+      if (!entry.crepe) return null;
       return entry.crepe.getMarkdown();
     },
 
@@ -997,7 +1023,12 @@ export function createEditorHost(root: HTMLElement): EditorHost {
 
     resetBaseline(tabId: string) {
       const entry = editors.get(tabId);
-      if (!entry || !entry.crepe) return;
+      if (!entry) return;
+      if (entry.sourceMode && entry.sourcePane) {
+        entry.baseline = entry.sourcePane.getText();
+        return;
+      }
+      if (!entry.crepe) return;
       entry.baseline = entry.crepe.getMarkdown();
     },
 
@@ -1088,6 +1119,42 @@ export function createEditorHost(root: HTMLElement): EditorHost {
           .querySelector<HTMLElement>(".document")
           ?.style.setProperty("zoom", zoom);
       }
+    },
+
+    toggleSourceMode(tabId: string) {
+      const entry = editors.get(tabId);
+      if (!entry || !entry.crepe) return; // preview タブは対象外
+      if (!entry.sourceMode) {
+        // WYSIWYG → ソース
+        const text = entry.crepe.getMarkdown();
+        const pane = createSourcePane(text, (t) => {
+          store.setDirty(tabId, t !== entry.baseline);
+          for (const fn of contentListeners) fn(tabId);
+        });
+        entry.sourcePane = pane;
+        entry.sourceMode = true;
+        entry.container.classList.add("source-mode");
+        entry.container.appendChild(pane.dom);
+        requestAnimationFrame(() => pane.focus());
+      } else {
+        // ソース → WYSIWYG
+        const text = entry.sourcePane?.getText() ?? "";
+        entry.sourcePane?.destroy();
+        entry.sourcePane = null;
+        entry.sourceMode = false;
+        entry.container.classList.remove("source-mode");
+        // 編集テキストを Crepe ドキュメントへ反映（markdownUpdated が dirty を再計算）
+        try {
+          entry.crepe.editor.action(replaceAll(text));
+        } catch (e) {
+          console.error("replaceAll on source exit failed:", e);
+        }
+        focusActive();
+      }
+    },
+
+    isSourceMode(tabId: string) {
+      return !!editors.get(tabId)?.sourceMode;
     },
 
     focus: focusActive,
