@@ -8,7 +8,8 @@ import {
   remarkStringifyOptionsCtx,
 } from "@milkdown/kit/core";
 import { keymap } from "@milkdown/kit/prose/keymap";
-import { Plugin, TextSelection } from "@milkdown/kit/prose/state";
+import { Plugin, TextSelection, NodeSelection } from "@milkdown/kit/prose/state";
+import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { GapCursor } from "@milkdown/kit/prose/gapcursor";
 import { exitCode, joinBackward, lift } from "@milkdown/kit/prose/commands";
@@ -45,7 +46,12 @@ import { ensureDocumentStyles, setHljsThemeStyle } from "./doc-styles";
 import { t } from "./i18n";
 import { replaceAll } from "@milkdown/kit/utils";
 import { createSourcePane, type SourcePane } from "./source-mode";
-import { formatImageAlt } from "./image-row";
+import {
+  formatImageAlt,
+  NBSP,
+  INDENT_NBSP,
+  countLeadingNbsp,
+} from "./image-row";
 
 // コードブロックの「プレビューのみ(隠す)」状態を出現順で取得する。
 // .cm-editor が非表示(offsetParent===null)＝「隠す」状態とみなす。
@@ -209,6 +215,83 @@ export function createCodeBlockFromSelection(view: EditorView): boolean {
   const sel = TextSelection.create(tr.doc, start + 1);
   view.dispatch(tr.setSelection(sel).scrollIntoView());
   view.focus();
+  return true;
+}
+
+// 段落が「画像行」（インライン image を1個以上含み、画像と空白テキストのみ）か判定する。
+function isImageRowParagraph(node: ProseNode): boolean {
+  if (node.type.name !== "paragraph") return false;
+  let hasImage = false;
+  let ok = true;
+  node.forEach((child) => {
+    if (child.type.name === "image") hasImage = true;
+    else if (child.isText) {
+      // NBSP(インデント)と半角スペース(画像区切り)のみ許容
+      if ((child.text ?? "").replace(/[  ]/g, "") !== "") ok = false;
+    } else ok = false;
+  });
+  return hasImage && ok;
+}
+
+// image-block（ブロック画像）を「インライン image 1個を内容とする段落」へ変換する。
+// src と幅（ratio>閾値なら alt=幅）を引き継ぐ。変換後の段落の開始位置を返す（失敗時 null）。
+export function convertImageBlockToInline(
+  view: EditorView,
+  pos: number,
+): number | null {
+  const node = view.state.doc.nodeAt(pos);
+  if (!node || node.type.name !== "image-block") return null;
+  const schema = view.state.schema;
+  const paragraphType = schema.nodes.paragraph;
+  const imageType = schema.nodes.image;
+  if (!paragraphType || !imageType) return null;
+  const ratio = Number(node.attrs.ratio) || 0;
+  const alt = ratio > 10 ? String(Math.round(ratio)) : "";
+  const inlineImage = imageType.create({ src: node.attrs.src ?? "", alt });
+  const paragraph = paragraphType.create(null, inlineImage);
+  view.dispatch(view.state.tr.replaceWith(pos, pos + node.nodeSize, paragraph));
+  return pos; // 置換後、段落はこの位置から始まる
+}
+
+/**
+ * 画像行の先頭インデントを ±1 段する（delta=+1 で字下げ、-1 で戻す）。
+ * - 空選択・行頭(parentOffset===0)かつ段落が画像行のときに作用
+ * - image-block を NodeSelection 中なら先にインライン段落へ変換（その後の再押下で字下げ可）
+ * - それ以外は false を返し、リスト/コードブロック等の既定 Tab を妨げない
+ */
+function indentImageRow(
+  state: EditorState,
+  dispatch: ((tr: Transaction) => void) | undefined,
+  view: EditorView | null,
+  delta: 1 | -1,
+): boolean {
+  const sel = state.selection;
+
+  // image-block を選択中: インライン段落へ変換（次回操作でインデント可能に）
+  if (sel instanceof NodeSelection && sel.node.type.name === "image-block") {
+    if (!view) return false;
+    convertImageBlockToInline(view, sel.from);
+    return true;
+  }
+
+  if (!sel.empty) return false;
+  const { $from } = sel;
+  if ($from.parentOffset !== 0) return false;
+  const parent = $from.parent;
+  if (!isImageRowParagraph(parent)) return false;
+
+  const paraStart = $from.start(); // 段落内容の開始位置
+  if (delta > 0) {
+    const tr = state.tr.insertText(NBSP.repeat(INDENT_NBSP), paraStart);
+    if (dispatch) dispatch(tr.scrollIntoView());
+    return true;
+  }
+  const first = parent.firstChild;
+  const lead = first && first.isText ? countLeadingNbsp(first.text ?? "") : 0;
+  if (lead <= 0) return false;
+  const remove = Math.min(lead, INDENT_NBSP);
+  const tr = state.tr.delete(paraStart, paraStart + remove);
+  if (dispatch) dispatch(tr.scrollIntoView());
   return true;
 }
 
@@ -812,6 +895,10 @@ export function createEditorHost(root: HTMLElement): EditorHost {
             if (inBlockquote) return lift(state, dispatch);
             return false;
           },
+          Tab: (state, dispatch, view) =>
+            indentImageRow(state, dispatch, view ?? null, +1),
+          "Shift-Tab": (state, dispatch, view) =>
+            indentImageRow(state, dispatch, view ?? null, -1),
         }),
         ...plugins,
       ]);
