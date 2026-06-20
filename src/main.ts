@@ -321,6 +321,15 @@ async function bootstrap(): Promise<void> {
         await openHtmlPreviewTab(editor);
       })();
     },
+    onToggleSource: (id) => {
+      // 右クリックしたタブをアクティブにしてからソース表示をトグルする。
+      void (async () => {
+        store.setActive(id);
+        const a = store.getActive();
+        if (a) await editor.show(a);
+        editor.toggleSourceMode(id);
+      })();
+    },
     onRefreshPreview: (id) => void refreshPreviewTab(id, editor),
     canRefreshPreview: (id) => {
       const tab = store.getState().tabs.find((t) => t.id === id);

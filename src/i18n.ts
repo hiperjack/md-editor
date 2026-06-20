@@ -145,6 +145,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "tabcm.newWindow": "新規ウィンドウで開く",
     "tabcm.copyPath": "パスをコピー",
     "tabcm.htmlPreview": "HTMLプレビューを開く",
+    "tabcm.source": "ソース表示（生Markdown編集）",
     "tabcm.refreshPreview": "更新",
     // プレビューペイン右クリックメニュー
     "previewcm.refresh": "更新",
@@ -397,6 +398,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "tabcm.newWindow": "Open in new window",
     "tabcm.copyPath": "Copy path",
     "tabcm.htmlPreview": "Open HTML preview",
+    "tabcm.source": "Source view (raw Markdown)",
     "tabcm.refreshPreview": "Refresh",
     "previewcm.refresh": "Refresh",
     "tb.file_export": "Export as HTML (Ctrl+Shift+E)",

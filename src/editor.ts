@@ -395,6 +395,12 @@ export type EditorHost = {
   toggleSourceMode: (tabId: string) => void;
   /** 指定タブが現在ソースモードかを返す。 */
   isSourceMode: (tabId: string) => boolean;
+  /**
+   * ソースモード中、文書順 index 番目の見出し行へスクロールする。
+   * 非ソース時・該当なしは false。コードフェンス内の # 行は見出しに数えない
+   * （アウトライン側の見出し抽出と整合させるため）。
+   */
+  scrollSourceToHeading: (tabId: string, headingIndex: number) => boolean;
 };
 
 export function createEditorHost(root: HTMLElement): EditorHost {
@@ -833,6 +839,62 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       },
     });
 
+    /*
+      画像の貼り付けを「現在行のカーソル位置にインライン画像」として挿入する。
+      Crepe 既定は image-block（次行のブロック画像）になり、前後にカーソルを
+      置けず横並びにもできないため、ここで横取りしてインライン image を入れる。
+      data: URL は保存時に image-persist がファイル化する。複数画像は横並びで挿入。
+    */
+    const imagePastePlugin = new Plugin({
+      props: {
+        handleDOMEvents: {
+          // Crepe 既定の貼り付け（image-block 化）より先に DOM の paste を捕まえる。
+          // 本プラグインはプラグイン配列の先頭側にあるため最初に呼ばれる。
+          paste(view, event) {
+          const dt = (event as ClipboardEvent).clipboardData;
+          if (!dt) return false;
+          const files = Array.from(dt.files).filter((f) =>
+            f.type.startsWith("image/"),
+          );
+          if (files.length === 0) return false;
+          // インライン挿入はテキスト位置にのみ可能。それ以外は既定に委ねる。
+          if (!(view.state.selection instanceof TextSelection)) return false;
+          const imageType = view.state.schema.nodes.image;
+          if (!imageType) return false;
+          event.preventDefault();
+          Promise.all(
+            files.map(
+              (f) =>
+                new Promise<string>((resolve, reject) => {
+                  const r = new FileReader();
+                  r.onload = () => resolve(String(r.result));
+                  r.onerror = () => reject(r.error);
+                  r.readAsDataURL(f);
+                }),
+            ),
+          )
+            .then((urls) => {
+              const schema = view.state.schema;
+              const nodes: ProseNode[] = [];
+              urls.forEach((url, i) => {
+                if (i > 0) nodes.push(schema.text(" "));
+                nodes.push(imageType.create({ src: url, alt: "" }));
+              });
+              const { from, to } = view.state.selection;
+              const tr = view.state.tr.replaceWith(from, to, nodes);
+              const size = nodes.reduce((n, node) => n + node.nodeSize, 0);
+              const after = Math.min(from + size, tr.doc.content.size);
+              tr.setSelection(TextSelection.create(tr.doc, after));
+              view.dispatch(tr.scrollIntoView());
+              view.focus();
+            })
+            .catch((e) => console.error("image paste failed:", e));
+          return true;
+          },
+        },
+      },
+    });
+
     const gapClickPlugin = new Plugin({
       props: {
         handleClick(view, pos, event) {
@@ -921,6 +983,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         imageDoubleClickPlugin,
         imageWheelResizePlugin,
         imageBlockSizePlugin,
+        imagePastePlugin,
         keymap({
           /*
             Enter は既定の段落分割 / リスト分割に委ねる (一般的なエディタ挙動)。
@@ -1286,6 +1349,30 @@ export function createEditorHost(root: HTMLElement): EditorHost {
 
     isSourceMode(tabId: string) {
       return !!editors.get(tabId)?.sourceMode;
+    },
+
+    scrollSourceToHeading(tabId: string, headingIndex: number) {
+      const entry = editors.get(tabId);
+      if (!entry || !entry.sourceMode || !entry.sourcePane) return false;
+      const lines = entry.sourcePane.getText().split("\n");
+      let inFence = false;
+      let count = -1;
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // ```／~~~ フェンスの開閉を追跡し、コード内の # は見出しに数えない。
+        if (/^\s{0,3}(```|~~~)/.test(line)) {
+          inFence = !inFence;
+          continue;
+        }
+        if (!inFence && /^\s{0,3}#{1,6}\s/.test(line)) {
+          count++;
+          if (count === headingIndex) {
+            entry.sourcePane.scrollToLine(i + 1);
+            return true;
+          }
+        }
+      }
+      return false;
     },
 
     focus: focusActive,

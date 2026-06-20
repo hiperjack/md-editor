@@ -144,7 +144,14 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
   let previewFingerprint = "";
 
   /** heading 位置へジャンプし、エディタ上端に揃える。 */
-  const jumpTo = (pos: number) => {
+  const jumpTo = (pos: number, index: number) => {
+    // ソースモード中は WYSIWYG の view が無いため、ソースの該当見出し行へ
+    // スクロールする（index は文書順の見出し番号）。
+    const activeId = store.getActive()?.id ?? null;
+    if (activeId && editor.isSourceMode(activeId)) {
+      editor.scrollSourceToHeading(activeId, index);
+      return;
+    }
     const view = editor.getActiveView();
     if (!view) return;
     try {
@@ -344,7 +351,7 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
       label.title = label.textContent;
       label.addEventListener("mousedown", (e) => {
         e.preventDefault();
-        jumpTo(h.pos);
+        jumpTo(h.pos, headings.indexOf(h));
       });
       li.appendChild(label);
 

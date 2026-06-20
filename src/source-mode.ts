@@ -1,4 +1,11 @@
-import { EditorView, lineNumbers, keymap } from "@codemirror/view";
+import {
+  EditorView,
+  lineNumbers,
+  keymap,
+  drawSelection,
+  highlightActiveLine,
+  highlightActiveLineGutter,
+} from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 import {
   defaultKeymap,
@@ -14,14 +21,44 @@ export type SourcePane = {
   getText: () => string;
   /** エディタにフォーカスする。 */
   focus: () => void;
+  /** 指定行（1始まり）へカーソルを移動しスクロールする。範囲外は丸める。 */
+  scrollToLine: (oneBasedLine: number) => void;
   /** CodeMirror を破棄し DOM を外す。 */
   destroy: () => void;
 };
 
 /**
+ * ソースペインの配色。アプリのテーマ変数（:root の --bg-* / --fg-* / --accent。
+ * ライト/ダークで自動切替）を参照するため、テーマ追従でカーソルや選択が見える。
+ */
+const sourceTheme = EditorView.theme({
+  "&": {
+    height: "100%",
+    backgroundColor: "var(--bg-0)",
+    color: "var(--fg-0)",
+  },
+  ".cm-content": { caretColor: "var(--accent)" },
+  ".cm-cursor, .cm-dropCursor": {
+    borderLeftColor: "var(--accent)",
+    borderLeftWidth: "2px",
+  },
+  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
+    {
+      backgroundColor: "var(--bg-3)",
+    },
+  ".cm-activeLine": { backgroundColor: "var(--bg-1)" },
+  ".cm-activeLineGutter": { backgroundColor: "var(--bg-1)", color: "var(--fg-0)" },
+  ".cm-gutters": {
+    backgroundColor: "var(--bg-0)",
+    color: "var(--fg-2)",
+    border: "none",
+  },
+});
+
+/**
  * 生 Markdown を「プレーンテキスト＋行番号」で編集する CodeMirror ペインを作る。
  * シンタックスハイライトは付けない（言語拡張を入れない）。
- * undo/redo・基本キーバインド・Tab字下げ・行折り返しのみ有効化する。
+ * undo/redo・基本キーバインド・Tab字下げ・行折り返し・カーソル/選択表示を有効化する。
  *
  * @param initial - 初期テキスト
  * @param onChange - テキスト変更コールバック。onChange は文字入力のたびに呼ばれる。高頻度なので必要なら呼び出し元でデバウンスすること。
@@ -39,9 +76,13 @@ export function createSourcePane(
       doc: initial,
       extensions: [
         lineNumbers(),
+        highlightActiveLine(),
+        highlightActiveLineGutter(),
+        drawSelection(),
         history(),
         keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),
         EditorView.lineWrapping,
+        sourceTheme,
         EditorView.updateListener.of((u) => {
           if (u.docChanged) onChange(u.state.doc.toString());
         }),
@@ -53,6 +94,16 @@ export function createSourcePane(
     dom,
     getText: () => view.state.doc.toString(),
     focus: () => view.focus(),
+    scrollToLine: (oneBasedLine: number) => {
+      const total = view.state.doc.lines;
+      const ln = Math.max(1, Math.min(oneBasedLine, total));
+      const line = view.state.doc.line(ln);
+      view.dispatch({
+        selection: { anchor: line.from },
+        effects: EditorView.scrollIntoView(line.from, { y: "start" }),
+      });
+      view.focus();
+    },
     destroy: () => {
       view.destroy();
       dom.remove();
