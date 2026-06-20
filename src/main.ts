@@ -341,6 +341,15 @@ async function bootstrap(): Promise<void> {
         editor.toggleSourceMode(id);
       })();
     },
+    onPrint: (id) => {
+      // 右クリックしたタブをアクティブにしてから印刷する（印刷はアクティブタブ対象）。
+      void (async () => {
+        store.setActive(id);
+        const a = store.getActive();
+        if (a) await editor.show(a);
+        fileActions.file_print?.();
+      })();
+    },
     onRefreshPreview: (id) => void refreshPreviewTab(id, editor),
     canRefreshPreview: (id) => {
       const tab = store.getState().tabs.find((t) => t.id === id);
@@ -573,14 +582,44 @@ async function bootstrap(): Promise<void> {
         const tab = tabId
           ? store.getState().tabs.find((t) => t.id === tabId)
           : null;
+        // 右クリックしたプレビューをアクティブにしてから印刷/出力を実行する
+        // （印刷・HTML出力はアクティブタブを対象にするため）。
+        const activateThenRun = (fn: () => void) => {
+          void (async () => {
+            if (tabId) {
+              store.setActive(tabId);
+              const a = store.getActive();
+              if (a) await editor.show(a);
+            }
+            fn();
+          })();
+        };
+        // 印刷・HTML出力は「export プレビュー」でのみ有効（外部HTMLファイルは対象外）。
+        const exportable = !!tab && tab.previewMode === "export";
         const items: MenuItem[] = [
           {
             type: "item",
             label: t("previewcm.refresh"),
+            shortcut: "F5",
             disabled: !tab || !canRefreshPreviewTab(tab, editor),
             action: () => {
               if (tabId) void refreshPreviewTab(tabId, editor);
             },
+          },
+          { type: "separator" },
+          {
+            type: "item",
+            label: t("menu.print"),
+            shortcut: "Ctrl+P",
+            disabled: !exportable,
+            action: () => activateThenRun(() => fileActions.file_print?.()),
+          },
+          {
+            type: "item",
+            label: t("menu.exportHtml"),
+            shortcut: "Ctrl+Shift+E",
+            disabled: !exportable,
+            action: () => activateThenRun(() => fileActions.file_export_html?.()),
           },
         ];
         showContextMenu(e.clientX, e.clientY, items);

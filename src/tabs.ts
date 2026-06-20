@@ -14,6 +14,8 @@ export type TabBarHandlers = {
   onHtmlPreview: (tabId: string) => void;
   /** タブの WYSIWYG ⇄ ソース編集 をトグルする。 */
   onToggleSource: (tabId: string) => void;
+  /** タブを印刷する（PDF/印刷プレビュー）。 */
+  onPrint: (tabId: string) => void;
   /** プレビュータブを更新する。 */
   onRefreshPreview: (tabId: string) => void;
   /** プレビュータブを更新できるか返す。 */
@@ -247,6 +249,7 @@ export function createTabBar(
             {
               type: "item",
               label: t("tabcm.refreshPreview"),
+              shortcut: "F5",
               disabled: !handlers.canRefreshPreview(tab.id),
               action: () => handlers.onRefreshPreview(tab.id),
             },
@@ -287,6 +290,14 @@ export function createTabBar(
             // プレビュータブはソース編集できない
             disabled: tab.kind === "preview",
             action: () => handlers.onToggleSource(tab.id),
+          },
+          {
+            type: "item",
+            label: t("menu.print"),
+            shortcut: "Ctrl+P",
+            // 外部HTMLファイルのプレビューは印刷対象外
+            disabled: tab.kind === "preview" && tab.previewMode !== "export",
+            action: () => handlers.onPrint(tab.id),
           },
           { type: "separator" },
           {

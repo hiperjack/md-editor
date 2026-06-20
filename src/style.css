@@ -1215,7 +1215,10 @@ body.is-resizing-outline {
 }
 
 .context-menu__item {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
   width: 100%;
   padding: 6px 12px;
   background: transparent;
@@ -1226,6 +1229,11 @@ body.is-resizing-outline {
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.context-menu__accel {
+  color: var(--fg-2);
+  font-size: 12px;
 }
 
 .context-menu__item:hover:not(:disabled) {
