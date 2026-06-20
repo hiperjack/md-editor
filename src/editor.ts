@@ -880,7 +880,11 @@ export function createEditorHost(root: HTMLElement): EditorHost {
                   if (i > 0) nodes.push(schema.text(" "));
                   nodes.push(imageType.create({ src: url, alt: "" }));
                 });
-                const { from, to } = view.state.selection;
+                // 段落をまたぐ選択にインラインを replaceWith すると例外になるため、
+                // 同一ブロック内のときだけ範囲置換し、それ以外はカーソル位置へ挿入する。
+                const sel = view.state.selection;
+                const from = sel.from;
+                const to = sel.$from.sameParent(sel.$to) ? sel.to : sel.from;
                 const tr = view.state.tr.replaceWith(from, to, nodes);
                 const size = nodes.reduce((n, node) => n + node.nodeSize, 0);
                 const after = Math.min(from + size, tr.doc.content.size);
@@ -1354,6 +1358,9 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     scrollSourceToHeading(tabId: string, headingIndex: number) {
       const entry = editors.get(tabId);
       if (!entry || !entry.sourceMode || !entry.sourcePane) return false;
+      // 注: ATX 見出し（#）のみ数える。本エディタは setext 見出し（=== / ---）を
+      // 出力しないため通常は整合するが、外部由来の setext 見出しを含む文書では
+      // アウトライン側の番号とずれる可能性がある（既知の制約）。
       const lines = entry.sourcePane.getText().split("\n");
       let inFence = false;
       let count = -1;
