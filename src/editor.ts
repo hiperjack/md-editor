@@ -851,45 +851,45 @@ export function createEditorHost(root: HTMLElement): EditorHost {
           // Crepe 既定の貼り付け（image-block 化）より先に DOM の paste を捕まえる。
           // 本プラグインはプラグイン配列の先頭側にあるため最初に呼ばれる。
           paste(view, event) {
-          const dt = (event as ClipboardEvent).clipboardData;
-          if (!dt) return false;
-          const files = Array.from(dt.files).filter((f) =>
-            f.type.startsWith("image/"),
-          );
-          if (files.length === 0) return false;
-          // インライン挿入はテキスト位置にのみ可能。それ以外は既定に委ねる。
-          if (!(view.state.selection instanceof TextSelection)) return false;
-          const imageType = view.state.schema.nodes.image;
-          if (!imageType) return false;
-          event.preventDefault();
-          Promise.all(
-            files.map(
-              (f) =>
-                new Promise<string>((resolve, reject) => {
-                  const r = new FileReader();
-                  r.onload = () => resolve(String(r.result));
-                  r.onerror = () => reject(r.error);
-                  r.readAsDataURL(f);
-                }),
-            ),
-          )
-            .then((urls) => {
-              const schema = view.state.schema;
-              const nodes: ProseNode[] = [];
-              urls.forEach((url, i) => {
-                if (i > 0) nodes.push(schema.text(" "));
-                nodes.push(imageType.create({ src: url, alt: "" }));
-              });
-              const { from, to } = view.state.selection;
-              const tr = view.state.tr.replaceWith(from, to, nodes);
-              const size = nodes.reduce((n, node) => n + node.nodeSize, 0);
-              const after = Math.min(from + size, tr.doc.content.size);
-              tr.setSelection(TextSelection.create(tr.doc, after));
-              view.dispatch(tr.scrollIntoView());
-              view.focus();
-            })
-            .catch((e) => console.error("image paste failed:", e));
-          return true;
+            const dt = (event as ClipboardEvent).clipboardData;
+            if (!dt) return false;
+            const files = Array.from(dt.files).filter((f) =>
+              f.type.startsWith("image/"),
+            );
+            if (files.length === 0) return false;
+            // インライン挿入はテキスト位置にのみ可能。それ以外は既定に委ねる。
+            if (!(view.state.selection instanceof TextSelection)) return false;
+            const imageType = view.state.schema.nodes.image;
+            if (!imageType) return false;
+            event.preventDefault();
+            Promise.all(
+              files.map(
+                (f) =>
+                  new Promise<string>((resolve, reject) => {
+                    const r = new FileReader();
+                    r.onload = () => resolve(String(r.result));
+                    r.onerror = () => reject(r.error);
+                    r.readAsDataURL(f);
+                  }),
+              ),
+            )
+              .then((urls) => {
+                const schema = view.state.schema;
+                const nodes: ProseNode[] = [];
+                urls.forEach((url, i) => {
+                  if (i > 0) nodes.push(schema.text(" "));
+                  nodes.push(imageType.create({ src: url, alt: "" }));
+                });
+                const { from, to } = view.state.selection;
+                const tr = view.state.tr.replaceWith(from, to, nodes);
+                const size = nodes.reduce((n, node) => n + node.nodeSize, 0);
+                const after = Math.min(from + size, tr.doc.content.size);
+                tr.setSelection(TextSelection.create(tr.doc, after));
+                view.dispatch(tr.scrollIntoView());
+                view.focus();
+              })
+              .catch((e) => console.error("image paste failed:", e));
+            return true;
           },
         },
       },
