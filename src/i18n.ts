@@ -262,13 +262,14 @@ const DICT: Record<Lang, Record<string, string>> = {
     "docTheme.headingStyle.none": "なし",
     "docTheme.headingStyle.underline": "下線",
     "docTheme.headingStyle.leftBorder": "左ボーダー",
+    "docTheme.headingStyle.filled": "塗りつぶし帯（濃い背景）",
     "docTheme.highlight": "コードハイライトテーマ",
     "docTheme.deco.autoToc": "目次を自動挿入",
     "docTheme.deco.headingNumbers": "見出し番号を自動付与",
     "docTheme.deco.callouts": "コールアウト変換（> [!NOTE] 等）",
     "docTheme.deco.stripedTables": "表の縞模様",
     "docTheme.sampleMd":
-      "## 見出しサンプル\n\n本文テキストのサンプルです。**強調**、`コード`、[リンク](#見出しサンプル)を含みます。\n\n> [!NOTE]\n> コールアウトのサンプルです。\n\n| 項目 | 数量 |\n| --- | --- |\n| りんご | 120 |\n| みかん | 80 |\n| ぶどう | 310 |\n\n```js\nconst total = items.reduce((s, x) => s + x.price, 0);\n```\n",
+      "# 見出し1サンプル\n\n本文テキストのサンプルです。**強調**、`コード`、[リンク](#見出し1サンプル)を含みます。\n\n## 見出し2サンプル\n\n> [!NOTE]\n> コールアウトのサンプルです。\n\n### 見出し3サンプル\n\n| 項目 | 数量 |\n| --- | --- |\n| りんご | 120 |\n| みかん | 80 |\n| ぶどう | 310 |\n\n```js\nconst total = items.reduce((s, x) => s + x.price, 0);\n```\n",
   },
   en: {
     "settings.title": "Settings",
@@ -508,13 +509,14 @@ const DICT: Record<Lang, Record<string, string>> = {
     "docTheme.headingStyle.none": "None",
     "docTheme.headingStyle.underline": "Underline",
     "docTheme.headingStyle.leftBorder": "Left border",
+    "docTheme.headingStyle.filled": "Filled band",
     "docTheme.highlight": "Code highlight theme",
     "docTheme.deco.autoToc": "Auto-insert table of contents",
     "docTheme.deco.headingNumbers": "Auto-number headings",
     "docTheme.deco.callouts": "Convert callouts (> [!NOTE] etc.)",
     "docTheme.deco.stripedTables": "Striped tables",
     "docTheme.sampleMd":
-      "## Sample heading\n\nThis is body text with **bold**, `code`, and a [link](#sample-heading).\n\n> [!NOTE]\n> This is a callout sample.\n\n| Item | Qty |\n| --- | --- |\n| Apple | 120 |\n| Orange | 80 |\n| Grape | 310 |\n\n```js\nconst total = items.reduce((s, x) => s + x.price, 0);\n```\n",
+      "# Sample heading 1\n\nThis is body text with **bold**, `code`, and a [link](#sample-heading-1).\n\n## Sample heading 2\n\n> [!NOTE]\n> This is a callout sample.\n\n### Sample heading 3\n\n| Item | Qty |\n| --- | --- |\n| Apple | 120 |\n| Orange | 80 |\n| Grape | 310 |\n\n```js\nconst total = items.reduce((s, x) => s + x.price, 0);\n```\n",
   },
 };
 

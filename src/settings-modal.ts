@@ -563,6 +563,7 @@ export function openFontSettings(): Promise<void> {
           { value: "none", label: t("docTheme.headingStyle.none") },
           { value: "underline", label: t("docTheme.headingStyle.underline") },
           { value: "left-border", label: t("docTheme.headingStyle.leftBorder") },
+          { value: "filled", label: t("docTheme.headingStyle.filled") },
         ],
         docDraft.theme.headingStyle,
         (v) => {

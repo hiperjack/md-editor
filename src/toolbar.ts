@@ -67,7 +67,8 @@ const ICONS: Record<string, string> = {
     "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z",
   // 折りたたみを全解除（chevrons-up-down: 上下へ開く＝展開）
   expand_all: "M7 15l5 5 5-5M7 9l5-5 5 5",
-  code_brackets: "M16 18l6-6-6-6M8 6l-6 6 6 6",
+  // ソース表示（生Markdown）。インラインコードの <> と区別するため中央にスラッシュを足した </>。
+  source: "m18 16 4-4-4-4M6 8l-4 4 4 4M14.5 4l-5 16",
 };
 
 const BUTTONS: ButtonSpec[] = [
@@ -80,7 +81,7 @@ const BUTTONS: ButtonSpec[] = [
   { key: "file_save_as", icon: ICONS.file_save_as, titleKey: "tb.file_save_as" },
   { key: "file_export_html", icon: ICONS.file_export, titleKey: "tb.file_export" },
   { key: "file_html_preview", icon: ICONS.eye, titleKey: "tb.file_html_preview" },
-  { key: "view_source", icon: ICONS.code_brackets, titleKey: "tb.source_toggle" },
+  { key: "view_source", icon: ICONS.source, titleKey: "tb.source_toggle" },
   { key: "sep", icon: "", titleKey: "" },
   { key: "fmt_h1", icon: ICONS.h1, titleKey: "tb.h1" },
   { key: "fmt_h2", icon: ICONS.h2, titleKey: "tb.h2" },
