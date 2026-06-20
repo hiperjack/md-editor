@@ -385,7 +385,8 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     const entry = editors.get(activeId);
     if (!entry) return;
     if (entry.sourceMode && entry.sourcePane) {
-      requestAnimationFrame(() => entry.sourcePane?.focus());
+      const pane = entry.sourcePane;
+      requestAnimationFrame(() => pane.focus());
       return;
     }
     requestAnimationFrame(() => {
@@ -1091,6 +1092,9 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         if (tab.kind === "preview") continue;
         const entry = editors.get(tab.id);
         if (!entry || !entry.crepe) continue;
+        // ソースモード中のタブは生テキスト編集中。Mermaidは描画されておらず、
+        // 作り直すとソース編集が失われるためスキップする。
+        if (entry.sourceMode) continue;
         const md = entry.crepe.getMarkdown();
         // ```mermaid / ~~~mermaid を含むタブだけ作り直す
         if (!/(?:^|\n)[ \t]*(?:`{3,}|~{3,})[ \t]*mermaid\b/i.test(md)) continue;
@@ -1195,6 +1199,9 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     async persistImages(tabId: string, mdFilePath: string): Promise<PersistResult> {
       const entry = editors.get(tabId);
       if (!entry || !entry.crepe) return { written: 0, failed: 0 };
+      // ソースモード中は生テキストを保存するため、Crepe ドキュメント側の
+      // 画像永続化は行わない（行うと書換が失われる/不要なファイル生成になる）。
+      if (entry.sourceMode) return { written: 0, failed: 0 };
       const imgDir = imageDirForMdPath(mdFilePath);
       if (!imgDir) return { written: 0, failed: 0 };
       let view: EditorView | null = null;
