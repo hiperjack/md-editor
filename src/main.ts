@@ -180,8 +180,19 @@ async function bootstrap(): Promise<void> {
       // 再読み込み（Ctrl+R / Ctrl+Shift+R / F5 / Shift+F5）。
       // リロードするとタブ状態がメモリごとリセットされ、未保存内容が
       // 無警告で失われる（onCloseRequested も発火しない）ため抑止する。
+      // ただしプレビュータブ上の単独 F5 は、そのプレビューの「更新」に割り当てる。
       if (key === "f5" || (mod && key === "r")) {
         e.preventDefault();
+        if (key === "f5" && !e.shiftKey && !mod) {
+          const active = store.getActive();
+          if (
+            active &&
+            active.kind === "preview" &&
+            canRefreshPreviewTab(active, editor)
+          ) {
+            void refreshPreviewTab(active.id, editor);
+          }
+        }
         return;
       }
 
