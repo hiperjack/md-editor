@@ -1488,3 +1488,20 @@ body.is-resizing-outline {
   margin-top: 20px;
 }
 
+/* ソース編集モード: container 配下を source-pane だけに切替える。 */
+.editor-pane.source-mode > *:not(.source-pane) {
+  display: none !important;
+}
+.source-pane {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+.source-pane .cm-editor {
+  height: 100%;
+}
+.source-pane .cm-scroller {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+}
+
