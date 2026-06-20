@@ -4,6 +4,7 @@ import toc from "markdown-it-toc-done-right";
 import githubAlerts from "markdown-it-github-alerts";
 import { type DocSettings, isLightColor } from "./theme";
 import { renderMermaidSvg } from "./mermaid-renderer";
+import { ensureBlankLineBeforeTables } from "./md-normalize";
 
 /**
  * 出力用レンダリングパイプライン（markdown → 文書HTML）。
@@ -173,6 +174,8 @@ export async function renderDocumentBody(
   if (settings.decorations.autoToc && !hasTocMarker(src)) {
     src = `[[toc]]\n\n${src}`;
   }
+  // リストや段落の直後に空行なしで置かれた表を、表として認識できるよう空行を補う。
+  src = ensureBlankLineBeforeTables(src);
 
   // コードフェンスが存在するときだけhighlight.jsをロードする
   const needHljs = /(^|\n)\s*(`{3,}|~{3,})/.test(src);
