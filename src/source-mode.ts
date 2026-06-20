@@ -22,6 +22,9 @@ export type SourcePane = {
  * 生 Markdown を「プレーンテキスト＋行番号」で編集する CodeMirror ペインを作る。
  * シンタックスハイライトは付けない（言語拡張を入れない）。
  * undo/redo・基本キーバインド・Tab字下げ・行折り返しのみ有効化する。
+ *
+ * @param initial - 初期テキスト
+ * @param onChange - テキスト変更コールバック。onChange は文字入力のたびに呼ばれる。高頻度なので必要なら呼び出し元でデバウンスすること。
  */
 export function createSourcePane(
   initial: string,

@@ -1489,6 +1489,7 @@ body.is-resizing-outline {
 }
 
 /* ソース編集モード: container 配下を source-pane だけに切替える。 */
+/* WYSIWYG 側の display を確実に上書きしてソースペインだけ見せる */
 .editor-pane.source-mode > *:not(.source-pane) {
   display: none !important;
 }

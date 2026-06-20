@@ -15,6 +15,9 @@
     "tauri:build": "tauri build"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.41.1",
     "@milkdown/crepe": "^7.5.0",
     "@milkdown/kit": "^7.5.0",
     "@tauri-apps/api": "^2.0.0",
