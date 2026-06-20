@@ -45,6 +45,7 @@ import { ensureDocumentStyles, setHljsThemeStyle } from "./doc-styles";
 import { t } from "./i18n";
 import { replaceAll } from "@milkdown/kit/utils";
 import { createSourcePane, type SourcePane } from "./source-mode";
+import { formatImageAlt } from "./image-row";
 
 // コードブロックの「プレビューのみ(隠す)」状態を出現順で取得する。
 // .cm-editor が非表示(offsetParent===null)＝「隠す」状態とみなす。
@@ -848,38 +849,17 @@ export function createEditorHost(root: HTMLElement): EditorHost {
           }) as never,
           /*
             画像の出力ハンドラ。
-            image-block (= paragraph 内に image 単独で含まれるパターン) の
-            alt はピクセル幅。`![320.00](img.png)` ではなく `![320](img.png)` と
-            整数で出力する。インライン画像は alt をそのまま (ユーザー入力) 出す。
+            数値 alt は px 幅、その他はそのまま（インライン/ブロック共通規約）。
+            formatImageAlt が閾値判定・整数変換を行う。
           */
-          image: ((node: unknown, parent: unknown) => {
+          image: ((node: unknown) => {
             const n = node as {
               url?: string;
               alt?: string | null;
               title?: string | null;
             };
-            const p = parent as
-              | { type?: string; children?: unknown[] }
-              | null
-              | undefined;
-            const isBlockImage =
-              !!p &&
-              p.type === "paragraph" &&
-              Array.isArray(p.children) &&
-              p.children.length === 1 &&
-              n.alt != null &&
-              Number.isFinite(Number(n.alt));
-
-            let altOut: string;
-            if (isBlockImage) {
-              const w = Math.round(Number(n.alt));
-              // 閾値以下 (レガシー/未設定 ratio=1 等) は alt を空にして
-              // クリーンな ![](url) に統一する。
-              altOut = w > IMG_PX_THRESHOLD ? String(w) : "";
-            } else {
-              altOut = n.alt ?? "";
-            }
-            const safeAlt = altOut.replace(/]/g, "\\]");
+            // 数値 alt は px 幅、その他はそのまま（インライン/ブロック共通規約）
+            const safeAlt = formatImageAlt(n.alt).replace(/]/g, "\\]");
             const url = n.url ?? "";
             const titlePart =
               n.title != null && n.title !== ""
