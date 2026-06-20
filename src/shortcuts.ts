@@ -132,6 +132,14 @@ export function setupShortcuts(
           settings.toggleOutline();
           return;
         }
+        // ソース表示トグル（Ctrl+Shift+I。既定の DevTools は main.ts で抑止解除済み）
+        if (k === "i") {
+          e.preventDefault();
+          e.stopPropagation();
+          const id = store.getActive()?.id;
+          if (id) editor.toggleSourceMode(id);
+          return;
+        }
         return;
       }
       if (k === "n") {
@@ -155,7 +163,6 @@ export function setupShortcuts(
         return;
       }
 
-      void editor;
     },
     { capture: true },
   );

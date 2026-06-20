@@ -200,9 +200,9 @@ async function bootstrap(): Promise<void> {
         return;
       }
 
-      // DevTools を開くブラウザ標準キー（Ctrl+Shift+I / Ctrl+Shift+J / Ctrl+Shift+C）を抑止。
-      // ※ Shift 付きのみ。Ctrl+C（コピー）等は対象外。
-      if (e.shiftKey && (key === "i" || key === "j" || key === "c")) {
+      // DevTools を開くブラウザ標準キー（Ctrl+Shift+J / Ctrl+Shift+C）を抑止。
+      // ※ Ctrl+Shift+I はソース表示トグルに再割り当て（shortcuts.ts で処理）。
+      if (e.shiftKey && (key === "j" || key === "c")) {
         e.preventDefault();
         return;
       }
