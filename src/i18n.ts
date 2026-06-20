@@ -269,7 +269,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "docTheme.deco.callouts": "コールアウト変換（> [!NOTE] 等）",
     "docTheme.deco.stripedTables": "表の縞模様",
     "docTheme.sampleMd":
-      "## 見出しサンプル\n\n本文テキストのサンプルです。**強調**、`コード`、[リンク](#見出しサンプル)を含みます。\n\n> [!NOTE]\n> コールアウトのサンプルです。\n\n| 項目 | 数量 |\n| --- | --- |\n| りんご | 120 |\n| みかん | 80 |\n| ぶどう | 310 |\n\n```js\nconst total = items.reduce((s, x) => s + x.price, 0);\n```\n",
+      "# 見出し1サンプル\n\n本文テキストのサンプルです。**強調**、`コード`、[リンク](#見出し1サンプル)を含みます。\n\n## 見出し2サンプル\n\n> [!NOTE]\n> コールアウトのサンプルです。\n\n### 見出し3サンプル\n\n| 項目 | 数量 |\n| --- | --- |\n| りんご | 120 |\n| みかん | 80 |\n| ぶどう | 310 |\n\n```js\nconst total = items.reduce((s, x) => s + x.price, 0);\n```\n",
   },
   en: {
     "settings.title": "Settings",
@@ -516,7 +516,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "docTheme.deco.callouts": "Convert callouts (> [!NOTE] etc.)",
     "docTheme.deco.stripedTables": "Striped tables",
     "docTheme.sampleMd":
-      "## Sample heading\n\nThis is body text with **bold**, `code`, and a [link](#sample-heading).\n\n> [!NOTE]\n> This is a callout sample.\n\n| Item | Qty |\n| --- | --- |\n| Apple | 120 |\n| Orange | 80 |\n| Grape | 310 |\n\n```js\nconst total = items.reduce((s, x) => s + x.price, 0);\n```\n",
+      "# Sample heading 1\n\nThis is body text with **bold**, `code`, and a [link](#sample-heading-1).\n\n## Sample heading 2\n\n> [!NOTE]\n> This is a callout sample.\n\n### Sample heading 3\n\n| Item | Qty |\n| --- | --- |\n| Apple | 120 |\n| Orange | 80 |\n| Grape | 310 |\n\n```js\nconst total = items.reduce((s, x) => s + x.price, 0);\n```\n",
   },
 };
 
