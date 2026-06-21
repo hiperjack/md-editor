@@ -13,6 +13,12 @@ import { store } from "./store";
 import { settings } from "./settings";
 import { t, onLangChange } from "./i18n";
 import {
+  getPreviewHeadings,
+  getPreviewCollapsedIndices,
+  togglePreviewFoldByIndex,
+  onPreviewFoldChange,
+} from "./preview-fold";
+import {
   toggleFold,
   getHeadingFoldPositions,
   onHeadingFoldChange,
@@ -136,13 +142,6 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
   /** 現在スクロール監視中のコンテナと、その解除関数。 */
   let detachScroll: (() => void) | null = null;
 
-  // プレビュータブ用の表示のみ折りたたみ状態(見出しインデックスの集合)。
-  // ProseMirror が無く連動先が無いため、アウトライン内の表示だけを制御する。
-  const previewCollapsed = new Set<number>();
-  // previewCollapsed はインデックスで状態を持つため、見出し構成が変わったら
-  // 別項目を誤って折りたたまないよう、フィンガープリント不一致でクリアする。
-  let previewFingerprint = "";
-
   /** heading 位置へジャンプし、エディタ上端に揃える。 */
   const jumpTo = (pos: number, index: number) => {
     // ソースモード中は WYSIWYG の view が無いため、ソースの該当見出し行へ
@@ -215,23 +214,61 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
     updateCurrent();
   };
 
-  /** プレビュータブ用: HTML見出し(h1〜h6)からアウトラインを作る。 */
-  const renderPreviewOutline = () => {
-    const pane = document.querySelector<HTMLElement>(
+  /** 表示中のプレビューペイン（スクロールコンテナ）。 */
+  const activePreviewPane = (): HTMLElement | null =>
+    document.querySelector<HTMLElement>(
       "#editor-host .editor-pane.preview-pane",
     );
-    const headings = pane
-      ? Array.from(pane.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6"))
-      : [];
-    // 見出し構成(レベル+テキスト列)が前回と変わっていたら折りたたみ状態をリセット。
-    // テキストだけだと同名見出しのレベル変更を取りこぼすため tagName も含める。
-    const fingerprint = headings
-      .map((h) => `${h.tagName}:${h.textContent ?? ""}`)
-      .join("\x00");
-    if (fingerprint !== previewFingerprint) {
-      previewCollapsed.clear();
-      previewFingerprint = fingerprint;
+
+  /** プレビューのスクロール位置から、現在地の見出しを .is-current でハイライト。 */
+  const updateCurrentPreview = () => {
+    const pane = activePreviewPane();
+    const items = Array.from(list.children) as HTMLElement[];
+    if (!pane || items.length === 0) return;
+    const headings = getPreviewHeadings();
+    const containerTop = pane.getBoundingClientRect().top;
+    const THRESHOLD = 8; // 上端をわずかに越えた見出しを現在地とみなす
+
+    let currentIdx = 0;
+    for (let i = 0; i < items.length; i++) {
+      const hi = Number(items[i].dataset.index);
+      const dom = headings[hi];
+      if (!dom) continue;
+      const top = dom.getBoundingClientRect().top - containerTop;
+      if (top <= THRESHOLD) currentIdx = i;
+      else break;
     }
+    items.forEach((it, i) => it.classList.toggle("is-current", i === currentIdx));
+  };
+
+  /** プレビューペインのスクロールを監視し、現在地ハイライトを更新する。 */
+  const attachPreviewScrollSpy = () => {
+    detachScroll?.();
+    detachScroll = null;
+    const pane = activePreviewPane();
+    if (!pane) return;
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        updateCurrentPreview();
+      });
+    };
+    pane.addEventListener("scroll", onScroll, { passive: true });
+    detachScroll = () => pane.removeEventListener("scroll", onScroll);
+    updateCurrentPreview();
+  };
+
+  /**
+   * プレビュータブ用: HTML見出しからアウトラインを作る。
+   * 折りたたみ状態はプレビュー本文（preview-fold.ts の pv-collapsed）と共有し、
+   * トグルはプレビュー本文の折りたたみをトグルする（双方向同期）。
+   */
+  const renderPreviewOutline = () => {
+    const headings = getPreviewHeadings();
+    const collapsedSet = getPreviewCollapsedIndices();
     const levels = headings.map((h) => Number(h.tagName.slice(1)) || 1);
     // 子有無(直後により深いレベルがあるか)。
     const hasChild = levels.map((lv, i) => {
@@ -248,12 +285,13 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
         hideUntilLevel = null;
       }
       const hidden = hideUntilLevel !== null;
-      const isCollapsed = previewCollapsed.has(i);
+      const isCollapsed = collapsedSet.has(i);
       if (isCollapsed && hideUntilLevel === null) hideUntilLevel = level;
       if (hidden) continue;
 
       const li = document.createElement("li");
       li.className = `outline-item outline-level-${level}`;
+      li.dataset.index = String(i); // getPreviewHeadings() のインデックス（現在地判定用）
       if (hasChild[i]) {
         const toggle = document.createElement("span");
         toggle.className =
@@ -261,9 +299,8 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
         toggle.addEventListener("mousedown", (e) => {
           e.preventDefault();
           e.stopPropagation();
-          if (previewCollapsed.has(i)) previewCollapsed.delete(i);
-          else previewCollapsed.add(i);
-          renderPreviewOutline();
+          // プレビュー本文の折りたたみをトグル → onPreviewFoldChange で再描画。
+          togglePreviewFoldByIndex(i);
         });
         li.appendChild(toggle);
       } else {
@@ -286,9 +323,8 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
     const hasHeadings = headings.length > 0;
     list.hidden = !hasHeadings;
     empty.hidden = hasHeadings;
-    // プレビューはProseMirror非依存のためスクロール監視は張らない
-    detachScroll?.();
-    detachScroll = null;
+    // プレビューペインのスクロールを監視して現在地をハイライトする。
+    attachPreviewScrollSpy();
   };
 
   const render = () => {
@@ -397,6 +433,8 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
   store.subscribe(schedule);
   // 折りたたみ(エディタ側トグル含む)が変わったらアウトラインを再描画する。
   onHeadingFoldChange(schedule);
+  // プレビュー本文の折りたたみ(三角クリック等)が変わったら再描画して同期する。
+  onPreviewFoldChange(schedule);
 
   return { refresh: render };
 }

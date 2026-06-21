@@ -29,7 +29,8 @@ export const PRINT_MEDIA_CSS = `@media print {
   /* orphans/widows は指定しない。3行未満の短い段落（例: "aa" だけの文書）で
      Chromium/WebView2 の印刷プレビュー組版がループしてプレビューが生成されない
      既知の不具合を避けるため。重要ブロックの分断回避は break-inside で担保する。 */
-  .document pre, .document code, .document .markdown-alert, .document thead th, .document nav.table-of-contents {
+  .document pre, .document code, .document .markdown-alert, .document thead th, .document nav.table-of-contents,
+  .document.heading-filled h1 {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

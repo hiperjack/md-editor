@@ -670,6 +670,47 @@ body.is-resizing-outline {
 }
 
 /*
+  HTMLプレビューの見出し折りたたみ（preview-fold.ts）。
+  見出し左の三角クリックで配下を隠す（表示のみ）。エディタの heading-fold と同様の見た目。
+*/
+.preview-pane .document :is(h1, h2, h3, h4, h5, h6).pv-foldable {
+  position: relative;
+}
+.preview-pane .document .pv-fold-toggle {
+  position: absolute;
+  left: -18px;
+  top: 0;
+  width: 16px;
+  height: 1.4em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  color: var(--doc-muted, #888);
+}
+.preview-pane .document .pv-foldable:hover .pv-fold-toggle,
+.preview-pane .document .pv-collapsed .pv-fold-toggle {
+  opacity: 0.55;
+}
+.preview-pane .document .pv-fold-toggle:hover {
+  opacity: 0.9;
+}
+.preview-pane .document .pv-fold-toggle::before {
+  content: "▾";
+  font-size: 11px;
+  line-height: 1;
+}
+.preview-pane .document .pv-collapsed > .pv-fold-toggle::before {
+  content: "▸";
+}
+.preview-pane .document .pv-folded-hidden {
+  display: none;
+}
+
+/*
   リストの折りたたみ（list-fold.ts）。
   配下にネストしたリストを持つ list_item にだけ三角アイコンを出す。
 */
