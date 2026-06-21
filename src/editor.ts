@@ -11,6 +11,7 @@ import { keymap } from "@milkdown/kit/prose/keymap";
 import { Plugin, TextSelection, NodeSelection } from "@milkdown/kit/prose/state";
 import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
+import { DOMParser as ProseDOMParser } from "@milkdown/kit/prose/model";
 import { GapCursor } from "@milkdown/kit/prose/gapcursor";
 import { exitCode, joinBackward, lift } from "@milkdown/kit/prose/commands";
 import type { EditorView } from "@milkdown/kit/prose/view";
@@ -861,6 +862,49 @@ export function createEditorHost(root: HTMLElement): EditorHost {
           paste(view, event) {
             const dt = (event as ClipboardEvent).clipboardData;
             if (!dt) return false;
+            /*
+              Excel 等の表計算からセル範囲をコピーすると、クリップボードに
+              「表のビットマップ画像(PNG)」と「text/html の <table>」が同梱される。
+              下の画像処理が先に画像を拾うと表が画像になってしまうため、HTML に
+              <table> があるときは自前で GFM テーブルへ変換して挿入する
+              （単に return false すると Crepe 既定の image-block 化が走り画像になる）。
+            */
+            const html = dt.getData("text/html");
+            if (html && /<table[\s>]/i.test(html)) {
+              try {
+                const doc = new DOMParser().parseFromString(html, "text/html");
+                /*
+                  GFM テーブルのスキーマは content="table_header_row table_row+"
+                  で、先頭行がヘッダ行であることを要求する。ヘッダ行の parseDOM は
+                  <th> を含む <tr> しか受け付けないが、Excel/スプレッドシートは全セルを
+                  <td> で出力し <th> を使わない。そのままだと先頭行がヘッダにならず
+                  テーブル構築に失敗してテキスト化（または無反応）するため、各 <table>
+                  の先頭行の <td> を <th> へ昇格させてから解析する。
+                */
+                doc.querySelectorAll("table").forEach((table) => {
+                  const firstRow = table.querySelector("tr");
+                  if (!firstRow || firstRow.querySelector("th")) return;
+                  firstRow.querySelectorAll("td").forEach((td) => {
+                    const th = doc.createElement("th");
+                    th.innerHTML = td.innerHTML;
+                    td.replaceWith(th);
+                  });
+                });
+                const slice = ProseDOMParser.fromSchema(
+                  view.state.schema,
+                ).parseSlice(doc.body);
+                // テーブルが組めず空スライスになった場合は既定の貼り付けに委ねる。
+                if (slice.content.size === 0) return false;
+                event.preventDefault();
+                view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
+                view.focus();
+                return true;
+              } catch (e) {
+                console.error("table paste failed:", e);
+                // 失敗時は既定の貼り付けに委ねる。
+                return false;
+              }
+            }
             const files = Array.from(dt.files).filter((f) =>
               f.type.startsWith("image/"),
             );
