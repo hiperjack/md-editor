@@ -19,6 +19,7 @@ A desktop app that lets you **edit Markdown in its finished, rendered form** ins
 ## Why mdedit?
 
 - **See it as you write it** — Edit directly with bold, headings, and lists already rendered (WYSIWYG). No round trips to a preview pane.
+- **See the raw Markdown when you want** — Toggle between the rendered view and the raw Markdown source (with line numbers) with a single key (`Ctrl+Shift+I`).
 - **Diagrams just work** — Mermaid you write in a code block becomes a live diagram in real time, and you can click to zoom. Diagram-only files (`.mmd` / `.mermaid`) open too.
 - **Export what you see** — Export to HTML with the exact same look as the editor, and print to PDF.
 - **Light and fast** — Built with Tauri, so the installer is small and startup is quick.
@@ -58,6 +59,7 @@ Get the latest version from [Releases](https://github.com/hiperjack/md-editor/re
 | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` | New tab / Open / Save |
 | `Ctrl+Shift+E` | Export as HTML |
 | `Ctrl+Shift+V` | Open HTML preview tab |
+| `Ctrl+Shift+I` | Toggle source (raw Markdown) view |
 | `Ctrl+P` | Print (PDF save available) |
 | `Ctrl+F` / `Ctrl+H` | Find / Replace |
 | `Ctrl+Shift+O` | Toggle heading outline |
