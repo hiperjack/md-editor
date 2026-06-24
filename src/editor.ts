@@ -8,8 +8,9 @@ import {
   remarkStringifyOptionsCtx,
 } from "@milkdown/kit/core";
 import { keymap } from "@milkdown/kit/prose/keymap";
-import { Plugin, TextSelection, NodeSelection } from "@milkdown/kit/prose/state";
+import { Plugin, TextSelection, NodeSelection, Selection } from "@milkdown/kit/prose/state";
 import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
+import { CellSelection } from "@milkdown/kit/prose/tables";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { DOMParser as ProseDOMParser } from "@milkdown/kit/prose/model";
 import { GapCursor } from "@milkdown/kit/prose/gapcursor";
@@ -644,6 +645,103 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     });
 
     /*
+      テーブルのセルを1クリックしたときの挙動を「通常テキスト」に揃える。
+      Crepe のテーブル NodeView は、現在の選択が「クリックしたセル内の
+      TextSelection」でない限り、セル内容を丸ごと NodeSelection で選択する
+      （1 クリックで I 字キャレットが出ずセルが選択される）。
+
+      ProseMirror は DOM イベントを処理する前に eventBelongsToView() で
+      NodeView の stopEvent() を先に評価する。そのため通常のプラグインの
+      handleDOMEvents.mousedown では NodeView の判定に割り込めない（stopEvent が
+      先に走り NodeSelection が予約される）。
+
+      そこで「キャプチャフェーズ」の mousedown を view.dom に直接張る（PM 自身の
+      バブルフェーズのリスナより必ず先に走る）。クリック回数（event.detail）で
+      挙動を分岐させ、通常テキストと同じ操作感にする。
+        - 1クリック: クリック座標のセル内へ TextSelection を先回りで置く。後続の
+          NodeView 判定が「同一セル内の TextSelection」を検知して何もしない
+          （return false）ため、PM 標準のキャレット配置・ドラッグ選択・
+          ダブルクリック単語選択が効く。
+        - 2クリック: 素通し（標準の単語選択に委ねる）。
+        - 3クリック: セル内テキストを全選択（既定の prosemirror-tables は
+          トリプルクリックでセルをブロック選択するため、それを抑止して置換する）。
+        - 4クリック以上: セルそのものを選択（CellSelection）。
+      3クリック以上は preventDefault + stopImmediatePropagation で PM／ブラウザの
+      既定処理を止めてから独自の選択を適用する。
+    */
+    const tableCellDepth = (
+      $pos: ReturnType<EditorState["doc"]["resolve"]>,
+    ): number => {
+      for (let d = $pos.depth; d > 0; d--) {
+        const name = $pos.node(d).type.name;
+        if (name === "table_cell" || name === "table_header") return d;
+      }
+      return -1;
+    };
+    const selectCellAllText = (view: EditorView, pos: number): void => {
+      const $pos = view.state.doc.resolve(pos);
+      const d = tableCellDepth($pos);
+      if (d < 0) return;
+      const sel = TextSelection.between(
+        view.state.doc.resolve($pos.start(d)),
+        view.state.doc.resolve($pos.end(d)),
+      );
+      view.dispatch(view.state.tr.setSelection(sel).scrollIntoView());
+    };
+    const selectWholeCell = (view: EditorView, pos: number): void => {
+      const $pos = view.state.doc.resolve(pos);
+      const d = tableCellDepth($pos);
+      if (d < 0) return;
+      view.dispatch(
+        view.state.tr
+          .setSelection(CellSelection.create(view.state.doc, $pos.before(d)))
+          .scrollIntoView(),
+      );
+    };
+    const tableCellCaretPlugin = new Plugin({
+      view(editorView) {
+        const onMouseDownCapture = (event: MouseEvent) => {
+          if (event.button !== 0) return;
+          const target = event.target as HTMLElement | null;
+          if (!target) return;
+          if (target.closest("button")) return; // 表の操作ボタンは除外
+          if (!target.closest("td, th")) return;
+          const coords = editorView.posAtCoords({
+            left: event.clientX,
+            top: event.clientY,
+          });
+          if (!coords) return;
+          const detail = event.detail;
+          if (detail === 1) {
+            const sel = TextSelection.near(
+              editorView.state.doc.resolve(coords.pos),
+            );
+            if (!editorView.state.selection.eq(sel)) {
+              editorView.dispatch(editorView.state.tr.setSelection(sel));
+            }
+            return;
+          }
+          if (detail === 2) return; // 標準の単語選択に委ねる
+          // 3クリック以上: 既定処理を止めて独自の選択を適用する。
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          if (detail === 3) selectCellAllText(editorView, coords.pos);
+          else selectWholeCell(editorView, coords.pos); // 4クリック以上
+        };
+        editorView.dom.addEventListener("mousedown", onMouseDownCapture, true);
+        return {
+          destroy() {
+            editorView.dom.removeEventListener(
+              "mousedown",
+              onMouseDownCapture,
+              true,
+            );
+          },
+        };
+      },
+    });
+
+    /*
       image-block の attrs.ratio を「ピクセル幅」として解釈する規約。
       - ratio > IMG_PX_THRESHOLD (10) → 画像をその px 幅で表示
       - ratio ≤ 10 → レガシー扱い（未設定 / 旧倍率）。natural fit のままにする
@@ -1036,6 +1134,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         listFoldPlugin,
         gapClickPlugin,
         codeBlockUnwrapPlugin,
+        tableCellCaretPlugin,
         imageDoubleClickPlugin,
         imageWheelResizePlugin,
         imageBlockSizePlugin,
@@ -1078,6 +1177,69 @@ export function createEditorHost(root: HTMLElement): EditorHost {
             indentImageRow(state, dispatch, view ?? null, +1),
           "Shift-Tab": (state, dispatch, view) =>
             indentImageRow(state, dispatch, view ?? null, -1),
+          /*
+            リスト/表/引用などの直後に置かれたブロック（見出し等）の先頭行で
+            ArrowUp を押したとき、間に gapcursor を挟まず直前ブロックの最終行へ
+            キャレットを移す。ProseMirror 既定はこれらブロック境界で gapcursor を
+            作るため、1 回の ArrowUp では上のブロックへ入れず「上に移動できない」
+            と感じる問題を解消する。
+            キャレットは「現在の水平位置（列）」を保ったまま直前ブロックの最終行へ
+            移す。行頭にいれば行頭へ、途中にいれば同じ列付近へ着地する。
+          */
+          ArrowUp: (state, dispatch, view) => {
+            if (!view) return false;
+            const { selection } = state;
+            if (!selection.empty) return false;
+            // 折り返しの途中（上端の視覚行でない）なら既定の行内移動に任せる。
+            if (!view.endOfTextblock("up")) return false;
+            const $head = selection.$head;
+            if ($head.depth < 1) return false;
+            // 現在の最上位ブロックの直前位置と、その直前の兄弟ブロック。
+            const beforePos = $head.before(1);
+            const prev = state.doc.resolve(beforePos).nodeBefore;
+            if (!prev) return false;
+            const prevName = prev.type.name;
+            const isList =
+              prevName === "bullet_list" || prevName === "ordered_list";
+            const isTable = prevName === "table";
+            const isQuote = prevName === "blockquote";
+            // 空段落（＝空行）は既定の上移動が飛び越してしまうため、ここで拾う。
+            const isEmptyPara =
+              prevName === "paragraph" && prev.content.size === 0;
+            // 既定では gapcursor で止まる/空行を飛ばすブロックのみ介入する
+            // （非空の段落/見出し同士は既定の列保持移動で十分なので触らない）。
+            if (!isList && !isTable && !isQuote && !isEmptyPara) return false;
+            // 直前ブロックの「最終行の実在テキスト位置」を求める（beforePos-1 は
+            // ブロックの閉じ境界で textblock 外のため、Selection.near で内側の
+            // 選択可能位置へ寄せる）。
+            const endSel = Selection.near(
+              state.doc.resolve(beforePos - 1),
+              -1,
+            );
+            let pos = endSel.head; // フォールバック: 直前ブロックの末尾
+            // 着地位置を Selection.near で寄せる際の探索方向。表のセル先頭境界は
+            // 前方(+1)へ寄せないと前のセル末尾へ戻ってしまうため向きを分ける。
+            let bias: 1 | -1 = -1;
+            if (isTable) {
+              // 表は「一番下の行の先頭セル」へ移す。座標解決は WebView の差異で
+              // 不安定（先頭行に着地する）なため、文書構造から決定論的に求める。
+              let p = beforePos - prev.nodeSize + 1; // 表内容の先頭
+              for (let i = 0; i < prev.childCount - 1; i++) {
+                p += prev.child(i).nodeSize; // 最終行の直前まで進める
+              }
+              pos = p + 2; // 最終行 → 先頭セル → 先頭子(段落)の内側
+              bias = 1;
+            } else {
+              // リスト/引用/空行は左マージンで座標解決がぶれるため、文字オフセット
+              // （列）で移す。行頭(offset 0)なら直前ブロック最終行の行頭へ。
+              const $end = endSel.$head;
+              const col = Math.min($head.parentOffset, $end.parent.content.size);
+              pos = $end.start() + col;
+            }
+            const target = Selection.near(state.doc.resolve(pos), bias);
+            if (dispatch) dispatch(state.tr.setSelection(target).scrollIntoView());
+            return true;
+          },
         }),
         ...plugins,
       ]);
@@ -1176,8 +1338,10 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     // 移送タブは移送元の baseline を引き継ぎ、未保存状態を保持する。
     const baseline = override?.baseline ?? crepe.getMarkdown();
 
-    const detachLineNumbers = attachLineNumbers(container, () =>
-      crepe.getMarkdown(),
+    const detachLineNumbers = attachLineNumbers(
+      container,
+      () => crepe.getMarkdown(),
+      () => pmView,
     );
 
     // 画像 src を md ファイル相対パスベースで Tauri asset URL に書き換える。

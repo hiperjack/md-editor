@@ -10,7 +10,24 @@
  *   これで WebView2 の絶対配置子要素のペイント不整合（残像）を回避する。
  */
 
+import { TextSelection } from "@milkdown/kit/prose/state";
+import { CellSelection } from "@milkdown/kit/prose/tables";
+import type { EditorView } from "@milkdown/kit/prose/view";
+import type { EditorState } from "@milkdown/kit/prose/state";
+import type { ResolvedPos } from "@milkdown/kit/prose/model";
+
 const GUTTER_WIDTH = 44;
+
+/**
+ * 行番号クリックで選択する対象を指す「アンカー」。
+ * - line: テキストブロック（段落/見出し/箇条書き項目）の本文 1 行目区間。
+ * - break: 段落内ハードブレーク直後の継続行区間。
+ * - row : テーブル行（クリックで行全体＝全セルを選択）。
+ */
+type SelAnchor =
+  | { type: "line"; el: HTMLElement }
+  | { type: "break"; br: HTMLBRElement }
+  | { type: "row"; el: HTMLElement };
 
 const HEADING_OR_P = new Set(["h1", "h2", "h3", "h4", "h5", "h6", "p"]);
 const BLOCK_LIKE = new Set([
@@ -32,6 +49,7 @@ const BLOCK_LIKE = new Set([
 export function attachLineNumbers(
   pane: HTMLElement,
   getSource: () => string,
+  getView?: () => EditorView | null,
 ): () => void {
   const gutter = document.createElement("div");
   gutter.className = "line-gutter";
@@ -76,6 +94,10 @@ export function attachLineNumbers(
 
   const findPM = () => pane.querySelector<HTMLElement>(".ProseMirror");
 
+  // 直近に描画したエントリ。.line-no クリック時に index で引く（render は
+  // entries 順に inner の子を並べるため index が一致する）。
+  let lastEntries: Entry[] = [];
+
   const update = () => {
     const pm = findPM();
     if (!pm) return;
@@ -91,7 +113,27 @@ export function attachLineNumbers(
     const entries = collectEntries(pm, offset, source);
     fitGutter(entries);
     render(inner, entries);
+    lastEntries = entries;
   };
+
+  // 行番号クリックで対応するソース行を選択する。
+  const onGutterMouseDown = (e: MouseEvent) => {
+    if (!getView) return;
+    if (e.button !== 0) return;
+    const view = getView();
+    if (!view) return;
+    const lineEl = (e.target as HTMLElement | null)?.closest<HTMLElement>(
+      ".line-no",
+    );
+    if (!lineEl) return;
+    const idx = Array.prototype.indexOf.call(inner.children, lineEl);
+    if (idx < 0) return;
+    const anchor = lastEntries[idx]?.sel;
+    if (!anchor) return;
+    e.preventDefault();
+    selectSourceLine(view, anchor);
+  };
+  inner.addEventListener("mousedown", onGutterMouseDown);
 
   const onScroll = () => {
     // translate3d で GPU 合成レイヤを維持（残像対策）
@@ -125,6 +167,7 @@ export function attachLineNumbers(
     mo.disconnect();
     pane.removeEventListener("scroll", onScroll);
     window.removeEventListener("resize", onResize);
+    inner.removeEventListener("mousedown", onGutterMouseDown);
     if (raf) cancelAnimationFrame(raf);
     gutter.remove();
   };
@@ -136,6 +179,8 @@ type Entry = {
   height: number;
   /** 折りたたみ中の見出し/リスト項目のエントリ（From-To 表示の起点）。 */
   collapsed?: boolean;
+  /** 行番号クリック時に選択する対象。無ければクリックは無反応。 */
+  sel?: SelAnchor;
 };
 type Ctx = { line: number };
 type SrcCtx = {
@@ -289,6 +334,11 @@ function findFenceEnd(srcLines: string[], openIdx: number): number {
   return srcLines.length;
 }
 
+/** 直前に push されたエントリがあれば選択アンカーを付与する。 */
+function setLastSel(out: Entry[], beforeLen: number, sel: SelAnchor): void {
+  if (out.length > beforeLen) out[out.length - 1].sel = sel;
+}
+
 function walkBlockSrc(
   el: HTMLElement,
   ctx: SrcCtx,
@@ -332,15 +382,16 @@ function walkBlockSrc(
     }
     // ソース markdown のテーブルは「ヘッダ行 + 区切り行 + body 行」だが
     // DOM のヘッダ tr は 1 つで両方を兼ねる。番号は「N-N+1」の併記で表す。
-    pushAt(
-      out,
-      trs[0],
-      `${ctx.srcIdx + 1}-${ctx.srcIdx + 2}`,
-      offset,
-    );
+    {
+      const b = out.length;
+      pushAt(out, trs[0], `${ctx.srcIdx + 1}-${ctx.srcIdx + 2}`, offset);
+      setLastSel(out, b, { type: "row", el: trs[0] });
+    }
     ctx.srcIdx += 2;
     for (let i = 1; i < trs.length; i++) {
+      const b = out.length;
       pushAt(out, trs[i], ctx.srcIdx + 1, offset);
+      setLastSel(out, b, { type: "row", el: trs[i] });
       ctx.srcIdx++;
     }
     return;
@@ -356,14 +407,20 @@ function walkBlockSrc(
   // 段落・見出し・hr
   const beforeLen = out.length;
   pushAt(out, el, ctx.srcIdx + 1, offset);
-  // 折りたたみ中の見出しは、隠れた行数を From-To で表すため起点として印を付ける。
-  if (out.length > beforeLen && el.classList.contains("is-collapsed")) {
-    out[out.length - 1].collapsed = true;
+  if (out.length > beforeLen) {
+    // 折りたたみ中の見出しは、隠れた行数を From-To で表すため起点として印を付ける。
+    if (el.classList.contains("is-collapsed")) {
+      out[out.length - 1].collapsed = true;
+    }
+    // hr 以外は本文 1 行目区間を選択対象にする（hr はテキストを持たない）。
+    if (tag !== "hr") out[out.length - 1].sel = { type: "line", el };
   }
   ctx.srcIdx++;
   const brs = el.querySelectorAll<HTMLBRElement>('br[data-type="hardbreak"]');
   brs.forEach((br) => {
+    const b = out.length;
     pushAfterBreak(out, br, ctx.srcIdx + 1, offset);
+    setLastSel(out, b, { type: "break", br });
     ctx.srcIdx++;
   });
 }
@@ -376,16 +433,21 @@ function walkLiSrc(
 ): void {
   const beforeLen = out.length;
   pushAt(out, li, ctx.srcIdx + 1, offset);
-  // 折りたたみ中のリスト項目も From-To 表示の起点として印を付ける。
-  if (out.length > beforeLen && li.closest(".list-fold.is-collapsed")) {
-    out[out.length - 1].collapsed = true;
+  if (out.length > beforeLen) {
+    // 折りたたみ中のリスト項目も From-To 表示の起点として印を付ける。
+    if (li.closest(".list-fold.is-collapsed")) {
+      out[out.length - 1].collapsed = true;
+    }
+    out[out.length - 1].sel = { type: "line", el: li };
   }
   ctx.srcIdx++;
   // 項目本文の継続行（インデント継続＝hardbreak）も 1 行ずつ数える。
   // 例:「- VSCode Marketplace」の次行にインデントされた URL があるケース。
   // ネストリスト内の hardbreak は除外し、項目直下の本文だけを対象にする。
   liContentHardbreaks(li).forEach((br) => {
+    const b = out.length;
     pushAfterBreak(out, br, ctx.srcIdx + 1, offset);
+    setLastSel(out, b, { type: "break", br });
     ctx.srcIdx++;
   });
   findNestedLists(li).forEach((nested) =>
@@ -746,6 +808,117 @@ function render(inner: HTMLElement, entries: Entry[]) {
   }
   while (inner.children.length > entries.length) {
     inner.lastElementChild?.remove();
+  }
+}
+
+/**
+ * 行番号クリックに応じて、対応するソース行を選択する。
+ * - line / break: その行のテキスト区間（ハードブレーク境界まで）を TextSelection。
+ * - row         : テーブル行全体を CellSelection で選択。
+ */
+function selectSourceLine(view: EditorView, anchor: SelAnchor): void {
+  if (anchor.type === "row") {
+    selectTableRow(view, anchor.el);
+    return;
+  }
+  let pos: number;
+  if (anchor.type === "break") {
+    // ハードブレーク直後（次の継続行の先頭）の文書位置を DOM から直接求める。
+    // 座標→posAtCoords は折り返し境界で前行末に丸められ 1 行ズレるため使わない。
+    const p = posAfterBreak(view, anchor.br);
+    if (p == null) return;
+    pos = p;
+  } else {
+    const rect = getFirstLineRect(anchor.el) ?? anchor.el.getBoundingClientRect();
+    if (!rect || rect.height === 0) return;
+    const coords = view.posAtCoords({
+      left: rect.left + 2,
+      top: rect.top + rect.height / 2,
+    });
+    if (!coords) return;
+    pos = coords.pos;
+  }
+  const seg = lineSegment(view.state, pos);
+  if (!seg) return;
+  view.focus();
+  view.dispatch(
+    view.state.tr
+      .setSelection(TextSelection.create(view.state.doc, seg.from, seg.to))
+      .scrollIntoView(),
+  );
+}
+
+/**
+ * pos を含むテキストブロック内の「1 ソース行」区間（前後のハードブレークに
+ * 挟まれた範囲）を求める。ハードブレークが無ければテキストブロック全体。
+ */
+function lineSegment(
+  state: EditorState,
+  pos: number,
+): { from: number; to: number } | null {
+  const $pos = state.doc.resolve(pos);
+  let d = $pos.depth;
+  while (d > 0 && !$pos.node(d).isTextblock) d--;
+  if (d === 0) return null;
+  const tb = $pos.node(d);
+  const tbStart = $pos.start(d);
+  const tbEnd = tbStart + tb.content.size;
+  let from = tbStart;
+  let to = tbEnd;
+  tb.forEach((child, childOffset) => {
+    if (child.type.name !== "hardbreak") return;
+    const at = tbStart + childOffset;
+    // pos より前のハードブレーク末尾を区間開始の候補にする。
+    if (at + child.nodeSize <= pos) from = Math.max(from, at + child.nodeSize);
+    // pos 以降の最初のハードブレークを区間終端にする。
+    else if (at < to) to = at;
+  });
+  return { from, to };
+}
+
+/** テーブル行（tr）の全セルを CellSelection で選択する。 */
+function selectTableRow(view: EditorView, tr: HTMLElement): void {
+  const cells = tr.querySelectorAll<HTMLElement>("th, td");
+  if (cells.length === 0) return;
+  const $first = cellAround(view, cells[0]);
+  const $last = cellAround(view, cells[cells.length - 1]);
+  if (!$first || !$last) return;
+  view.focus();
+  view.dispatch(
+    view.state.tr
+      .setSelection(CellSelection.rowSelection($first, $last))
+      .scrollIntoView(),
+  );
+}
+
+/** セル DOM から、そのセル直前を指す ResolvedPos を得る（CellSelection 用）。 */
+function cellAround(view: EditorView, cellEl: HTMLElement): ResolvedPos | null {
+  let pos: number;
+  try {
+    pos = view.posAtDOM(cellEl, 0);
+  } catch {
+    return null;
+  }
+  const $pos = view.state.doc.resolve(pos);
+  for (let d = $pos.depth; d > 0; d--) {
+    const name = $pos.node(d).type.name;
+    if (name === "table_cell" || name === "table_header") {
+      return view.state.doc.resolve($pos.before(d));
+    }
+  }
+  return null;
+}
+
+/** ハードブレーク <br> 直後（次の継続行の先頭）の文書位置を返す。 */
+function posAfterBreak(view: EditorView, br: HTMLBRElement): number | null {
+  const parent = br.parentNode;
+  if (!parent) return null;
+  const idx = Array.prototype.indexOf.call(parent.childNodes, br);
+  if (idx < 0) return null;
+  try {
+    return view.posAtDOM(parent as Node, idx + 1);
+  } catch {
+    return null;
   }
 }
 

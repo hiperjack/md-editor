@@ -548,6 +548,14 @@ body.is-resizing-outline {
   box-sizing: border-box;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  /* 行番号クリックでその行を選択する（ガター自体は pointer-events:none なので
+     クリック可能にするためここで有効化する）。 */
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.line-no:hover {
+  color: var(--accent);
 }
 
 /* Crepeのデフォルトテーマを軸に微調整 */
