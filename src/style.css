@@ -579,9 +579,20 @@ body.is-resizing-outline {
 #editor-host .milkdown {
   min-height: 100%;
   height: auto;
+  /* ProseMirror を縦方向に伸ばして余白部分も編集領域にする（下記参照）。
+     在席の子は ProseMirror のみ（他は absolute/fixed のツールチップ類）。 */
+  display: flex;
+  flex-direction: column;
 }
 
+/*
+  内容が短いとき ProseMirror は内容分の高さしか持たず、その下の .milkdown 余白を
+  クリックするとエディタ外＝フォーカスが外れてキャレットが消える。flex で縦に
+  伸ばし、余白部分（下パディング）も ProseMirror に含めることで、下の空白を
+  クリックしても文末にキャレットが置かれフォーカスが保たれる。
+*/
 #editor-host .milkdown .ProseMirror {
+  flex: 1 1 auto;
   min-height: 100%;
   padding: 14px 64px 96px;
   /* 左パディングはガター幅 + 隙間20px に追従（隙間に折りたたみ三角が入る）。 */
