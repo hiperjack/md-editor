@@ -511,6 +511,28 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       ensureDocumentStyles();
       setHljsThemeStyle(docTheme.get().theme.highlightTheme);
       container.innerHTML = tab.previewHtml ?? "";
+      // 開いた時点のエディタ拡大率を初期ズームとして引き継ぐ。
+      // エディタの絶対pxではなく既定(15px)からの倍率を使い、プレビューのCSS zoomへ反映する。
+      // 以降はプレビュー上の Ctrl+ホイールで独立して調整できる（main.ts の adjustPreviewZoom）。
+      const EDITOR_DEFAULT_FONT_PX = 15; // settings.ts DEFAULT_SETTINGS.fontSize
+      const PREVIEW_ZOOM_MIN = 0.5;
+      const PREVIEW_ZOOM_MAX = 3.0;
+      const editorPx =
+        parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue(
+            "--editor-font-size",
+          ),
+        ) || EDITOR_DEFAULT_FONT_PX;
+      const initialZoom = Math.min(
+        PREVIEW_ZOOM_MAX,
+        Math.max(PREVIEW_ZOOM_MIN, editorPx / EDITOR_DEFAULT_FONT_PX),
+      );
+      if (initialZoom !== 1) {
+        container.dataset.zoom = String(initialZoom);
+        container
+          .querySelector<HTMLElement>(".document")
+          ?.style.setProperty("zoom", String(initialZoom));
+      }
       // 見出し折りたたみ（表示のみ）を取り付ける。
       attachPreviewFold(container);
     }
