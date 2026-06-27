@@ -284,6 +284,39 @@ export async function openHtmlPreviewTab(editor: EditorHost): Promise<void> {
 }
 
 /**
+ * アクティブタブの内容を、プレゼン（スライドショー）として読み取り専用の新規タブに表示する。
+ * HTML出力と同一の文書HTMLをスライド単位に区切って見せる（mode="slideshow"）。
+ * 文書プレビュー（openHtmlPreviewTab）と同じレンダリング結果を共有する。
+ */
+export async function openPresentationPreviewTab(
+  editor: EditorHost,
+): Promise<void> {
+  const tab = store.getActive();
+  if (!tab) return;
+  const markdown = editor.getMarkdown(tab.id);
+  if (markdown === null) return; // プレビュータブ自身など、編集内容がない場合
+
+  try {
+    const { html, title } = await renderExportPreview(tab.filePath, markdown);
+    store.addPreviewTab({
+      title: `${t("preview.slideTabPrefix")}${title.replace(t("preview.tabPrefix"), "")}`,
+      html,
+      mode: "slideshow",
+      sourceTabId: tab.id,
+      sourceFilePath: tab.filePath,
+    });
+    const created = store.getActive();
+    if (created) await editor.show(created);
+  } catch (e) {
+    console.error("openPresentationPreviewTab failed:", e);
+    await message(
+      `${t("export.failed")}\n${e instanceof Error ? e.message : String(e)}`,
+      { kind: "error" },
+    );
+  }
+}
+
+/**
  * 外部HTMLファイルをサンドボックスiframeの読み取り専用タブで開く。
  */
 export async function openHtmlFileTab(

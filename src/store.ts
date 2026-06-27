@@ -11,8 +11,8 @@ export type Tab = {
   previewHtml?: string;
   /** preview タブ: タブに表示する名前。 */
   previewTitle?: string;
-  /** preview タブの種別。"export"=markdown出力プレビュー（既定）、"htmlfile"=外部HTMLをiframe表示。 */
-  previewMode?: "export" | "htmlfile";
+  /** preview タブの種別。"export"=markdown出力プレビュー（既定）、"slideshow"=プレゼン表示、"htmlfile"=外部HTMLをiframe表示。 */
+  previewMode?: "export" | "slideshow" | "htmlfile";
   /** previewMode "htmlfile" のときの iframe srcdoc 用の生HTML。 */
   previewSrcDoc?: string;
   /** 更新（再レンダリング）用: 元エディタタブのid（同一ウィンドウ内）。 */
@@ -114,7 +114,7 @@ export const store = {
     title: string;
     html?: string;
     srcDoc?: string;
-    mode?: "export" | "htmlfile";
+    mode?: "export" | "slideshow" | "htmlfile";
     sourceTabId?: string | null;
     sourceFilePath?: string | null;
   }): string {

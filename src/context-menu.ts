@@ -87,7 +87,9 @@ export function showContextMenu(x: number, y: number, items: MenuItem[]): void {
   menu.style.left = "0px";
   menu.style.top = "0px";
   menu.style.visibility = "hidden";
-  getRoot().appendChild(menu);
+  // フルスクリーン中は、表示されるのが fullscreenElement のサブツリーだけのため、
+  // メニューもその配下に入れないと見えない（発表モードの右クリック対応）。
+  (document.fullscreenElement ?? getRoot()).appendChild(menu);
   menuEl = menu;
 
   const w = menu.offsetWidth;

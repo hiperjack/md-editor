@@ -27,6 +27,14 @@ type ButtonSpec = {
   titleKey: string;
   /** "right" を指定すると右寄せ。最初に出現したものより前にflex-spacerが差し込まれる。 */
   align?: "right";
+  /**
+   * タブ種別による表示制御（未指定なら常時表示）。
+   *  - "editor": 編集タブのみ表示（書式系ボタン）。
+   *  - "editorExport": 編集タブとHTMLプレビュー(export)のみ表示（折りたたみ全解除など）。
+   *  - "hideSlideshow": プレゼンタブでは隠す（それ以外は表示）。
+   * 実際の出し分けは body[data-tabkind] とCSSで行う。
+   */
+  vis?: "editor" | "editorExport" | "hideSlideshow";
 };
 
 // Lucide由来の単純なSVGパス（24x24, stroke-based）
@@ -42,6 +50,7 @@ const ICONS: Record<string, string> = {
   file_export:
     "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
   eye: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z",
+  presentation: "M2 3h20M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3M7 21l5-5 5 5",
   bold: "M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6zM6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z",
   italic: "M19 4h-9M14 20H5M15 4 9 20",
   strike: "M16 4H9a3 3 0 0 0-2.83 4M14 12a4 4 0 0 1 0 8H6M4 12h16",
@@ -81,30 +90,35 @@ const BUTTONS: ButtonSpec[] = [
   { key: "file_save_as", icon: ICONS.file_save_as, titleKey: "tb.file_save_as" },
   { key: "file_export_html", icon: ICONS.file_export, titleKey: "tb.file_export" },
   { key: "file_html_preview", icon: ICONS.eye, titleKey: "tb.file_html_preview" },
+  { key: "file_presentation", icon: ICONS.presentation, titleKey: "tb.file_presentation" },
   { key: "view_source", icon: ICONS.source, titleKey: "tb.source_toggle" },
-  { key: "sep", icon: "", titleKey: "" },
-  { key: "fmt_h1", icon: ICONS.h1, titleKey: "tb.h1" },
-  { key: "fmt_h2", icon: ICONS.h2, titleKey: "tb.h2" },
-  { key: "fmt_h3", icon: ICONS.h3, titleKey: "tb.h3" },
-  { key: "fmt_h4", icon: ICONS.h4, titleKey: "tb.h4" },
-  { key: "sep", icon: "", titleKey: "" },
-  { key: "fmt_bold", icon: ICONS.bold, titleKey: "tb.bold" },
-  { key: "fmt_italic", icon: ICONS.italic, titleKey: "tb.italic" },
-  { key: "fmt_strike", icon: ICONS.strike, titleKey: "tb.strike" },
-  { key: "fmt_code", icon: ICONS.code, titleKey: "tb.code" },
-  { key: "sep", icon: "", titleKey: "" },
-  { key: "fmt_bullet", icon: ICONS.bullet, titleKey: "tb.bullet" },
-  { key: "fmt_ordered", icon: ICONS.ordered, titleKey: "tb.ordered" },
-  { key: "fmt_quote", icon: ICONS.quote, titleKey: "tb.quote" },
-  { key: "fmt_codeblock", icon: ICONS.codeblock, titleKey: "tb.codeblock" },
-  { key: "sep", icon: "", titleKey: "" },
-  { key: "fmt_table", icon: ICONS.table, titleKey: "tb.table" },
-  { key: "fmt_link", icon: ICONS.link, titleKey: "tb.link" },
-  { key: "fmt_image", icon: ICONS.image, titleKey: "tb.image" },
-  { key: "fmt_hr", icon: ICONS.hr, titleKey: "tb.hr" },
-  // 右端側のグループ: spacerの右に区切り→全展開→設定ボタンの順で並ぶ
+  // プレゼン操作バーの差し込み口。
+  { key: "pres_slot", icon: "", titleKey: "" },
+  // ソース表示の横の区切り。プレゼンタブでは操作バー先頭側に区切りを置くため隠す。
+  { key: "sep", icon: "", titleKey: "", vis: "hideSlideshow" },
+  { key: "fmt_h1", icon: ICONS.h1, titleKey: "tb.h1", vis: "editor" },
+  { key: "fmt_h2", icon: ICONS.h2, titleKey: "tb.h2", vis: "editor" },
+  { key: "fmt_h3", icon: ICONS.h3, titleKey: "tb.h3", vis: "editor" },
+  { key: "fmt_h4", icon: ICONS.h4, titleKey: "tb.h4", vis: "editor" },
+  { key: "sep", icon: "", titleKey: "", vis: "editor" },
+  { key: "fmt_bold", icon: ICONS.bold, titleKey: "tb.bold", vis: "editor" },
+  { key: "fmt_italic", icon: ICONS.italic, titleKey: "tb.italic", vis: "editor" },
+  { key: "fmt_strike", icon: ICONS.strike, titleKey: "tb.strike", vis: "editor" },
+  { key: "fmt_code", icon: ICONS.code, titleKey: "tb.code", vis: "editor" },
+  { key: "sep", icon: "", titleKey: "", vis: "editor" },
+  { key: "fmt_bullet", icon: ICONS.bullet, titleKey: "tb.bullet", vis: "editor" },
+  { key: "fmt_ordered", icon: ICONS.ordered, titleKey: "tb.ordered", vis: "editor" },
+  { key: "fmt_quote", icon: ICONS.quote, titleKey: "tb.quote", vis: "editor" },
+  { key: "fmt_codeblock", icon: ICONS.codeblock, titleKey: "tb.codeblock", vis: "editor" },
+  { key: "sep", icon: "", titleKey: "", vis: "editor" },
+  { key: "fmt_table", icon: ICONS.table, titleKey: "tb.table", vis: "editor" },
+  { key: "fmt_link", icon: ICONS.link, titleKey: "tb.link", vis: "editor" },
+  { key: "fmt_image", icon: ICONS.image, titleKey: "tb.image", vis: "editor" },
+  { key: "fmt_hr", icon: ICONS.hr, titleKey: "tb.hr", vis: "editor" },
+  // 右端側のグループ: spacerの右に 全展開 → 区切り → 設定 の順で並ぶ。
+  // 全展開はHTMLプレビューでも有効。区切りと設定は常時表示（設定ボタンの左に区切り）。
+  { key: "view_expand_all", icon: ICONS.expand_all, titleKey: "tb.expand_all", align: "right", vis: "editorExport" },
   { key: "sep", icon: "", titleKey: "", align: "right" },
-  { key: "view_expand_all", icon: ICONS.expand_all, titleKey: "tb.expand_all", align: "right" },
   { key: "view_font", icon: ICONS.settings, titleKey: "tb.settings", align: "right" },
 ];
 
@@ -173,8 +187,25 @@ export function createToolbar(
 
   const titleUpdaters: Array<() => void> = [];
   let spacerInserted = false;
+  // タブ種別による表示制御クラス（CSSが body[data-tabkind] と組で出し分ける）。
+  const visClass = (spec: ButtonSpec): string =>
+    spec.vis === "editor"
+      ? " toolbar-vis-editor"
+      : spec.vis === "editorExport"
+        ? " toolbar-vis-editorexport"
+        : spec.vis === "hideSlideshow"
+          ? " toolbar-vis-hideslideshow"
+          : "";
 
   for (const spec of BUTTONS) {
+    // プレゼン操作バーの差し込み口。
+    if (spec.key === "pres_slot") {
+      const slot = document.createElement("span");
+      slot.className = "toolbar-pres-slot";
+      slot.id = "toolbar-pres-slot";
+      parent.appendChild(slot);
+      continue;
+    }
     // 最初に出現した右寄せ要素（sepでも可）の直前に flex spacer を挿入して、
     // 以降を右端へ追いやる。
     if (spec.align === "right" && !spacerInserted) {
@@ -185,12 +216,12 @@ export function createToolbar(
     }
     if (spec.key === "sep") {
       const sep = document.createElement("span");
-      sep.className = "toolbar-sep";
+      sep.className = "toolbar-sep" + visClass(spec);
       parent.appendChild(sep);
       continue;
     }
     const btn = document.createElement("button");
-    btn.className = "toolbar-btn";
+    btn.className = "toolbar-btn" + visClass(spec);
     btn.title = t(spec.titleKey);
     btn.dataset.action = spec.key;
     btn.innerHTML = svg(spec.icon);

@@ -400,10 +400,17 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
     attachScrollSpy();
   };
 
+  // プレゼン（スライドショー）タブはプレゼンUIが自前の左サイドバー（サムネ一覧）を
+  // 持つため、アプリのアウトラインパネルは実効非表示にする（設定値は変えず、抜けたら復帰）。
+  const isPresentationActive = (): boolean => {
+    const a = store.getActive();
+    return a?.kind === "preview" && a.previewMode === "slideshow";
+  };
+
   // settings.showOutline に応じてパネルの表示/非表示を反映。
   // ツールバーボタンの active 状態は main.ts 側（ツールバー生成後）で同期する。
   const applyVisibility = () => {
-    const visible = settings.get().showOutline;
+    const visible = settings.get().showOutline && !isPresentationActive();
     panel.classList.toggle("is-visible", visible);
     document
       .getElementById("outline-resizer")
@@ -418,6 +425,15 @@ export function createOutlinePanel(editor: EditorHost): OutlinePanel {
   };
   applyVisibility();
   settings.subscribe(applyVisibility);
+  // プレゼンタブへ出入りしたときだけ実効表示状態を取り直す（毎回の再描画は避ける）。
+  let presActive = isPresentationActive();
+  store.subscribe(() => {
+    const now = isPresentationActive();
+    if (now !== presActive) {
+      presActive = now;
+      applyVisibility();
+    }
+  });
 
   // 内容変更・タブ切替で rAF デバウンスして再構築（表示中のみ）。
   let scheduled = false;

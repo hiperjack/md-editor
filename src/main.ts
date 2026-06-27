@@ -35,7 +35,9 @@ import { confirmCloseAll } from "./modal";
 import { settings } from "./settings";
 import { docTheme, resolveMermaidScheme } from "./theme";
 import { openFontSettings } from "./settings-modal";
-import { exportActiveTabAsHtml, openHtmlPreviewTab, openHtmlFileTab, refreshPreviewTab, canRefreshPreview as canRefreshPreviewTab } from "./exporter";
+import { exportActiveTabAsHtml, openHtmlPreviewTab, openPresentationPreviewTab, openHtmlFileTab, refreshPreviewTab, canRefreshPreview as canRefreshPreviewTab } from "./exporter";
+import { startPresentation, togglePresentationView, togglePresentationLaser, selectPresentationSlide, isPresentationGridView, isPresentationFullscreen, setPresentationChromeSync, getPresentationToolbar } from "./presentation";
+import { expandAllPreviewFolds } from "./preview-fold";
 import { showContextMenu, type MenuItem } from "./context-menu";
 import { printActiveTab } from "./print";
 import { installDiagramViewerTrigger } from "./diagram-viewer";
@@ -43,6 +45,7 @@ import { setMermaidColorScheme } from "./mermaid-renderer";
 import { setLang, t, onLangChange } from "./i18n";
 import "./style.css";
 import "./styles/print.css";
+import "./styles/presentation.css";
 
 function isTauriContext(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -150,6 +153,10 @@ async function bootstrap(): Promise<void> {
       if ((e.target as Element | null)?.closest?.(".diagram-viewer-overlay")) {
         return;
       }
+      // プレゼンプレビューは自前で Ctrl+ホイール（グリッドのタイル拡縮）を処理する。
+      if ((e.target as Element | null)?.closest?.(".presentation")) {
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       const delta = e.deltaY > 0 ? -1 : 1;
@@ -180,13 +187,18 @@ async function bootstrap(): Promise<void> {
       // 再読み込み（Ctrl+R / Ctrl+Shift+R / F5 / Shift+F5）。
       // リロードするとタブ状態がメモリごとリセットされ、未保存内容が
       // 無警告で失われる（onCloseRequested も発火しない）ため抑止する。
-      // ただしプレビュータブ上の単独 F5 は、そのプレビューの「更新」に割り当てる。
+      // ただしプレビュータブ上の F5 は用途別に割り当てる:
+      //  - プレゼンタブ: F5=先頭から発表 / Shift+F5=表示中ページから発表
+      //  - その他プレビュー: 単独 F5=プレビュー更新
       if (key === "f5" || (mod && key === "r")) {
         e.preventDefault();
-        if (key === "f5" && !e.shiftKey && !mod) {
+        if (key === "f5" && !mod) {
           const active = store.getActive();
-          if (
+          if (active?.kind === "preview" && active.previewMode === "slideshow") {
+            startPresentation(active.id, !e.shiftKey);
+          } else if (
             active &&
+            !e.shiftKey &&
             active.kind === "preview" &&
             canRefreshPreviewTab(active, editor)
           ) {
@@ -332,6 +344,15 @@ async function bootstrap(): Promise<void> {
         await openHtmlPreviewTab(editor);
       })();
     },
+    onPresentation: (id) => {
+      // 右クリックしたタブをアクティブにしてから、その内容でプレゼンを開く
+      void (async () => {
+        store.setActive(id);
+        const a = store.getActive();
+        if (a) await editor.show(a);
+        await openPresentationPreviewTab(editor);
+      })();
+    },
     onToggleSource: (id) => {
       // 右クリックしたタブをアクティブにしてからソース表示をトグルする。
       void (async () => {
@@ -395,6 +416,7 @@ async function bootstrap(): Promise<void> {
     },
     file_export_html: () => void exportActiveTabAsHtml(editor),
     file_html_preview: () => void openHtmlPreviewTab(editor),
+    file_presentation: () => void openPresentationPreviewTab(editor),
     file_print: () => void printActiveTab(editor),
     file_close: () => {
       const a = store.getActive();
@@ -413,7 +435,20 @@ async function bootstrap(): Promise<void> {
       const a = store.getActive();
       if (a) editor.toggleSourceMode(a.id);
     },
+    // プレゼンタブのときだけ、デッキ／一覧モードを切り替える（Alt+V→D）。
+    view_present_toggle: () => {
+      const a = store.getActive();
+      if (a?.kind === "preview" && a.previewMode === "slideshow") {
+        togglePresentationView(a.id);
+      }
+    },
     view_expand_all: () => {
+      // HTMLプレビュー（export）タブでは本文の折りたたみを解除する。
+      const a = store.getActive();
+      if (a?.kind === "preview") {
+        if (a.previewMode === "export") expandAllPreviewFolds();
+        return;
+      }
       const v = editor.getActiveView();
       if (!v) return;
       expandAllHeadingFolds(v);
@@ -429,6 +464,28 @@ async function bootstrap(): Promise<void> {
   // ツールバー（ファイル系・表示系もボタンに含めるためmergeしてから渡す）
   const fmtActions = makeToolbarActions(editor);
   createToolbar(toolbarEl, { ...fileActions, ...viewActions, ...fmtActions });
+
+  // アクティブタブ種別に応じてツールバーを切り替える:
+  //  - 編集タブ: 通常の編集ボタン。
+  //  - プレビュー系タブ: 編集用ボタン（H1以降）を隠す。
+  //  - プレゼンタブ: 空いた場所にプレゼン操作バーを差し込む。
+  const presSlot = () => document.getElementById("toolbar-pres-slot");
+  const syncPresentationChrome = () => {
+    const a = store.getActive();
+    const kind =
+      !a || a.kind !== "preview" ? "editor" : a.previewMode ?? "export";
+    document.body.dataset.tabkind = kind;
+    const slot = presSlot();
+    if (!slot) return;
+    slot.replaceChildren();
+    if (a?.kind === "preview" && a.previewMode === "slideshow") {
+      const tb = getPresentationToolbar(a.id);
+      if (tb) slot.appendChild(tb);
+    }
+  };
+  setPresentationChromeSync(syncPresentationChrome);
+  store.subscribe(syncPresentationChrome);
+  syncPresentationChrome();
 
   // ── HTMLメニューバー（Alt 操作対応） ──────────────
   const editOps = makeEditOps(editor);
@@ -449,6 +506,12 @@ async function bootstrap(): Promise<void> {
         kind: "error",
       });
     }
+  };
+
+  // アクティブタブがプレゼン（スライドショー）プレビューか。
+  const isSlideshowActive = (): boolean => {
+    const a = store.getActive();
+    return a?.kind === "preview" && a.previewMode === "slideshow";
   };
 
   const buildMenus = (): TopMenu[] => [
@@ -481,6 +544,7 @@ async function bootstrap(): Promise<void> {
           { type: "sep" },
           { type: "item", label: t("menu.exportHtml"), mnemonic: "E", accel: "Ctrl+Shift+E", run: fileActions.file_export_html },
           { type: "item", label: t("menu.htmlPreview"), mnemonic: "H", accel: "Ctrl+Shift+V", run: fileActions.file_html_preview },
+          { type: "item", label: t("menu.presentation"), mnemonic: "R", accel: "Ctrl+Shift+P", run: fileActions.file_presentation },
           { type: "item", label: t("menu.print"), mnemonic: "P", accel: "Ctrl+P", run: fileActions.file_print },
           { type: "sep" },
           { type: "item", label: t("menu.close"), mnemonic: "C", accel: "Ctrl+W", run: fileActions.file_close },
@@ -537,9 +601,40 @@ async function bootstrap(): Promise<void> {
         { type: "item", label: t("menu.zoomOut"), mnemonic: "O", accel: "Ctrl+-", run: viewActions.view_zoom_out },
         { type: "item", label: t("menu.zoomReset"), mnemonic: "R", accel: "Ctrl+0", run: viewActions.view_zoom_reset },
         { type: "sep" },
-        { type: "item", label: t("menu.outline"), mnemonic: "L", accel: "Ctrl+Shift+O", run: viewActions.view_outline },
-        { type: "item", label: t("menu.source"), mnemonic: "U", accel: "Ctrl+Shift+I", run: viewActions.view_source },
-        { type: "item", label: t("menu.expandAll"), mnemonic: "E", run: viewActions.view_expand_all },
+        {
+          type: "item",
+          label: t("menu.outline"),
+          mnemonic: "L",
+          accel: "Ctrl+Shift+O",
+          // プレゼンタブではアウトラインは出さない（プレゼンが自前のサムネ一覧を持つ）。
+          enabled: () => !isSlideshowActive(),
+          run: viewActions.view_outline,
+        },
+        {
+          type: "item",
+          label: t("menu.source"),
+          mnemonic: "U",
+          accel: "Ctrl+Shift+I",
+          // ソース表示は編集タブ専用（プレビュー各種では無効）。
+          enabled: () => store.getActive()?.kind !== "preview",
+          run: viewActions.view_source,
+        },
+        {
+          type: "item",
+          label: t("menu.expandAll"),
+          mnemonic: "E",
+          // プレゼンタブでは折りたたみ概念がないため無効。
+          enabled: () => !isSlideshowActive(),
+          run: viewActions.view_expand_all,
+        },
+        {
+          type: "item",
+          label: t("menu.presentToggle"),
+          mnemonic: "D",
+          // プレゼンタブのときだけ有効。それ以外ではグレーアウトする（設定の直上に配置）。
+          enabled: () => isSlideshowActive(),
+          run: viewActions.view_present_toggle,
+        },
         { type: "item", label: t("menu.settings"), mnemonic: "S", accel: "Ctrl+,", run: viewActions.view_font },
       ],
     },
@@ -596,7 +691,49 @@ async function bootstrap(): Promise<void> {
         };
         // 印刷・HTML出力は「export プレビュー」でのみ有効（外部HTMLファイルは対象外）。
         const exportable = !!tab && tab.previewMode === "export";
-        const items: MenuItem[] = [
+        const isSlide = !!tab && tab.previewMode === "slideshow";
+        // スライドタイル/サムネを右クリックしたら、そのスライドを選択してから出す。
+        if (isSlide && tabId) {
+          const thumbEl = target.closest<HTMLElement>(".slide-thumb");
+          const idx = thumbEl?.dataset.index;
+          if (idx !== undefined) selectPresentationSlide(tabId, Number(idx));
+        }
+        const items: MenuItem[] = [];
+        // プレゼンタブでは、発表・レーザー・デッキ/一覧切替を先頭に出す。
+        if (isSlide && tabId) {
+          items.push(
+            {
+              type: "item",
+              label: t("pres.present"),
+              shortcut: "F5",
+              action: () => startPresentation(tabId, true),
+            },
+            {
+              type: "item",
+              label: t("pres.presentHere"),
+              shortcut: "Shift+F5",
+              action: () => startPresentation(tabId, false),
+            },
+            {
+              type: "item",
+              label: t("menu.presentToggle"),
+              shortcut: "G",
+              // 発表（フルスクリーン）中はデッキ固定のため切替不可。
+              disabled: isPresentationFullscreen(tabId),
+              action: () => togglePresentationView(tabId),
+            },
+            {
+              type: "item",
+              label: t("pres.laserMenu"),
+              shortcut: "L",
+              // 一覧モードではレーザーは使わないのでグレーアウト。
+              disabled: isPresentationGridView(tabId),
+              action: () => togglePresentationLaser(tabId),
+            },
+            { type: "separator" },
+          );
+        }
+        items.push(
           {
             type: "item",
             label: t("previewcm.refresh"),
@@ -621,7 +758,7 @@ async function bootstrap(): Promise<void> {
             disabled: !exportable,
             action: () => activateThenRun(() => fileActions.file_export_html?.()),
           },
-        ];
+        );
         showContextMenu(e.clientX, e.clientY, items);
       } else {
         e.preventDefault();

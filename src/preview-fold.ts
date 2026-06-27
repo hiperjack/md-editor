@@ -107,6 +107,22 @@ export function togglePreviewFoldByIndex(index: number): void {
   notifyFoldChange();
 }
 
+/** 表示中プレビューの折りたたみをすべて解除する（「折りたたみを全て解除」用）。 */
+export function expandAllPreviewFolds(): void {
+  const doc = activePreviewDoc();
+  if (!doc) return;
+  let changed = false;
+  for (const h of headingChildrenOf(doc)) {
+    if (h.classList.contains("pv-collapsed")) {
+      h.classList.remove("pv-collapsed");
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  recomputeFold(doc);
+  notifyFoldChange();
+}
+
 /**
  * プレビューペイン要素に見出し折りたたみを取り付ける。
  * `.document` 直下のフラットな兄弟（見出し・本文）を対象にする。

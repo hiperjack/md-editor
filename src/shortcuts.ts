@@ -49,11 +49,11 @@ export function setupShortcuts(
         return;
       }
 
-      // 印刷。Ctrl+P は独自印刷。Ctrl+Shift+P（Chromium標準のシステム印刷）は
-      // エディタ画面そのものを印刷してしまうため抑止のみ（何もしない）。
+      // Ctrl+P は独自印刷。Ctrl+Shift+P はプレゼン（スライドショー）を開く。
       if (e.key.toLowerCase() === "p") {
         e.preventDefault();
-        if (!e.shiftKey) fileActions.file_print?.();
+        if (e.shiftKey) fileActions.file_presentation?.();
+        else fileActions.file_print?.();
         return;
       }
 
@@ -126,6 +126,7 @@ export function setupShortcuts(
           fileActions.file_html_preview?.();
           return;
         }
+        // （Ctrl+Shift+P=プレゼンは上の "p" 分岐で処理済み）
         // アウトラインパネルの表示トグル
         if (k === "o") {
           e.preventDefault();
