@@ -43,6 +43,7 @@ import { headingFoldPlugin } from "./heading-fold";
 import { listFoldPlugin } from "./list-fold";
 import { fileTypeOfPath, wrapMermaidSource } from "./mmd";
 import { attachPreviewFold } from "./preview-fold";
+import { mountPresentation, forgetPresentationState } from "./presentation";
 import { ensureBlankLineBeforeTables } from "./md-normalize";
 import { mermaidCodePreview } from "./mermaid-renderer";
 import { docTheme } from "./theme";
@@ -504,6 +505,12 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       iframe.setAttribute("sandbox", "");
       iframe.srcdoc = tab.previewSrcDoc ?? "";
       container.appendChild(iframe);
+    } else if (tab.previewMode === "slideshow") {
+      // プレゼン（スライドショー）。文書プレビューと同じ文書CSS・ハイライトCSSを
+      // 注入し、同一HTMLをスライド単位に区切って見せる。
+      ensureDocumentStyles();
+      setHljsThemeStyle(docTheme.get().theme.highlightTheme);
+      mountPresentation(container, tab.previewHtml ?? "", tab.id);
     } else {
       // プレビューの .document が参照する文書CSS・ハイライトCSSを、このウィンドウへ
       // 確実に注入する（別ウィンドウへ移送された場合に背景等が欠落するのを防ぐ）。
@@ -1429,6 +1436,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         const entry = await pending;
         editors.delete(tabId);
         await destroyEntry(entry);
+        forgetPresentationState(tabId);
         return;
       }
 
@@ -1436,6 +1444,8 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       if (!entry) return;
       editors.delete(tabId);
       await destroyEntry(entry);
+      // プレゼンタブの現在スライド位置の記憶を破棄する（更新では破棄しない）。
+      forgetPresentationState(tabId);
     },
 
     getMarkdown(tabId: string) {

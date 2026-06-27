@@ -12,6 +12,7 @@ export type TabBarHandlers = {
   onCopyPath: (tabId: string) => void;
   /** タブの内容をHTMLプレビュータブで開く。 */
   onHtmlPreview: (tabId: string) => void;
+  onPresentation: (tabId: string) => void;
   /** タブの WYSIWYG ⇄ ソース編集 をトグルする。 */
   onToggleSource: (tabId: string) => void;
   /** タブを印刷する（PDF/印刷プレビュー）。 */
@@ -283,6 +284,13 @@ export function createTabBar(
             // プレビュータブ自身は対象外
             disabled: tab.kind === "preview",
             action: () => handlers.onHtmlPreview(tab.id),
+          },
+          {
+            type: "item",
+            label: t("tabcm.presentation"),
+            // プレビュータブ自身は対象外
+            disabled: tab.kind === "preview",
+            action: () => handlers.onPresentation(tab.id),
           },
           {
             type: "item",

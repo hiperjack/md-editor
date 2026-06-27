@@ -1,0 +1,323 @@
+/*
+ * プレゼンプレビューのレイアウト。
+ * スライドの中身（.document）は document.css とテーマCSS変数でそのまま描画され、
+ * ここではその外側（キャンバスの枠・サイドバー・グリッド・フルスクリーン）と、
+ * スライド用の最小調整（3ゾーン構成・ヘッダー固定・本文スクロール）を定義する。
+ */
+
+.editor-pane.preview-pane.presentation-host {
+  overflow: hidden;
+  background: var(--bg-1);
+  box-shadow: none;
+}
+
+.presentation {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  outline: none;
+  background: var(--bg-1);
+}
+
+/* ── 操作バー（アプリ上部ツールバー内のスロットに差し込まれる） ── */
+.pres-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* アプリのツールバー内のプレゼン用スロット。 */
+.toolbar-pres-slot {
+  display: inline-flex;
+  align-items: center;
+}
+/* ツールバーのタブ種別別の出し分け。
+ *  - vis-editor: 編集タブ以外では隠す（書式系ボタン）。
+ *  - vis-editorexport: プレゼン/外部HTMLでは隠す（=編集とHTMLプレビューでのみ表示）。
+ * 設定ボタンや「ソース表示横の区切り」は vis 未指定なので常時表示。 */
+body[data-tabkind]:not([data-tabkind="editor"]) .toolbar-vis-editor {
+  display: none !important;
+}
+body[data-tabkind="slideshow"] .toolbar-vis-editorexport,
+body[data-tabkind="htmlfile"] .toolbar-vis-editorexport {
+  display: none !important;
+}
+/* プレゼンタブでは隠す（ソース表示横の区切りなど）。 */
+body[data-tabkind="slideshow"] .toolbar-vis-hideslideshow {
+  display: none !important;
+}
+/* プレゼン操作バー先頭の区切り（デッキボタンの左）。アプリの .toolbar-sep に合わせる。 */
+.pres-sep {
+  display: inline-block;
+  width: 1px;
+  height: 18px;
+  margin: 0 6px;
+  background: var(--border, #d0d0d0);
+}
+.pres-btn {
+  border: 1px solid var(--border, #c8c8c8);
+  background: var(--bg-1, #fff);
+  color: var(--fg-1, #222);
+  border-radius: 5px;
+  padding: 3px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.pres-btn:hover:not(:disabled) { background: var(--bg-3, #e8e8e8); }
+.pres-btn.active {
+  background: var(--accent, #2563eb);
+  border-color: var(--accent, #2563eb);
+  color: #fff;
+}
+.pres-btn:disabled { opacity: 0.4; cursor: default; }
+.pres-counter {
+  font-size: 12px;
+  color: var(--fg-2, #555);
+  min-width: 56px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── デッキ（サイドバー＋主ビュー） ── */
+.pres-deck {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+.presentation.view-grid .pres-deck { display: none; }
+
+.pres-sidebar {
+  flex: 0 0 auto;
+  width: 220px;
+  overflow-y: auto;
+  overflow-x: hidden; /* 横スクロールは出さない。サムネは幅に合わせて縮む。 */
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-2, #f6f6f6);
+}
+/* サイドバー幅を変えるドラッグハンドル。 */
+.pres-sidebar-resizer {
+  flex: 0 0 auto;
+  width: 5px;
+  cursor: col-resize;
+  background: var(--border, #d0d0d0);
+  opacity: 0.5;
+}
+.pres-sidebar-resizer:hover,
+.pres-sidebar-resizer.dragging {
+  opacity: 1;
+  background: var(--accent, #2563eb);
+}
+.pres-mainview {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+/* ── グリッド ── */
+.pres-grid {
+  display: none;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 18px;
+  align-content: start;
+}
+.presentation.view-grid .pres-grid { display: grid; }
+
+/* ── サムネ / タイル ── */
+.slide-thumb {
+  position: relative;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 2px solid var(--border, #ccc);
+  border-radius: 4px;
+  background: var(--doc-bg, #fff);
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  box-sizing: border-box;
+}
+.slide-thumb.active { border-color: var(--accent, #2563eb); }
+/* サイドバー・タイルとも、枠幅に合わせて16:9で伸縮（横スクロールを出さない）。
+ * 中身（.slide-frame）は absolute のため、高さは padding-bottom で確実に作る。
+ * aspect-ratio だけだとグリッドのトラック高さが0と評価され、タイルが重なることがある。 */
+.pres-sidebar .slide-thumb,
+.slide-thumb.slide-tile {
+  width: 100% !important;
+  height: 0 !important;
+  padding-bottom: 56.25%; /* 9 / 16 */
+}
+/* サムネ/タイル内はクリックでスライド選択に専念させる。
+ * Mermaid図などの拡大（虫眼鏡）やホバー操作は無効化する。 */
+.slide-thumb .slide-canvas {
+  pointer-events: none;
+}
+/* サムネのフレームはボタン内いっぱいに（高さの取得に依存せず確実に充填）。 */
+.slide-thumb .slide-frame {
+  position: absolute;
+  inset: 0;
+}
+.slide-thumb-num {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  pointer-events: none;
+}
+
+/* ── 16:9 フレーム＋キャンバス ──
+ * フレームは表示領域いっぱいの「中央寄せの器」（透明）。16:9の紙面・背景・影は
+ * キャンバス側に付ける。これによりスライドは常に16:9で、その外側はアプリ背景の
+ * レターボックス（左右または上下が対称）になる。レターボックス幅はウィンドウ比で
+ * 変わるが、これは16:9を保つ以上は不可避な挙動。 */
+.slide-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.slide-canvas {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1280px;
+  height: 720px;
+  transform-origin: center center;
+  /* transform（中央寄せ＋拡縮）は JS（mountCanvas / buildThumb）が設定する。 */
+  overflow: hidden;
+  background: var(--doc-bg, #fff);
+}
+/* 主ビュー/フルスクリーンの16:9紙面に影をつける（サムネは枠側で表現）。 */
+.pres-mainview .slide-canvas {
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.22);
+  border-radius: 4px;
+}
+
+/* スライド本体（.document）を3ゾーンのフレックス構成へ切り替える。
+ * preview-pane の .document に付く margin/box-shadow を打ち消す。 */
+.slide-canvas .document.slide-doc {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  margin: 0;
+  box-shadow: none;
+  border-radius: 0;
+  box-sizing: border-box;
+  /* タイトルを上に寄せ、本文は下まで使えるよう上下パディングは小さめ。 */
+  padding: 18px 64px 24px;
+  display: flex;
+  flex-direction: column;
+  /* スライドは本文をやや大きめに。見出しの em もこれに比例する。 */
+  font-size: calc(var(--doc-font-size) * 1.35);
+  overflow: hidden;
+}
+
+/* ヘッダー（タイトル＋メッセージ）は固定表示。
+ * 見出しレベル（H1/H2…）に依らずタイトル・メッセージのサイズを全ページ統一する。
+ * document.css の `.document h1/h2` と詳細度が並ぶと注入順で負けるため、
+ * `.slide-canvas` を前置して詳細度を上げて確実に勝たせる。 */
+.slide-canvas .slide-header { flex: 0 0 auto; }
+.slide-canvas .slide-header > :is(h1, h2, h3, h4, h5, h6) {
+  margin: 0 0 0.15em;
+  font-size: 1.9em;
+  line-height: 1.2;
+}
+.slide-canvas .slide-header .slide-message {
+  margin: 0 0 0.4em;
+  font-size: 1.05em;
+  font-weight: 600;
+  color: var(--doc-text);
+  border-bottom: 2px solid var(--doc-accent-soft, currentColor);
+  padding-bottom: 0.3em;
+}
+
+/* 本文ゾーン。fit（zoom）で収め、下限超でゾーン内スクロール。 */
+.slide-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+.slide-body.scrollable { overflow-y: auto; }
+.slide-body-inner {
+  /* zoom は fitBody が設定する。 */
+  transform-origin: top left;
+}
+.slide-body-inner > :first-child { margin-top: 0; }
+
+/* ── タイトルスライド（見出し1で始まるスライド） ──
+ * 紙面の縦中央に、左揃えでタイトルを特大表示する。 */
+.slide-canvas .document.slide-doc.slide-title-page {
+  justify-content: center;
+  padding: 18px 72px;
+}
+.slide-canvas .slide-title-page .slide-header { flex: 0 0 auto; }
+.slide-canvas .slide-title-page .slide-header > h1 {
+  font-size: 3.4em;
+  line-height: 1.15;
+  margin: 0 0 0.2em;
+}
+/* タイトルスライドのメッセージはサブタイトル扱い（罫線なし）。 */
+.slide-canvas .slide-title-page .slide-header .slide-message {
+  font-size: 1.3em;
+  font-weight: 500;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.slide-canvas .slide-title-page .slide-body { flex: 0 0 auto; }
+
+.pres-empty {
+  color: var(--fg-2, #888);
+  font-size: 14px;
+}
+
+/* ── レーザーポインタ ── */
+.presentation.laser-on .slide-canvas,
+.presentation.laser-on .pres-mainview,
+.presentation.laser-on .pres-fullscreen {
+  cursor: none;
+}
+.pres-laser {
+  position: fixed;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 45, 45, 0.95) 0%,
+    rgba(255, 0, 0, 0.6) 45%,
+    rgba(255, 0, 0, 0) 75%
+  );
+  box-shadow: 0 0 10px 3px rgba(255, 0, 0, 0.5);
+  pointer-events: none;
+  z-index: 10000;
+}
+
+/* ── フルスクリーン発表 ── */
+.pres-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+.pres-fullscreen .slide-frame {
+  background: var(--doc-bg, #fff);
+}
