@@ -322,7 +322,34 @@ body[data-tabkind="slideshow"] .toolbar-vis-hideslideshow {
   background: var(--doc-bg, #fff);
 }
 /* フルスクリーン発表中はMermaid図の拡大ヒント（虫眼鏡カーソル）を出さない。
-   発表中はクリック拡大の導線が不要で、カーソルが目立つのを避ける。 */
-.pres-fullscreen .mermaid-figure {
+   発表中はクリック拡大の導線が不要で、カーソルが目立つのを避ける。
+   style.css の `.editor-pane.preview-pane .mermaid-figure { cursor: zoom-in }`
+   (詳細度 0,3,0) を上書きするため、同じ祖先を含めて詳細度を 0,4,0 に上げる。 */
+.editor-pane.preview-pane .pres-fullscreen .mermaid-figure {
   cursor: default;
+}
+
+/* ── 発表終了画面（PowerPoint風の黒画面）──
+   最終スライドからさらに進むと表示。クリック/キー/ホイールで先頭へ戻り終了する。 */
+.pres-end {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2em;
+  background: #000;
+  color: #e6e6e6;
+  cursor: pointer;
+  user-select: none;
+}
+.pres-end-title {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.pres-end-hint {
+  font-size: 15px;
+  color: #9a9a9a;
 }
