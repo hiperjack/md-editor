@@ -205,7 +205,11 @@ function fitBody(canvas: HTMLElement): void {
   inner.style.zoom = "1";
   body.classList.remove("scrollable");
   const avail = body.clientHeight;
-  const content = inner.scrollHeight;
+  // 本文の実高さは body 側の scrollHeight で測る。body は overflow:hidden で
+  // BFC を作るため、最後の子要素の margin-bottom が body の領域に含まれる。
+  // inner.scrollHeight はこの末尾マージンを取りこぼし、必要な縮小量を過小評価して
+  // 末尾（最後の段落）が枠下に数px はみ出して見切れていた。
+  const content = body.scrollHeight;
   if (avail <= 0 || content <= avail) return;
   const z = avail / content;
   if (z < MIN_BODY_ZOOM) {
@@ -395,6 +399,9 @@ export function mountPresentation(
   // ── フルスクリーン発表（前方参照のため先に宣言） ──
   let fsOverlay: HTMLElement | null = null;
   let fsFrame: HTMLElement | null = null;
+  // 発表終了画面（PowerPoint風）。最終スライドからさらに「次へ」で true になり、
+  // 黒画面を表示する。フルスクリーン専用の状態で、デッキ/グリッドの index には影響しない。
+  let atEnd = false;
 
   // ── レーザーポインタ ──
   // マウス位置に赤い光点を追従させ、スライド上のカーソルは隠す。
@@ -431,10 +438,30 @@ export function mountPresentation(
     setLaser(!laserOn);
   };
 
+  // 発表終了画面（黒背景）。クリックでも終了（先頭へ）できる。
+  const buildEndScreen = (): HTMLElement => {
+    const end = document.createElement("div");
+    end.className = "pres-end";
+    const title = document.createElement("div");
+    title.className = "pres-end-title";
+    title.textContent = t("pres.endTitle");
+    const hint = document.createElement("div");
+    hint.className = "pres-end-hint";
+    hint.textContent = t("pres.endHint");
+    end.append(title, hint);
+    end.addEventListener("click", () => goNext());
+    return end;
+  };
+
   const renderFullscreen = () => {
     if (!fsOverlay) return;
     fsOverlay.innerHTML = "";
     if (total === 0) return;
+    // 終了画面はスライドを描かず黒画面のみ（レーザーも出さない）。
+    if (atEnd) {
+      fsOverlay.appendChild(buildEndScreen());
+      return;
+    }
     fsFrame = mountCanvas(slides[index], template);
     fsOverlay.appendChild(fsFrame);
     // innerHTML クリアで外れるので、点が有効なら貼り直す。
@@ -525,6 +552,7 @@ export function mountPresentation(
     fsOverlay?.remove();
     fsOverlay = null;
     fsFrame = null;
+    atEnd = false;
     // 発表終了後もレーザーが有効なら、点を root 側へ戻す（オーバーレイ破棄で外れるため）。
     if (laserOn) {
       root.appendChild(laserDot);
@@ -535,6 +563,7 @@ export function mountPresentation(
 
   const enterFullscreen = () => {
     if (total === 0) return;
+    atEnd = false;
     if (fsOverlay) {
       // すでに発表中なら現在スライドを描き直すだけ（多重オーバーレイを防ぐ）。
       renderFullscreen();
@@ -564,6 +593,47 @@ export function mountPresentation(
     requestAnimationFrame(() => overlay.focus({ preventScroll: true }));
   };
 
+  // ── ページ送り（キー・ホイール・終了画面クリックで共通利用）──
+  // フルスクリーンでは PowerPoint 風に「最終スライド→次へ」で終了画面、さらに
+  // 「次へ」でフルスクリーン解除して先頭(P1)へ戻る。
+  function goNext(): void {
+    if (fsOverlay) {
+      if (atEnd) {
+        // 終了画面からさらに進む → 発表を終え、先頭へ戻る。
+        exitFullscreen();
+        setIndex(0);
+        return;
+      }
+      if (index >= total - 1) {
+        atEnd = true;
+        renderFullscreen();
+        return;
+      }
+    }
+    setIndex(index + 1);
+  }
+  function goPrev(): void {
+    if (fsOverlay && atEnd) {
+      // 終了画面から戻る → 最終スライドを再表示。
+      atEnd = false;
+      renderFullscreen();
+      return;
+    }
+    setIndex(index - 1);
+  }
+  // Home/End 等の直接ジャンプ。終了画面からのジャンプも実スライドへ確実に戻す。
+  function jumpTo(target: number): void {
+    const wasEnd = atEnd;
+    atEnd = false;
+    const clamped = Math.min(Math.max(0, target), Math.max(0, total - 1));
+    // 終了画面から同じ index へ戻る場合、setIndex は早期 return するため明示再描画する。
+    if (fsOverlay && wasEnd && clamped === index) {
+      renderFullscreen();
+      return;
+    }
+    setIndex(clamped);
+  }
+
   // ── 操作配線 ──
   btnDeck.addEventListener("click", () => setView("deck"));
   btnGrid.addEventListener("click", () => setView("grid"));
@@ -576,16 +646,16 @@ export function mountPresentation(
     const k = e.key;
     if (k === "ArrowRight" || k === "ArrowDown" || k === "PageDown" || k === " ") {
       e.preventDefault();
-      setIndex(index + 1);
+      goNext();
     } else if (k === "ArrowLeft" || k === "ArrowUp" || k === "PageUp") {
       e.preventDefault();
-      setIndex(index - 1);
+      goPrev();
     } else if (k === "Home") {
       e.preventDefault();
-      setIndex(0);
+      jumpTo(0);
     } else if (k === "End") {
       e.preventDefault();
-      setIndex(total - 1);
+      jumpTo(total - 1);
     } else if (k === "g" || k === "G") {
       e.preventDefault();
       setView(view === "grid" ? "deck" : "grid");
@@ -650,7 +720,8 @@ export function mountPresentation(
       setTimeout(() => {
         wheelLock = false;
       }, 160);
-      setIndex(index + (e.deltaY > 0 ? 1 : -1));
+      if (e.deltaY > 0) goNext();
+      else goPrev();
     },
     { passive: false },
   );

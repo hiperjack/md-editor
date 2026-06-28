@@ -439,6 +439,10 @@ export function installDiagramViewerTrigger(): void {
     "click",
     (e) => {
       const target = e.target as Element | null;
+      // フルスクリーン発表中はクリック拡大ビューアを開かない。
+      // クリックをスライド操作に専念させ、図が選択・パン/ズーム状態になるのを防ぐ。
+      // デッキ／グリッド表示（フルスクリーン外）では従来どおり拡大ビューアを使える。
+      if (target?.closest(".pres-fullscreen")) return;
       // エディタ内インラインのMermaidプレビュー。
       const inlinePreview = target?.closest(
         ".editor-pane .preview .mermaid-preview",
