@@ -23,7 +23,7 @@
  *   - 本文: それ以降すべて（はみ出たら zoom で fit→下限超でゾーン内スクロール）
  */
 
-import { t } from "./i18n";
+import { t, onLangChange } from "./i18n";
 
 /** 論理キャンバスサイズ（16:9固定）。外側スケールはこの座標系を変えない。 */
 const CANVAS_W = 1280;
@@ -52,6 +52,9 @@ type Slide = {
 
 /** プレビュータブごとの現在スライド番号。更新（再生成）をまたいで保持する。 */
 const lastIndexByTab = new Map<string, number>();
+
+/** プレビュータブごとの言語切替リスナ解除関数。再マウント/タブ閉じで解除する。 */
+const langUnsubByTab = new Map<string, () => void>();
 
 /** プレビュータブごとの操作コントローラ（F5/Shift+F5・メニュー・コンテキストメニュー用）。 */
 const controllers = new Map<
@@ -87,6 +90,8 @@ export function getPresentationToolbar(tabId: string): HTMLElement | null {
 export function forgetPresentationState(tabId: string): void {
   lastIndexByTab.delete(tabId);
   controllers.delete(tabId);
+  langUnsubByTab.get(tabId)?.();
+  langUnsubByTab.delete(tabId);
 }
 
 function isHeading(el: Element): boolean {
@@ -334,6 +339,9 @@ export function mountPresentation(
 ): void {
   const { template, slides } = parseSlides(html);
   container.classList.add("presentation-host");
+  // 同じタブの再マウント時は、前回の言語切替リスナを解除しておく（多重登録を防ぐ）。
+  langUnsubByTab.get(tabId)?.();
+  langUnsubByTab.delete(tabId);
 
   const root = document.createElement("div");
   root.className = "presentation";
@@ -763,6 +771,23 @@ export function mountPresentation(
     },
     toolbar,
   });
+
+  // 言語切替時、操作バーのボタン名・ツールチップ・空状態テキストを貼り直す。
+  // （メニューバー同様、t() は生成時に評価されるため明示的な再適用が要る。）
+  const applyLang = () => {
+    btnDeck.textContent = t("pres.deckView");
+    btnDeck.title = `${t("pres.deckView")} (G)`;
+    btnGrid.textContent = t("pres.gridView");
+    btnGrid.title = `${t("pres.gridView")} (G)`;
+    btnPrev.title = `${t("pres.prev")} (←)`;
+    btnNext.title = `${t("pres.next")} (→)`;
+    btnLaser.textContent = t("pres.laser");
+    btnLaser.title = `${t("pres.laser")} (L)`;
+    btnFull.textContent = t("pres.fullscreen");
+    btnFull.title = `${t("pres.fullscreen")} (F / F5)`;
+    if (total === 0) renderMain();
+  };
+  langUnsubByTab.set(tabId, onLangChange(applyLang));
 
   // 初期表示。
   renderMain();
