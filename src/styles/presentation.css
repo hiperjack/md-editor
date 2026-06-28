@@ -145,6 +145,9 @@ body[data-tabkind="slideshow"] .toolbar-vis-hideslideshow {
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
   box-sizing: border-box;
+  /* <button> のUA既定 text-align:center が中身（スライド本文）に継承され、
+     主ビュー（div, 既定 left）と食い違ってサムネだけ中央寄せになるのを防ぐ。 */
+  text-align: left;
 }
 .slide-thumb.active { border-color: var(--accent, #2563eb); }
 /* サイドバー・タイルとも、枠幅に合わせて16:9で伸縮（横スクロールを出さない）。
