@@ -321,3 +321,8 @@ body[data-tabkind="slideshow"] .toolbar-vis-hideslideshow {
 .pres-fullscreen .slide-frame {
   background: var(--doc-bg, #fff);
 }
+/* フルスクリーン発表中はMermaid図の拡大ヒント（虫眼鏡カーソル）を出さない。
+   発表中はクリック拡大の導線が不要で、カーソルが目立つのを避ける。 */
+.pres-fullscreen .mermaid-figure {
+  cursor: default;
+}
