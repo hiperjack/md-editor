@@ -21,7 +21,7 @@ A desktop app that lets you **edit Markdown in its finished, rendered form** ins
 - **See it as you write it** — Edit directly with bold, headings, and lists already rendered (WYSIWYG). No round trips to a preview pane.
 - **See the raw Markdown when you want** — Toggle between the rendered view and the raw Markdown source (with line numbers) with a single key (`Ctrl+Shift+I`).
 - **Diagrams just work** — Mermaid you write in a code block becomes a live diagram in real time, and you can click to zoom. Diagram-only files (`.mmd` / `.mermaid`) open too.
-- **Present without leaving the editor** — Turn the same document into 16:9 slides and present full-screen, with a thumbnail deck, a grid overview, and a laser pointer (`Ctrl+Shift+P`). Slides split at `---` or headings.
+- **Present without leaving the editor** — Turn the same document into 16:9 slides and present full-screen, with a thumbnail deck, a grid overview, and a laser pointer (`Ctrl+Shift+P`). Slides split at `---` or headings. A bundled [Claude Code skill](./skills/presentation-md) can turn your notes into presentation-ready Markdown.
 - **Export what you see** — Export to HTML with the exact same look as the editor, and print to PDF.
 - **Light and fast** — Built with Tauri, so the installer is small and startup is quick.
 - **Bilingual** — Japanese and English UI, with switchable dark / light themes.
