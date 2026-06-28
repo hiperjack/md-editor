@@ -27,6 +27,7 @@ The menu bar is drawn in HTML rather than natively, so it supports mnemonic keyb
   - Supports detaching to / merging into another window
 - **Heading folding**: Hovering a heading shows a triangle icon on its left; clicking folds/unfolds the blocks beneath it (display only while editing — it does not affect the saved content). It is two-way linked with the left outline panel, so folding in either place stays consistent.
 - **HTML export / printing**: `Ctrl+Shift+E` exports HTML with the document theme applied. `Ctrl+P` prints the body only (the dialog can save to PDF). An `.mmd` tab becomes a standalone HTML file with the single diagram centered.
+- **Presentation view (slideshow)**: `Ctrl+Shift+P` (or right-click a tab → "Open presentation view", or the toolbar button) opens a read-only presentation tab built from the *same* render pipeline as HTML export, so slides look identical to the document. The document is split into 16:9 slides at `<hr>` (`---`) boundaries, or — when there are no horizontal rules — at H1/H2 headings. Each slide is laid out in three fixed zones: title (the leading heading), message (the first paragraph after it), and body (everything else, auto-zoomed to fit with in-zone scrolling below a minimum scale). Three views share one canvas renderer: a **deck** (thumbnail sidebar + main slide), a **grid** overview, and a **full-screen** present mode. A laser pointer (`L`) and "present from this slide" are available. The HTML-preview zoom level is inherited when the view opens.
 - **Document theme**: Font, line height, heading styles, colors, etc. can be adjusted in settings and are reflected in preview / export / print. The settings dialog is organized into tabs (General / Mermaid / HTML preview, etc.).
 - **Multi-window**: Drag a tab out of the window to create a new window (detach); drag it onto another window's tab bar to merge. If the source had only one tab, the source window closes. Opening the same file in multiple windows is detected and shown via a popup.
 - **Find & replace**: `Ctrl+F` opens the search bar, `Ctrl+H` expands the replace field. Supports case sensitivity, regular expressions (capture-reference replacement like `$1`), whole-word matching, and replace-all. It operates on the ProseMirror document, so undo works.
@@ -171,6 +172,22 @@ In addition to the above, the toolbar has (from the left) the outline toggle, th
 | `Alt+wheel` (over an image) | Resize the image block's pixel width |
 | Click (a Mermaid diagram) | Open the zoom viewer (wheel-zoom / pan / selection-mode toggle) |
 
+### Presentation view
+
+Opened with `Ctrl+Shift+P`. The following keys are active while a presentation tab is focused:
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl+Shift+P` | Open the presentation view for the current document |
+| `→` / `↓` / `PageDown` / `Space` | Next slide |
+| `←` / `↑` / `PageUp` | Previous slide |
+| `Home` / `End` | First / last slide |
+| `G` | Toggle deck / grid overview |
+| `L` | Toggle the laser pointer |
+| `F` / `F5` / `Enter` | Present full-screen |
+| `Esc` | Exit full-screen / leave grid |
+| `Ctrl+wheel` (grid) | Adjust the tile column width |
+
 ### Editing
 
 | Shortcut | Action |
@@ -219,6 +236,7 @@ md-editor/
 │   ├── print.ts                 # Body-only printing (@media print)
 │   ├── mermaid-renderer.ts      # Renders Mermaid to SVG (dynamic import)
 │   ├── diagram-viewer.ts        # Diagram zoom viewer (zoom / pan / selection mode)
+│   ├── presentation.ts          # Presentation view (slide split, deck / grid / full-screen, laser)
 │   ├── mmd.ts                   # Fence wrap/unwrap for .mmd / .mermaid
 │   ├── doc-styles.ts            # Supplies/injects document CSS and highlight themes
 │   ├── theme.ts                 # Document theme (font/color/headings, etc.) and CSS-variable generation
@@ -279,6 +297,10 @@ HTML export and the HTML preview tab go through the same `render-pipeline.ts`. T
 ### Mermaid and the diagram viewer
 
 ` ```mermaid ` blocks and `.mmd` / `.mermaid` files are converted to SVG by `mermaid-renderer.ts` (Mermaid itself is over 1 MB, so it is dynamically imported). Colors follow the display theme (on export they follow the document background). Clicking a diagram opens the zoom viewer in `diagram-viewer.ts`, with wheel-zoom, pan (hand), and a text-selection mode toggle. For inline diagrams in the editor, the viewer can jump back to the source code.
+
+### Presentation view
+
+`presentation.ts` reuses the exporter's rendered document HTML (`<main class="document">`) so slides match the HTML export pixel-for-pixel. Splitting is done on the *rendered DOM*, not the raw Markdown — splitting raw text would corrupt it (e.g. `text\n---` becomes a setext H2). Boundaries are `<hr>` first, falling back to H1/H2 when no rules are present. Each slide's children are assigned to three zones (title / message / body); the body is fit with a CSS `zoom` and drops to in-zone scrolling below a minimum scale. The deck, grid, and full-screen views all mount the same 16:9 canvas and only swap the outer layout. The presentation control bar lives in the app toolbar via a registered slot (a callback avoids a `presentation.ts ↔ main.ts` import cycle), and the current slide index is remembered per tab across re-renders.
 
 ### Cross-window tab transfer
 

@@ -14,22 +14,23 @@ Edit with formatting applied as you type, preview Mermaid diagrams inline, and e
 
 ## What is mdedit?
 
-A desktop app that lets you **edit Markdown in its finished, rendered form** instead of staring at raw syntax. There's no separate preview pane to jump back and forth to — what you write is the document. It also supports Mermaid diagrams, export to HTML and PDF, and working across multiple windows and tabs.
+A desktop app that lets you **edit Markdown in its finished, rendered form** instead of staring at raw syntax. There's no separate preview pane to jump back and forth to — what you write is the document. It also supports Mermaid diagrams, export to HTML and PDF, presenting your notes as slides, and working across multiple windows and tabs.
 
 ## Why mdedit?
 
 - **See it as you write it** — Edit directly with bold, headings, and lists already rendered (WYSIWYG). No round trips to a preview pane.
 - **See the raw Markdown when you want** — Toggle between the rendered view and the raw Markdown source (with line numbers) with a single key (`Ctrl+Shift+I`).
 - **Diagrams just work** — Mermaid you write in a code block becomes a live diagram in real time, and you can click to zoom. Diagram-only files (`.mmd` / `.mermaid`) open too.
+- **Present without leaving the editor** — Turn the same document into 16:9 slides and present full-screen, with a thumbnail deck, a grid overview, and a laser pointer (`Ctrl+Shift+P`). Slides split at `---` or headings.
 - **Export what you see** — Export to HTML with the exact same look as the editor, and print to PDF.
 - **Light and fast** — Built with Tauri, so the installer is small and startup is quick.
 - **Bilingual** — Japanese and English UI, with switchable dark / light themes.
 
 ## Screenshots
 
-| WYSIWYG editing | Mermaid preview | HTML export |
-|---|---|---|
-| ![Editing](./docs/assets/edit.png) | ![Mermaid preview](./docs/assets/mermaid.png) | ![HTML export](./docs/assets/export.png) |
+| WYSIWYG editing | Mermaid preview | HTML export | Presentation |
+|---|---|---|---|
+| ![Editing](./docs/assets/edit.png) | ![Mermaid preview](./docs/assets/mermaid.png) | ![HTML export](./docs/assets/export.png) | ![Presentation](./docs/assets/presentation.png) |
 
 ## Download
 
@@ -59,6 +60,7 @@ Get the latest version from [Releases](https://github.com/hiperjack/md-editor/re
 | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` | New tab / Open / Save |
 | `Ctrl+Shift+E` | Export as HTML |
 | `Ctrl+Shift+V` | Open HTML preview tab |
+| `Ctrl+Shift+P` | Open presentation view (`F` to present full-screen) |
 | `Ctrl+Shift+I` | Toggle source (raw Markdown) view |
 | `Ctrl+P` | Print (PDF save available) |
 | `Ctrl+F` / `Ctrl+H` | Find / Replace |
