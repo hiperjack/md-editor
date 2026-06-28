@@ -697,8 +697,19 @@ export function mountPresentation(
     "wheel",
     (e) => {
       if (e.ctrlKey) {
-        // 既定のブラウザズームを抑止。グリッドのときだけタイルサイズを変える。
+        // 既定のブラウザズームを抑止。
         e.preventDefault();
+        // フルスクリーン/デッキ主ビューで、カーソル下に縮小下限を超えてスクロール可能に
+        // なった本文（.slide-body.scrollable）があれば、その領域だけをスクロールする。
+        // グリッドのサムネは pointer-events:none で拾わないが、念のため view で除外する。
+        const scrollable = (e.target as Element | null)?.closest?.(
+          ".slide-body.scrollable",
+        ) as HTMLElement | null;
+        if (scrollable && view !== "grid") {
+          scrollable.scrollTop += e.deltaY;
+          return;
+        }
+        // グリッドのときだけタイルサイズを変える。
         if (view === "grid") {
           gridCol = Math.min(
             GRID_COL_MAX,
