@@ -43,7 +43,7 @@ import { headingFoldPlugin } from "./heading-fold";
 import { listFoldPlugin } from "./list-fold";
 import { fileTypeOfPath, wrapMermaidSource } from "./mmd";
 import { attachPreviewFold } from "./preview-fold";
-import { mountPresentation, forgetPresentationState } from "./presentation";
+import { mountPresentation, forgetPresentationState } from "./presentation-lazy";
 import { ensureBlankLineBeforeTables } from "./md-normalize";
 import { mermaidCodePreview } from "./mermaid-renderer";
 import { docTheme } from "./theme";

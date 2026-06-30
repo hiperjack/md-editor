@@ -6,7 +6,7 @@ import { store, type Tab } from "./store";
 import { confirmSave, confirmDuplicate, confirmDuplicateWindow } from "./modal";
 import type { EditorHost } from "./editor";
 import { fileTypeOfPath, extractMermaidSource } from "./mmd";
-import { openHtmlFileTab } from "./exporter";
+import { openHtmlFileTab } from "./exporter-lazy";
 import { showProgress } from "./progress";
 import { t } from "./i18n";
 
