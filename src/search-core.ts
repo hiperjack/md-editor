@@ -77,8 +77,14 @@ export function findRangesInText(text: string, re: RegExp): TextMatch[] {
 
 /**
  * 置換文字列を解決する。
- * regex モードでは `$1`〜`$9` / `$&`（マッチ全体）/ `$$`（リテラル $）を展開する。
+ * regex モードでは以下を展開する:
+ * - エスケープ `\n`(改行) / `\t`(タブ) / `\r`(CR) / `\\`(リテラル `\`)、
+ *   未知のエスケープ `\x` はバックスラッシュを落として `x` を残す。
+ * - キャプチャ参照 `$1`〜`$99` / `$&`(マッチ全体) / `$$`(リテラル `$`)。
  * 非 regex モードでは replacement をそのまま返す。
+ *
+ * 置換文字列を先頭から1文字ずつ走査する単一パス。キャプチャで差し込んだ文字列は
+ * 再走査しないため、キャプチャ内のバックスラッシュを二重解釈しない。
  */
 export function resolveReplacement(
   match: { match: string; groups: string[] },
@@ -86,10 +92,44 @@ export function resolveReplacement(
   isRegex: boolean,
 ): string {
   if (!isRegex) return replacement;
-  return replacement.replace(/\$(\$|&|\d{1,2})/g, (_, token: string) => {
-    if (token === "$") return "$";
-    if (token === "&") return match.match;
-    const idx = parseInt(token, 10) - 1;
-    return match.groups[idx] ?? "";
-  });
+  let out = "";
+  for (let i = 0; i < replacement.length; i++) {
+    const c = replacement[i];
+    // バックスラッシュエスケープ
+    if (c === "\\" && i + 1 < replacement.length) {
+      const n = replacement[i + 1];
+      i++;
+      if (n === "n") out += "\n";
+      else if (n === "t") out += "\t";
+      else if (n === "r") out += "\r";
+      else if (n === "\\") out += "\\";
+      else out += n; // 未知のエスケープはバックスラッシュを落とす
+      continue;
+    }
+    // キャプチャ参照
+    if (c === "$" && i + 1 < replacement.length) {
+      const n = replacement[i + 1];
+      if (n === "$") {
+        out += "$";
+        i++;
+        continue;
+      }
+      if (n === "&") {
+        out += match.match;
+        i++;
+        continue;
+      }
+      if (n >= "0" && n <= "9") {
+        // 1〜2桁の番号。差し込んだキャプチャ文字列は再走査しない（二重解釈防止）。
+        let digits = n;
+        const n2 = replacement[i + 2];
+        if (n2 !== undefined && n2 >= "0" && n2 <= "9") digits += n2;
+        out += match.groups[parseInt(digits, 10) - 1] ?? "";
+        i += digits.length;
+        continue;
+      }
+    }
+    out += c;
+  }
+  return out;
 }
