@@ -106,6 +106,12 @@ export function setupShortcuts(
         find.openReplace();
         return;
       }
+      // Ctrl+G / Ctrl+Shift+G は WebView2 標準のページ内検索（次/前を検索）の
+      // ポップアップを開いてしまうため抑止する。独自バーは Ctrl+F/H で開く。
+      if (k === "g") {
+        e.preventDefault();
+        return;
+      }
 
       // ファイル操作（メニュー accelerator が届かないケース対策）
       if (e.shiftKey) {
