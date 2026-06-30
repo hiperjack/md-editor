@@ -24,6 +24,8 @@
  */
 
 import { t, onLangChange } from "./i18n";
+// プレゼンのスタイルはこのモジュールと一緒に遅延ロードする（起動バンドルから除外）。
+import "./styles/presentation.css";
 
 /** 論理キャンバスサイズ（16:9固定）。外側スケールはこの座標系を変えない。 */
 const CANVAS_W = 1280;

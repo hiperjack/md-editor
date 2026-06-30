@@ -1,6 +1,5 @@
 import { store } from "./store";
 import { settings } from "./settings";
-import { openFontSettings } from "./settings-modal";
 import type { EditorHost } from "./editor";
 import type { FindReplaceController } from "./find-replace";
 
@@ -45,7 +44,7 @@ export function setupShortcuts(
       // 設定（Ctrl+,）。WebView2 がメニュー accelerator を取りこぼすため明示的に拾う。
       if (e.key === ",") {
         e.preventDefault();
-        void openFontSettings();
+        void import("./settings-modal").then((m) => m.openFontSettings());
         return;
       }
 

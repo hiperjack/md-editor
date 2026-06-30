@@ -34,18 +34,16 @@ import {
 import { confirmCloseAll } from "./modal";
 import { settings } from "./settings";
 import { docTheme, resolveMermaidScheme } from "./theme";
-import { openFontSettings } from "./settings-modal";
-import { exportActiveTabAsHtml, openHtmlPreviewTab, openPresentationPreviewTab, openHtmlFileTab, refreshPreviewTab, canRefreshPreview as canRefreshPreviewTab } from "./exporter";
-import { startPresentation, togglePresentationView, togglePresentationLaser, selectPresentationSlide, isPresentationGridView, isPresentationFullscreen, setPresentationChromeSync, getPresentationToolbar } from "./presentation";
+// exporter / presentation は起動に不要なため遅延ロードシム経由で参照する。
+import { exportActiveTabAsHtml, openHtmlPreviewTab, openPresentationPreviewTab, openHtmlFileTab, refreshPreviewTab, canRefreshPreview as canRefreshPreviewTab } from "./exporter-lazy";
+import { startPresentation, togglePresentationView, togglePresentationLaser, selectPresentationSlide, isPresentationGridView, isPresentationFullscreen, setPresentationChromeSync, getPresentationToolbar } from "./presentation-lazy";
 import { expandAllPreviewFolds } from "./preview-fold";
 import { showContextMenu, type MenuItem } from "./context-menu";
-import { printActiveTab } from "./print";
 import { installDiagramViewerTrigger } from "./diagram-viewer";
 import { setMermaidColorScheme } from "./mermaid-renderer";
 import { setLang, t, onLangChange } from "./i18n";
 import "./style.css";
 import "./styles/print.css";
-import "./styles/presentation.css";
 
 function isTauriContext(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -57,6 +55,27 @@ type OpenFilePayload = {
 };
 
 async function bootstrap(): Promise<void> {
+  // 起動計測。localStorage.mdeditPerf="1" のときだけ各区間の経過を console に出す。
+  // bootstrap 到達時点の performance.now() は「HTMLロード＋バンドル取得/解析/評価」の
+  // おおよその合計を表す（navigation 起点）。以降は各処理の所要を区間で見る。
+  // 起動計測。localStorage.mdeditPerf="1" のときだけ各区間の経過を console に出す。
+  // 各行は「累積ms（navigation起点）」と直前区間の「+ms」。bootstrap 到達時点の値は
+  // HTMLロード＋バンドル取得/解析/評価のおおよその合計を表す。
+  const perfOn =
+    typeof localStorage !== "undefined" &&
+    localStorage.getItem("mdeditPerf") === "1";
+  let lastMarkMs = 0;
+  const mark = (label: string): void => {
+    if (!perfOn) return;
+    const now = performance.now();
+    const delta = lastMarkMs ? now - lastMarkMs : now;
+    lastMarkMs = now;
+    console.info(
+      `[startup] ${label}: ${now.toFixed(1)}ms (+${delta.toFixed(1)})`,
+    );
+  };
+  mark("bootstrap-entry (bundle load+eval)");
+
   const menubarEl = document.getElementById("menubar");
   const tabbarEl = document.getElementById("tabbar");
   const toolbarEl = document.getElementById("toolbar");
@@ -243,9 +262,11 @@ async function bootstrap(): Promise<void> {
     { capture: true },
   );
 
+  mark("pre-editor (settings/docTheme done)");
   const editor = createEditorHost(editorHostEl);
   const find = createFindReplace(editor);
   const outline = createOutlinePanel(editor);
+  mark("editor-host created");
 
   // Mermaid配色の変更を購読する。配色が変わったら、図を含むタブを作り直して
   // 確実に反映する。Crepe(Vue)管理下のプレビューDOMを直接書き換えると、Vueの
@@ -269,6 +290,7 @@ async function bootstrap(): Promise<void> {
   store.addTab();
   const initial = store.getActive();
   if (initial) await editor.show(initial);
+  mark("first editor.show done");
 
   let prevActiveId: string | null = store.getState().activeTabId;
   store.subscribe(() => {
@@ -417,7 +439,8 @@ async function bootstrap(): Promise<void> {
     file_export_html: () => void exportActiveTabAsHtml(editor),
     file_html_preview: () => void openHtmlPreviewTab(editor),
     file_presentation: () => void openPresentationPreviewTab(editor),
-    file_print: () => void printActiveTab(editor),
+    file_print: () =>
+      void import("./print").then((m) => m.printActiveTab(editor)),
     file_close: () => {
       const a = store.getActive();
       if (a) void closeTab(a.id, editor);
@@ -429,7 +452,8 @@ async function bootstrap(): Promise<void> {
     view_zoom_in: () => settings.changeFontSize(1),
     view_zoom_out: () => settings.changeFontSize(-1),
     view_zoom_reset: () => settings.resetFontSize(),
-    view_font: () => void openFontSettings(),
+    view_font: () =>
+      void import("./settings-modal").then((m) => m.openFontSettings()),
     view_outline: () => settings.toggleOutline(),
     view_source: () => {
       const a = store.getActive();
@@ -952,6 +976,7 @@ async function bootstrap(): Promise<void> {
       await win.destroy();
     });
 
+    mark("frontend_ready (bootstrap end)");
     try {
       await invoke<void>("frontend_ready");
     } catch (e) {
