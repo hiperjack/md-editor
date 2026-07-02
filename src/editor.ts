@@ -29,6 +29,12 @@ import {
 } from "@codemirror/language";
 import { languages as codeLanguages } from "@codemirror/language-data";
 import remarkBreaks from "remark-breaks";
+import {
+  remarkUnderline,
+  underlineSchema,
+  toggleUnderlineCommand,
+  underlineKeymap,
+} from "./underline";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame-dark.css";
 
@@ -643,6 +649,12 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         },
       },
     });
+
+    // 下線マーク（<u>）。スキーマ・トグルコマンド・Mod-u キーマップを登録する。
+    crepe.editor
+      .use(underlineSchema)
+      .use(toggleUnderlineCommand)
+      .use(underlineKeymap);
 
     // Enter は既定の段落分割 (一般的なエディタ挙動)。同じ段落内のソフト改行は
     // Shift+Enter (hardbreak)。キーマップは後段の keymap({...}) で定義する。
@@ -1278,6 +1290,8 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         // 空行を空段落ノードへ実体化し、往復で空行を保持する。
         // remarkBreaks の後に置く (ブロック間 position は影響を受けない)。
         { plugin: remarkBlankLines, options: {} },
+        // <u>/</u> の html ノードペアを underline ノードへ畳む。
+        { plugin: remarkUnderline, options: {} },
       ]);
       ctx.update(remarkStringifyOptionsCtx, (opts) => ({
         ...opts,
@@ -1323,6 +1337,16 @@ export function createEditorHost(root: HTMLElement): EditorHost {
                 ? ` "${String(n.title).replace(/"/g, '\\"')}"`
                 : "";
             return `![${safeAlt}](${url}${titlePart})`;
+          }) as never,
+          /*
+            underline ノード（下線マーク）の出力ハンドラ。
+            <u> + 子要素 + </u> に直列化する。
+          */
+          underline: ((node: unknown, _parent: unknown, state: unknown, info: unknown) => {
+            const s = state as {
+              containerPhrasing: (node: unknown, info: unknown) => string;
+            };
+            return "<u>" + s.containerPhrasing(node, info) + "</u>";
           }) as never,
         },
         /*
