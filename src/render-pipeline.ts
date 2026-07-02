@@ -5,6 +5,7 @@ import githubAlerts from "markdown-it-github-alerts";
 import { type DocSettings, isLightColor } from "./theme";
 import { renderMermaidSvg } from "./mermaid-renderer";
 import { ensureBlankLineBeforeTables } from "./md-normalize";
+import { underlineTagPlugin } from "./markdown-it-underline";
 
 /**
  * 出力用レンダリングパイプライン（markdown → 文書HTML）。
@@ -122,6 +123,7 @@ function buildMarkdownIt(settings: DocSettings, hljs: Hljs | null): MarkdownIt {
   if (settings.decorations.callouts) {
     md.use(githubAlerts);
   }
+  underlineTagPlugin(md);
   taskListPlugin(md);
   tableWrapPlugin(md);
   mermaidFencePlugin(md);
