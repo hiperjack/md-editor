@@ -6,6 +6,8 @@ type ButtonSpec<T extends string> = {
   label: string;
   value: T;
   kind?: ButtonKind;
+  /** Alt+<英字> でこのボタンを選択できるようにする（小文字1文字で指定）。 */
+  altKey?: string;
 };
 
 function showModal<T extends string>(opts: {
@@ -50,6 +52,18 @@ function showModal<T extends string>(opts: {
     };
 
     const onKey = (e: KeyboardEvent) => {
+      // Alt+英字: altKey が一致するボタンで確定（例: Alt+Y=保存 / Alt+N=破棄）。
+      if (e.altKey) {
+        const hit = opts.buttons.find(
+          (b) => b.altKey && b.altKey === e.key.toLowerCase(),
+        );
+        if (hit) {
+          e.preventDefault();
+          e.stopPropagation();
+          finish(hit.value);
+        }
+        return;
+      }
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
@@ -94,8 +108,8 @@ export function confirmSave(filename: string): Promise<SaveChoice> {
     title: t("dlg.save.title"),
     body: t("dlg.save.body").replace("{filename}", filename),
     buttons: [
-      { label: t("dlg.save.save"), value: "save", kind: "primary" },
-      { label: t("dlg.save.discard"), value: "discard", kind: "danger" },
+      { label: t("dlg.save.save"), value: "save", kind: "primary", altKey: "y" },
+      { label: t("dlg.save.discard"), value: "discard", kind: "danger", altKey: "n" },
       { label: t("dlg.save.cancel"), value: "cancel" },
     ],
     defaultValue: "cancel",
