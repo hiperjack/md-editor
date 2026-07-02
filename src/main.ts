@@ -599,6 +599,7 @@ async function bootstrap(): Promise<void> {
       items: () => [
         { type: "item", label: t("menu.bold"), mnemonic: "B", accel: "Ctrl+B", run: fmtActions.fmt_bold },
         { type: "item", label: t("menu.italic"), mnemonic: "I", accel: "Ctrl+I", run: fmtActions.fmt_italic },
+        { type: "item", label: t("menu.underline"), mnemonic: "D", accel: "Ctrl+U", run: fmtActions.fmt_underline },
         { type: "item", label: t("menu.strike"), mnemonic: "S", accel: "Ctrl+Shift+X", run: fmtActions.fmt_strike },
         { type: "item", label: t("menu.code"), mnemonic: "C", accel: "Ctrl+E", run: fmtActions.fmt_code },
         { type: "sep" },

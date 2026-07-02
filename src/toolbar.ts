@@ -14,6 +14,7 @@ import { toggleStrikethroughCommand, insertTableCommand } from "@milkdown/kit/pr
 
 import { type EditorHost, createCodeBlockFromSelection } from "./editor";
 import { imageActionFromMenu } from "./image-edit";
+import { toggleUnderlineCommand } from "./underline";
 import { t, onLangChange } from "./i18n";
 
 type Action = () => void;
@@ -53,6 +54,7 @@ const ICONS: Record<string, string> = {
   presentation: "M2 3h20M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3M7 21l5-5 5 5",
   bold: "M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6zM6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z",
   italic: "M19 4h-9M14 20H5M15 4 9 20",
+  underline: "M6 4v6a6 6 0 0 0 12 0V4M4 20h16",
   strike: "M16 4H9a3 3 0 0 0-2.83 4M14 12a4 4 0 0 1 0 8H6M4 12h16",
   code: "m16 18 6-6-6-6M8 6l-6 6 6 6",
   h1: "M4 12h8M4 18V6M12 18V6M17 12l3-2v8",
@@ -103,6 +105,7 @@ const BUTTONS: ButtonSpec[] = [
   { key: "sep", icon: "", titleKey: "", vis: "editor" },
   { key: "fmt_bold", icon: ICONS.bold, titleKey: "tb.bold", vis: "editor" },
   { key: "fmt_italic", icon: ICONS.italic, titleKey: "tb.italic", vis: "editor" },
+  { key: "fmt_underline", icon: ICONS.underline, titleKey: "tb.underline", vis: "editor" },
   { key: "fmt_strike", icon: ICONS.strike, titleKey: "tb.strike", vis: "editor" },
   { key: "fmt_code", icon: ICONS.code, titleKey: "tb.code", vis: "editor" },
   { key: "sep", icon: "", titleKey: "", vis: "editor" },
@@ -147,6 +150,7 @@ export function makeToolbarActions(editor: EditorHost): Record<string, Action> {
   return {
     fmt_bold: () => run((c) => c.call(toggleStrongCommand.key)),
     fmt_italic: () => run((c) => c.call(toggleEmphasisCommand.key)),
+    fmt_underline: () => run((c) => c.call(toggleUnderlineCommand.key)),
     fmt_strike: () => run((c) => c.call(toggleStrikethroughCommand.key)),
     fmt_code: () => run((c) => c.call(toggleInlineCodeCommand.key)),
     fmt_h1: () => run((c) => c.call(wrapInHeadingCommand.key, 1)),
