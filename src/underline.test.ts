@@ -38,7 +38,7 @@ describe("pairUnderlineNodes", () => {
   it("属性付き <u class=x> は対象外", () => {
     const p = para(html('<u class="x">'), text("b"), html("</u>"));
     pairUnderlineNodes(root(p));
-    expect(p.children![0]).toEqual(html('<u class="x">'));
+    expect(p.children).toEqual([html('<u class="x">'), text("b"), html("</u>")]);
   });
 
   it("同一段落内の複数ペアを個別に変換する", () => {

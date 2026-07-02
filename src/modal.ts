@@ -53,7 +53,8 @@ function showModal<T extends string>(opts: {
 
     const onKey = (e: KeyboardEvent) => {
       // Alt+英字: altKey が一致するボタンで確定（例: Alt+Y=保存 / Alt+N=破棄）。
-      if (e.altKey) {
+      // AltGr(=Ctrl+Alt) や Meta 併用は対象外（非Latin配列での誤発火を防ぐ）。
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
         const hit = opts.buttons.find(
           (b) => b.altKey && b.altKey === e.key.toLowerCase(),
         );
@@ -61,8 +62,8 @@ function showModal<T extends string>(opts: {
           e.preventDefault();
           e.stopPropagation();
           finish(hit.value);
+          return;
         }
-        return;
       }
       if (e.key === "Escape") {
         e.preventDefault();
