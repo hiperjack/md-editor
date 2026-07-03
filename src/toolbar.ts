@@ -15,6 +15,9 @@ import { toggleStrikethroughCommand, insertTableCommand } from "@milkdown/kit/pr
 import { type EditorHost, createCodeBlockFromSelection } from "./editor";
 import { imageActionFromMenu } from "./image-edit";
 import { toggleUnderlineCommand } from "./underline";
+import { setTextColorCommand } from "./text-color";
+import { showColorPalette } from "./color-palette";
+import { settings } from "./settings";
 import { t, onLangChange } from "./i18n";
 
 type Action = () => void;
@@ -55,6 +58,10 @@ const ICONS: Record<string, string> = {
   bold: "M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6zM6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z",
   italic: "M19 4h-9M14 20H5M15 4 9 20",
   underline: "M6 4v6a6 6 0 0 0 12 0V4M4 20h16",
+  // 文字色: "A"。下のカラーバーは createToolbar が別要素（.toolbar-colorbar）で描く。
+  text_color: "m7 16 5-12 5 12M8.9 12h6.2",
+  // 文字色パレットを開く小さな ▾。
+  chevron_down: "m6 9 6 6 6-6",
   strike: "M16 4H9a3 3 0 0 0-2.83 4M14 12a4 4 0 0 1 0 8H6M4 12h16",
   code: "m16 18 6-6-6-6M8 6l-6 6 6 6",
   h1: "M4 12h8M4 18V6M12 18V6M17 12l3-2v8",
@@ -106,6 +113,9 @@ const BUTTONS: ButtonSpec[] = [
   { key: "fmt_bold", icon: ICONS.bold, titleKey: "tb.bold", vis: "editor" },
   { key: "fmt_italic", icon: ICONS.italic, titleKey: "tb.italic", vis: "editor" },
   { key: "fmt_underline", icon: ICONS.underline, titleKey: "tb.underline", vis: "editor" },
+  // 文字色はスプリットボタン: 本体=直近色を適用、右の ▾=パレットを開く。
+  { key: "fmt_text_color", icon: ICONS.text_color, titleKey: "tb.textColor", vis: "editor" },
+  { key: "fmt_text_color_menu", icon: ICONS.chevron_down, titleKey: "tb.textColorPalette", vis: "editor" },
   { key: "fmt_strike", icon: ICONS.strike, titleKey: "tb.strike", vis: "editor" },
   { key: "fmt_code", icon: ICONS.code, titleKey: "tb.code", vis: "editor" },
   { key: "sep", icon: "", titleKey: "", vis: "editor" },
@@ -151,6 +161,31 @@ export function makeToolbarActions(editor: EditorHost): Record<string, Action> {
     fmt_bold: () => run((c) => c.call(toggleStrongCommand.key)),
     fmt_italic: () => run((c) => c.call(toggleEmphasisCommand.key)),
     fmt_underline: () => run((c) => c.call(toggleUnderlineCommand.key)),
+    // 本体クリック: 直近の色をそのまま適用する。
+    fmt_text_color: () =>
+      run((c) => c.call(setTextColorCommand.key, settings.get().lastTextColor)),
+    // ▾ クリック（書式メニューからも呼ばれる）: パレットを開いて選んだ色を適用。
+    fmt_text_color_menu: () => {
+      // アンカーはツールバーの ▾ ボタン直下。不可視（メニュー起動等）ならキャレット位置。
+      const btn = document.querySelector<HTMLElement>(
+        '.toolbar-btn[data-action="fmt_text_color_menu"]',
+      );
+      let anchor = { x: window.innerWidth / 2, y: 80 };
+      if (btn && btn.offsetParent !== null) {
+        const r = btn.getBoundingClientRect();
+        anchor = { x: r.left, y: r.bottom + 4 };
+      } else {
+        const view = editor.getActiveView();
+        if (view) {
+          const c = view.coordsAtPos(view.state.selection.head);
+          anchor = { x: c.left, y: c.bottom + 4 };
+        }
+      }
+      showColorPalette(anchor, (color) => {
+        if (color) settings.setLastTextColor(color);
+        run((c) => c.call(setTextColorCommand.key, color ?? undefined));
+      });
+    },
     fmt_strike: () => run((c) => c.call(toggleStrikethroughCommand.key)),
     fmt_code: () => run((c) => c.call(toggleInlineCodeCommand.key)),
     fmt_h1: () => run((c) => c.call(wrapInHeadingCommand.key, 1)),
@@ -229,6 +264,15 @@ export function createToolbar(
     btn.title = t(spec.titleKey);
     btn.dataset.action = spec.key;
     btn.innerHTML = svg(spec.icon);
+    // 文字色スプリットボタン: 本体はアイコン下に直近色のカラーバー、▾ は幅を詰める。
+    if (spec.key === "fmt_text_color") {
+      btn.classList.add("toolbar-btn--split-main");
+      const bar = document.createElement("span");
+      bar.className = "toolbar-colorbar";
+      btn.appendChild(bar);
+    } else if (spec.key === "fmt_text_color_menu") {
+      btn.classList.add("toolbar-btn--split-arrow");
+    }
     btn.addEventListener("mousedown", (e) => {
       // ボタンクリック時にエディタのフォーカスを失わないよう preventDefault
       e.preventDefault();

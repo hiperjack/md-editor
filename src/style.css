@@ -334,6 +334,37 @@ body {
   flex-shrink: 0;
 }
 
+/* 文字色スプリットボタン: 本体（A + 直近色バー）と ▾ を密着させて1ボタン風に見せる */
+.toolbar-btn--split-main {
+  position: relative;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  margin-right: 0;
+}
+
+.toolbar-btn--split-main .toolbar-colorbar {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 4px;
+  height: 3px;
+  border-radius: 1px;
+  background: var(--last-text-color, #ff0000);
+  pointer-events: none;
+}
+
+.toolbar-btn--split-arrow {
+  width: 14px;
+  margin-left: -1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.toolbar-btn--split-arrow svg {
+  width: 10px;
+  height: 10px;
+}
+
 /* 右寄せボタン (設定など) を端に追いやるための伸縮スペーサ */
 .toolbar-spacer {
   flex: 1 1 auto;
@@ -1309,6 +1340,62 @@ body.is-resizing-outline {
   height: 1px;
   margin: 4px 6px;
   background: var(--border);
+}
+
+/* ===== 文字色パレット（color-palette.ts） ===== */
+
+.color-palette {
+  position: fixed;
+  z-index: 10002;
+  padding: 8px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  user-select: none;
+  font-family: inherit;
+}
+
+.color-palette__heading {
+  padding: 2px 2px 4px;
+  color: var(--fg-2);
+  font-size: 11px;
+}
+
+.color-palette__grid {
+  display: grid;
+  grid-template-columns: repeat(10, 20px);
+  gap: 3px;
+  margin-bottom: 6px;
+}
+
+.color-palette__swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.color-palette__swatch:hover {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.color-palette__clear {
+  width: 100%;
+  padding: 5px 8px;
+  background: transparent;
+  color: var(--fg-0);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.color-palette__clear:hover {
+  background: var(--tab-hover-bg);
 }
 
 /* 印刷（Ctrl+P）はエディタDOMではなく、非表示 iframe に流し込んだ

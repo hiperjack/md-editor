@@ -35,6 +35,12 @@ import {
   toggleUnderlineCommand,
   underlineKeymap,
 } from "./underline";
+import {
+  remarkTextColor,
+  textColorSchema,
+  setTextColorCommand,
+  textColorHandler,
+} from "./text-color";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame-dark.css";
 
@@ -651,10 +657,13 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     });
 
     // 下線マーク（<u>）。スキーマ・トグルコマンド・Mod-u キーマップを登録する。
+    // 文字色マーク（<span style="color:#hex">）。スキーマと適用/解除コマンドを登録する。
     crepe.editor
       .use(underlineSchema)
       .use(toggleUnderlineCommand)
-      .use(underlineKeymap);
+      .use(underlineKeymap)
+      .use(textColorSchema)
+      .use(setTextColorCommand);
 
     // Enter は既定の段落分割 (一般的なエディタ挙動)。同じ段落内のソフト改行は
     // Shift+Enter (hardbreak)。キーマップは後段の keymap({...}) で定義する。
@@ -1292,6 +1301,8 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         { plugin: remarkBlankLines, options: {} },
         // <u>/</u> の html ノードペアを underline ノードへ畳む。
         { plugin: remarkUnderline, options: {} },
+        // <span style="color:#hex">/</span> の html ノードペアを textColor ノードへ畳む。
+        { plugin: remarkTextColor, options: {} },
       ]);
       ctx.update(remarkStringifyOptionsCtx, (opts) => ({
         ...opts,
@@ -1348,6 +1359,11 @@ export function createEditorHost(root: HTMLElement): EditorHost {
             };
             return "<u>" + s.containerPhrasing(node, info) + "</u>";
           }) as never,
+          /*
+            textColor ノード（文字色マーク）の出力ハンドラ。
+            <span style="color:#hex"> + 子要素 + </span> に直列化する。
+          */
+          textColor: (textColorHandler) as never,
         },
         /*
           ブロック間は原則「単一 \n 区切り (空行 0)」にする。
