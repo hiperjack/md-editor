@@ -334,35 +334,33 @@ body {
   flex-shrink: 0;
 }
 
-/* 文字色スプリットボタン: 本体（A + 直近色バー）と ▾ を密着させて1ボタン風に見せる */
-.toolbar-btn--split-main {
+/* 文字色ボタンの直近色バー（アイコンの下）。ボタン自体は .toolbar-caret 用に relative。 */
+.toolbar-btn {
   position: relative;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-  margin-right: 0;
 }
 
-.toolbar-btn--split-main .toolbar-colorbar {
+.toolbar-colorbar {
   position: absolute;
   left: 6px;
   right: 6px;
-  bottom: 4px;
+  bottom: 3px;
   height: 3px;
   border-radius: 1px;
   background: var(--last-text-color, #ff0000);
   pointer-events: none;
 }
 
-.toolbar-btn--split-arrow {
-  width: 14px;
-  margin-left: -1px;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-}
-
-.toolbar-btn--split-arrow svg {
-  width: 10px;
-  height: 10px;
+/* ホバーでポップアップが開くボタンの右下 ▼ バッジ（CSS三角形）。 */
+.toolbar-caret {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 0;
+  height: 0;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 4px solid var(--fg-2);
+  pointer-events: none;
 }
 
 /* 右寄せボタン (設定など) を端に追いやるための伸縮スペーサ */

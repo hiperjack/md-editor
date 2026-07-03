@@ -16,7 +16,16 @@ import { type EditorHost, createCodeBlockFromSelection } from "./editor";
 import { imageActionFromMenu } from "./image-edit";
 import { toggleUnderlineCommand } from "./underline";
 import { setTextColorCommand } from "./text-color";
-import { showColorPalette } from "./color-palette";
+import {
+  showColorPalette,
+  closeColorPalette,
+  getColorPaletteEl,
+} from "./color-palette";
+import {
+  showContextMenu,
+  closeContextMenu,
+  getContextMenuEl,
+} from "./context-menu";
 import { settings } from "./settings";
 import { t, onLangChange } from "./i18n";
 
@@ -58,10 +67,8 @@ const ICONS: Record<string, string> = {
   bold: "M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6zM6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z",
   italic: "M19 4h-9M14 20H5M15 4 9 20",
   underline: "M6 4v6a6 6 0 0 0 12 0V4M4 20h16",
-  // 文字色: "A"。下のカラーバーは createToolbar が別要素（.toolbar-colorbar）で描く。
+  // 文字色: "A"。下のカラーバーと右下の▼は createToolbar が別要素で描く。
   text_color: "m7 16 5-12 5 12M8.9 12h6.2",
-  // 文字色パレットを開く小さな ▾。
-  chevron_down: "m6 9 6 6 6-6",
   strike: "M16 4H9a3 3 0 0 0-2.83 4M14 12a4 4 0 0 1 0 8H6M4 12h16",
   code: "m16 18 6-6-6-6M8 6l-6 6 6 6",
   h1: "M4 12h8M4 18V6M12 18V6M17 12l3-2v8",
@@ -97,7 +104,8 @@ const BUTTONS: ButtonSpec[] = [
   { key: "file_open", icon: ICONS.file_open, titleKey: "tb.file_open" },
   { key: "file_save", icon: ICONS.file_save, titleKey: "tb.file_save" },
   { key: "file_save_as", icon: ICONS.file_save_as, titleKey: "tb.file_save_as" },
-  { key: "file_export_html", icon: ICONS.file_export, titleKey: "tb.file_export" },
+  // 出力ボタン: ホバー/クリックで「HTML出力・印刷・プレゼンHTML・プレゼンPDF」のメニューを開く。
+  { key: "file_export_menu", icon: ICONS.file_export, titleKey: "tb.export" },
   { key: "file_html_preview", icon: ICONS.eye, titleKey: "tb.file_html_preview" },
   { key: "file_presentation", icon: ICONS.presentation, titleKey: "tb.file_presentation" },
   { key: "view_source", icon: ICONS.source, titleKey: "tb.source_toggle" },
@@ -113,9 +121,8 @@ const BUTTONS: ButtonSpec[] = [
   { key: "fmt_bold", icon: ICONS.bold, titleKey: "tb.bold", vis: "editor" },
   { key: "fmt_italic", icon: ICONS.italic, titleKey: "tb.italic", vis: "editor" },
   { key: "fmt_underline", icon: ICONS.underline, titleKey: "tb.underline", vis: "editor" },
-  // 文字色はスプリットボタン: 本体=直近色を適用、右の ▾=パレットを開く。
+  // 文字色: クリック=直近色を適用、ホバー=パレットを開く（右下に▼バッジ）。
   { key: "fmt_text_color", icon: ICONS.text_color, titleKey: "tb.textColor", vis: "editor" },
-  { key: "fmt_text_color_menu", icon: ICONS.chevron_down, titleKey: "tb.textColorPalette", vis: "editor" },
   { key: "fmt_strike", icon: ICONS.strike, titleKey: "tb.strike", vis: "editor" },
   { key: "fmt_code", icon: ICONS.code, titleKey: "tb.code", vis: "editor" },
   { key: "sep", icon: "", titleKey: "", vis: "editor" },
@@ -161,14 +168,14 @@ export function makeToolbarActions(editor: EditorHost): Record<string, Action> {
     fmt_bold: () => run((c) => c.call(toggleStrongCommand.key)),
     fmt_italic: () => run((c) => c.call(toggleEmphasisCommand.key)),
     fmt_underline: () => run((c) => c.call(toggleUnderlineCommand.key)),
-    // 本体クリック: 直近の色をそのまま適用する。
+    // ボタンクリック: 直近の色をそのまま適用する。
     fmt_text_color: () =>
       run((c) => c.call(setTextColorCommand.key, settings.get().lastTextColor)),
-    // ▾ クリック（書式メニューからも呼ばれる）: パレットを開いて選んだ色を適用。
+    // ホバー（および書式メニュー）: パレットを開いて選んだ色を適用。
     fmt_text_color_menu: () => {
-      // アンカーはツールバーの ▾ ボタン直下。不可視（メニュー起動等）ならキャレット位置。
+      // アンカーはツールバーの文字色ボタン直下。不可視（メニュー起動等）ならキャレット位置。
       const btn = document.querySelector<HTMLElement>(
-        '.toolbar-btn[data-action="fmt_text_color_menu"]',
+        '.toolbar-btn[data-action="fmt_text_color"]',
       );
       let anchor = { x: window.innerWidth / 2, y: 80 };
       if (btn && btn.offsetParent !== null) {
@@ -218,11 +225,70 @@ export function makeToolbarActions(editor: EditorHost): Record<string, Action> {
   };
 }
 
+/**
+ * ボタンのホバーでポップアップを開閉する。
+ * ボタンとポップアップの間の隙間を跨ぐ移動で閉じないよう、mouseleave からの
+ * クローズは短い遅延（ポップアップ側の mouseenter でキャンセル）で行う。
+ */
+function wireHoverPopup(
+  btn: HTMLElement,
+  open: () => void,
+  getEl: () => HTMLElement | null,
+  close: () => void,
+): void {
+  let openTimer: number | null = null;
+  let closeTimer: number | null = null;
+  const cancelClose = (): void => {
+    if (closeTimer !== null) {
+      clearTimeout(closeTimer);
+      closeTimer = null;
+    }
+  };
+  const scheduleClose = (): void => {
+    cancelClose();
+    closeTimer = window.setTimeout(() => close(), 300);
+  };
+  const openNow = (): void => {
+    cancelClose();
+    if (getEl()) return;
+    open();
+    const el = getEl();
+    if (el) {
+      el.addEventListener("mouseenter", cancelClose);
+      el.addEventListener("mouseleave", scheduleClose);
+    }
+  };
+  btn.addEventListener("mouseenter", () => {
+    if (openTimer !== null) clearTimeout(openTimer);
+    openTimer = window.setTimeout(openNow, 150);
+  });
+  btn.addEventListener("mouseleave", () => {
+    if (openTimer !== null) {
+      clearTimeout(openTimer);
+      openTimer = null;
+    }
+    scheduleClose();
+  });
+}
+
 export function createToolbar(
   parent: HTMLElement,
   actions: Record<string, Action>,
 ): void {
   parent.innerHTML = "";
+
+  // 出力メニュー（HTML出力・印刷・プレゼンHTML・プレゼンPDF）。
+  // 項目はファイルメニューと同じアクションを共有する。
+  const openExportMenu = (btn: HTMLElement): void => {
+    const r = btn.getBoundingClientRect();
+    showContextMenu(r.left, r.bottom + 2, [
+      { type: "item", label: t("menu.exportHtml"), shortcut: "Ctrl+Shift+E", action: () => actions.file_export_html?.() },
+      { type: "item", label: t("menu.print"), shortcut: "Ctrl+P", action: () => actions.file_print?.() },
+      { type: "separator" },
+      { type: "item", label: t("menu.presentationHtml"), action: () => actions.file_pres_html?.() },
+      { type: "item", label: t("menu.presentationPdf"), action: () => actions.file_pres_pdf?.() },
+    ]);
+  };
 
   const titleUpdaters: Array<() => void> = [];
   let spacerInserted = false;
@@ -264,14 +330,33 @@ export function createToolbar(
     btn.title = t(spec.titleKey);
     btn.dataset.action = spec.key;
     btn.innerHTML = svg(spec.icon);
-    // 文字色スプリットボタン: 本体はアイコン下に直近色のカラーバー、▾ は幅を詰める。
+    // 文字色ボタン: アイコン下に直近色のカラーバー、右下に▼バッジ。
+    // クリック=直近色を適用、ホバー=パレットを開く。
     if (spec.key === "fmt_text_color") {
-      btn.classList.add("toolbar-btn--split-main");
       const bar = document.createElement("span");
       bar.className = "toolbar-colorbar";
       btn.appendChild(bar);
-    } else if (spec.key === "fmt_text_color_menu") {
-      btn.classList.add("toolbar-btn--split-arrow");
+      const caret = document.createElement("span");
+      caret.className = "toolbar-caret";
+      btn.appendChild(caret);
+      wireHoverPopup(
+        btn,
+        () => actions.fmt_text_color_menu?.(),
+        getColorPaletteEl,
+        closeColorPalette,
+      );
+    }
+    // 出力ボタン: ホバー/クリックで出力メニューを開く（右下に▼バッジ）。
+    if (spec.key === "file_export_menu") {
+      const caret = document.createElement("span");
+      caret.className = "toolbar-caret";
+      btn.appendChild(caret);
+      wireHoverPopup(
+        btn,
+        () => openExportMenu(btn),
+        getContextMenuEl,
+        closeContextMenu,
+      );
     }
     btn.addEventListener("mousedown", (e) => {
       // ボタンクリック時にエディタのフォーカスを失わないよう preventDefault
@@ -279,6 +364,11 @@ export function createToolbar(
     });
     btn.addEventListener("click", (e) => {
       e.preventDefault();
+      // 出力ボタンはアクションを持たず、メニューを開くだけ。
+      if (spec.key === "file_export_menu") {
+        if (!getContextMenuEl()) openExportMenu(btn);
+        return;
+      }
       const fn = actions[spec.key];
       if (fn) fn();
     });

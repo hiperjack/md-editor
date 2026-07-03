@@ -32,6 +32,11 @@ function getRoot(): HTMLElement {
   return el;
 }
 
+/** 表示中のメニュー要素（未表示なら null）。ホバー開閉の判定に使う。 */
+export function getContextMenuEl(): HTMLElement | null {
+  return menuEl;
+}
+
 export function closeContextMenu(): void {
   if (cleanup) {
     cleanup();

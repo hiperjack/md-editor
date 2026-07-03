@@ -28,6 +28,11 @@ const STANDARD_ROW: readonly string[] = [
 let paletteEl: HTMLElement | null = null;
 let cleanup: (() => void) | null = null;
 
+/** 表示中のパレット要素（未表示なら null）。ホバー開閉の判定に使う。 */
+export function getColorPaletteEl(): HTMLElement | null {
+  return paletteEl;
+}
+
 export function closeColorPalette(): void {
   if (cleanup) {
     cleanup();
