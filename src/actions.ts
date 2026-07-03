@@ -494,10 +494,90 @@ export type MovedTabPayload = {
   kind?: "preview";
   previewHtml?: string;
   previewTitle?: string;
-  previewMode?: "export" | "htmlfile";
+  previewMode?: "export" | "slideshow" | "htmlfile";
   previewSrcDoc?: string;
   sourceFilePath?: string | null;
+  /** 発表専用ウィンドウ: 起動後このスライド番号から自動で発表を開始する。 */
+  presentAt?: number | null;
+  /** 発表専用ウィンドウ: 発表元ウィンドウのラベル（終了時のスライド番号同期先）。 */
+  openerLabel?: string | null;
+  /** 発表専用ウィンドウ: 発表元のプレゼンタブID（スライド番号同期用）。 */
+  sourceTabId?: string | null;
 };
+
+/**
+ * 発表専用ウィンドウ（PowerPoint方式）を開く。
+ *
+ * メインウィンドウをフルスクリーン化するとOSのスナップ状態が壊れるため、
+ * 発表はフルスクリーンの別ウィンドウで行い、メインウィンドウには一切触れない。
+ * 内容はタブ移送と同じ stash_pending_tab / take_pending_tab で受け渡す。
+ * 生成に失敗した場合は false（呼び出し側が従来のオーバーレイ発表へフォールバック）。
+ */
+export async function openPresentationWindow(opts: {
+  html: string;
+  title: string;
+  sourceFilePath: string | null;
+  sourceTabId: string;
+  presentAt: number;
+}): Promise<boolean> {
+  if (!isTauriContext()) return false;
+  const label = genWindowLabel();
+  try {
+    await invoke<void>("stash_pending_tab", {
+      label,
+      payload: {
+        filePath: null,
+        content: "",
+        baseline: "",
+        diskContent: "",
+        kind: "preview",
+        previewHtml: opts.html,
+        previewTitle: opts.title,
+        previewMode: "slideshow",
+        previewSrcDoc: "",
+        sourceFilePath: opts.sourceFilePath,
+        presentAt: opts.presentAt,
+        openerLabel: getCurrentWindow().label,
+        sourceTabId: opts.sourceTabId,
+      },
+    });
+  } catch (e) {
+    console.error("stash_pending_tab (presentation) failed:", e);
+    return false;
+  }
+
+  // 非表示で生成し、発表オーバーレイの準備完了後に presentation.ts 側が
+  // show() する（起動中のエディタUIが全画面で見えるのを防ぐ）。
+  const w = new WebviewWindow(label, {
+    url: "index.html",
+    title: opts.title,
+    fullscreen: true,
+    visible: false,
+  });
+  const created = await new Promise<boolean>((resolve) => {
+    let settled = false;
+    const done = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve(ok);
+    };
+    void w.once("tauri://created", () => done(true));
+    void w.once("tauri://error", (e) => {
+      console.error("create presentation window error:", e);
+      done(false);
+    });
+    setTimeout(() => done(true), 2000);
+  });
+  if (!created) {
+    try {
+      await invoke("take_pending_tab", { label });
+    } catch {
+      /* 破棄失敗は無視 */
+    }
+    return false;
+  }
+  return true;
+}
 
 /**
  * 新規ウィンドウ起動時、移送されてきたタブを開く。
@@ -518,6 +598,17 @@ export async function openMovedTab(
       : null;
 
   if (payload.kind === "preview") {
+    // 発表専用ウィンドウ: マウント完了時に自動で発表を開始するよう予約し、
+    // 発表オーバーレイが出るまで通常UIを隠す（黒背景のまま起動して見せる）。
+    if (payload.presentAt != null) {
+      document.body.classList.add("pres-window-boot");
+      const { armPresentationWindow } = await import("./presentation-lazy");
+      await armPresentationWindow({
+        index: payload.presentAt,
+        openerLabel: payload.openerLabel ?? null,
+        sourceTabId: payload.sourceTabId ?? null,
+      });
+    }
     // プレビュータブとして復元する（ズーム倍率は引き継がず等倍）。
     store.addPreviewTab({
       title: payload.previewTitle ?? "Preview",

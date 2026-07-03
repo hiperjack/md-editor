@@ -23,103 +23,89 @@
  *   - 本文: それ以降すべて（はみ出たら zoom で fit→下限超でゾーン内スクロール）
  */
 
-import {
-  getCurrentWindow,
-  PhysicalPosition,
-  PhysicalSize,
-} from "@tauri-apps/api/window";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { emitTo } from "@tauri-apps/api/event";
+import { store } from "./store";
+import { openPresentationWindow } from "./actions";
 import { t, onLangChange } from "./i18n";
 // プレゼンのスタイルはこのモジュールと一緒に遅延ロードする（起動バンドルから除外）。
 import "./styles/presentation.css";
 
 /**
- * フルスクリーン前のウィンドウ状態（位置・サイズ・最大化）。
+ * 発表専用ウィンドウ（PowerPoint方式）。
  *
- * WebView2 では HTML Fullscreen API がホストウィンドウごとフルスクリーン化する。
- * 解除時の復元が WebView2 任せだと別の場所・サイズに戻ることがあるため、
- * 発表開始時に自前で保存し、解除後に復元する。スナップ配置（画面半分/4分の1）は
- * 位置とサイズの組で決まるため、サイズも必ず戻す。
+ * 発表（フルスクリーン）はメインウィンドウでは行わず、フルスクリーンの
+ * 別ウィンドウを開いてそちらで行う。メインウィンドウの配置に一切触れない
+ * ため、OSのスナップ状態（画面半分/4分の1）も含めて完全に保たれる
+ * （ウィンドウを一度でも動かすとスナップ状態は失われ、外部から再設定する
+ * 公開APIは無い。PowerPointのスライドショーと同じ回避策）。
+ *
+ * このモジュール変数が非nullのとき、現在のウィンドウ自身が発表専用
+ * ウィンドウとして動作する: マウント完了で自動発表し、発表終了で
+ * スライド番号を発表元へ同期してウィンドウごと閉じる。
  */
-let savedWindowState: {
-  pos: { x: number; y: number };
-  size: { w: number; h: number };
-  maximized: boolean;
+let presWindow: {
+  index: number;
+  openerLabel: string | null;
+  sourceTabId: string | null;
 } | null = null;
 
-function isTauriContext(): boolean {
-  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-}
+/** 発表準備が整う前にウィンドウを出してしまわないための安全タイマー。 */
+let presWindowRevealTimer: number | null = null;
 
-async function saveWindowState(): Promise<void> {
-  if (!isTauriContext()) return;
-  try {
-    const w = getCurrentWindow();
-    const [maximized, p, s] = await Promise.all([
-      w.isMaximized(),
-      w.outerPosition(),
-      w.outerSize(),
-    ]);
-    savedWindowState = {
-      pos: { x: p.x, y: p.y },
-      size: { w: s.width, h: s.height },
-      maximized,
-    };
-  } catch (e) {
-    // 権限不足等で取得できない場合は復元も行わない（原因調査用にログは残す）。
-    console.warn("saveWindowState failed:", e);
-    savedWindowState = null;
+/**
+ * 発表専用ウィンドウを表示する（非表示で生成されている）。
+ * 自動発表の開始時に呼ぶほか、マウントに失敗した場合でもウィンドウが
+ * 永遠に不可視のまま残らないよう、armから一定時間で強制表示する。
+ */
+function revealPresentationWindow(): void {
+  if (presWindowRevealTimer !== null) {
+    clearTimeout(presWindowRevealTimer);
+    presWindowRevealTimer = null;
   }
+  document.body.classList.remove("pres-window-boot");
+  const w = getCurrentWindow();
+  void w
+    .show()
+    .then(() => w.setFocus())
+    .catch((e) => console.warn("show presentation window failed:", e));
 }
 
-async function restoreWindowState(): Promise<void> {
-  if (!savedWindowState || !isTauriContext()) return;
-  const s = savedWindowState;
-  savedWindowState = null;
-  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-  try {
-    // OSフルスクリーンの解除完了を待ってから直す。
-    for (let i = 0; i < 20 && document.fullscreenElement; i++) {
-      await sleep(50);
-    }
-    const w = getCurrentWindow();
-    if (s.maximized) {
-      await w.maximize();
-      return;
-    }
-    // WebView2 は解除後にウィンドウを最大化のまま残したり、遅れて自前の復元で
-    // 上書きしてくることがある。待たずに直ちに強制し（別位置が見える時間を
-    // 最小化）、期待どおりの状態が2回連続で観測できるまで強制し直す。
-    let stable = 0;
-    for (let i = 0; i < 20; i++) {
-      if (i > 0) await sleep(60);
-      // 発表へ再突入したら復元を中止する（新しい保存が優先）。
-      if (document.fullscreenElement) return;
-      const [maximized, p, sz] = await Promise.all([
-        w.isMaximized(),
-        w.outerPosition(),
-        w.outerSize(),
-      ]);
-      const ok =
-        !maximized &&
-        Math.abs(p.x - s.pos.x) <= 1 &&
-        Math.abs(p.y - s.pos.y) <= 1 &&
-        Math.abs(sz.width - s.size.w) <= 1 &&
-        Math.abs(sz.height - s.size.h) <= 1;
-      if (ok) {
-        stable++;
-        if (stable >= 2) return;
-        continue;
+/** 発表専用ウィンドウの起動予約（mountPresentation より先に呼ぶこと）。 */
+export function armPresentationWindow(opts: {
+  index: number;
+  openerLabel: string | null;
+  sourceTabId: string | null;
+}): void {
+  presWindow = opts;
+  // マウントが完了しない異常時でも、不可視のウィンドウを残さない保険。
+  presWindowRevealTimer = window.setTimeout(() => revealPresentationWindow(), 8000);
+}
+
+/** 発表専用ウィンドウの生成中フラグ（F5連打等での二重生成を防ぐ）。 */
+let openingPresWindow = false;
+
+/** 発表専用ウィンドウ: スライド番号を発表元へ同期してウィンドウを閉じる。 */
+function closePresentationWindow(index: number): void {
+  const pw = presWindow;
+  if (!pw) return;
+  void (async () => {
+    if (pw.openerLabel && pw.sourceTabId) {
+      try {
+        await emitTo(pw.openerLabel, "pres-window-exit", {
+          tabId: pw.sourceTabId,
+          index,
+        });
+      } catch (e) {
+        console.warn("pres-window-exit emit failed:", e);
       }
-      stable = 0;
-      // 最大化中は setSize/setPosition が効かないため先に解除する。
-      if (maximized) await w.unmaximize();
-      await w.setSize(new PhysicalSize(s.size.w, s.size.h));
-      await w.setPosition(new PhysicalPosition(s.pos.x, s.pos.y));
     }
-  } catch (e) {
-    // 復元失敗は致命的でないが、権限不足等に気づけるようログは残す。
-    console.warn("restoreWindowState failed:", e);
-  }
+    try {
+      await getCurrentWindow().destroy();
+    } catch (e) {
+      console.warn("close presentation window failed:", e);
+    }
+  })();
 }
 
 /** 論理キャンバスサイズ（16:9固定）。外側スケールはこの座標系を変えない。 */
@@ -654,11 +640,14 @@ export function mountPresentation(
   }
 
   const exitFullscreen = () => {
+    // 発表専用ウィンドウ: 現在スライドを発表元へ同期してウィンドウごと閉じる。
+    if (presWindow) {
+      closePresentationWindow(index);
+      return;
+    }
     if (document.fullscreenElement) {
       void document.exitFullscreen().catch(() => {});
     }
-    // フルスクリーン前のウィンドウ位置・最大化状態へ戻す（WebView2の復元は当てにしない）。
-    void restoreWindowState();
     fsOverlay?.remove();
     fsOverlay = null;
     fsFrame = null;
@@ -671,8 +660,13 @@ export function mountPresentation(
     root.focus({ preventScroll: true });
   };
 
-  const enterFullscreen = () => {
-    if (total === 0) return;
+  /**
+   * 発表オーバーレイを表示する。
+   * useHtmlFullscreen=true のときだけ HTML Fullscreen API を使う（発表専用
+   * ウィンドウは生成時点でOSフルスクリーンのため不要。オーバーレイは
+   * position:fixed で全面を覆う）。
+   */
+  const showPresentOverlay = (useHtmlFullscreen: boolean) => {
     atEnd = false;
     if (fsOverlay) {
       // すでに発表中なら現在スライドを描き直すだけ（多重オーバーレイを防ぐ）。
@@ -688,22 +682,49 @@ export function mountPresentation(
     fsOverlay.tabIndex = 0;
     root.appendChild(fsOverlay);
     renderFullscreen();
-    const onFsChange = () => {
-      if (!document.fullscreenElement) {
-        document.removeEventListener("fullscreenchange", onFsChange);
-        exitFullscreen();
-      }
-    };
-    document.addEventListener("fullscreenchange", onFsChange);
     const overlay = fsOverlay;
-    // フルスクリーン化の前にウィンドウ位置・最大化状態を保存する（解除時に復元）。
-    void saveWindowState().then(() => {
+    if (useHtmlFullscreen) {
+      const onFsChange = () => {
+        if (!document.fullscreenElement) {
+          document.removeEventListener("fullscreenchange", onFsChange);
+          exitFullscreen();
+        }
+      };
+      document.addEventListener("fullscreenchange", onFsChange);
       void overlay.requestFullscreen?.().catch(() => {
         // フルスクリーンAPIが使えない環境ではオーバーレイ表示のみで代替する。
       });
-    });
+    }
     // フルスクリーン中でもキー操作を確実に受けるためフォーカスをオーバーレイへ。
     requestAnimationFrame(() => overlay.focus({ preventScroll: true }));
+  };
+
+  const enterFullscreen = () => {
+    if (total === 0) return;
+    // 発表専用ウィンドウ内: オーバーレイ表示のみ（ウィンドウは既に全画面）。
+    if (presWindow) {
+      showPresentOverlay(false);
+      return;
+    }
+    // 通常ウィンドウ: 発表専用ウィンドウ（PowerPoint方式）を開く。このウィンドウの
+    // 配置（スナップ状態含む）には一切触れない。生成に失敗した場合（Tauri外等）は
+    // 従来どおり自ウィンドウのHTMLフルスクリーンで発表する。
+    if (openingPresWindow) return;
+    openingPresWindow = true;
+    const tab = store.getState().tabs.find((tb) => tb.id === tabId);
+    void openPresentationWindow({
+      html,
+      title: tab?.previewTitle ?? "Presentation",
+      sourceFilePath: tab?.sourceFilePath ?? null,
+      sourceTabId: tabId,
+      presentAt: index,
+    })
+      .then((ok) => {
+        if (!ok) showPresentOverlay(true);
+      })
+      .finally(() => {
+        openingPresWindow = false;
+      });
   };
 
   // ── ページ送り（キー・ホイール・終了画面クリックで共通利用）──
@@ -902,6 +923,14 @@ export function mountPresentation(
   requestAnimationFrame(() => root.focus({ preventScroll: true }));
   // アプリ上部ツールバーへこのプレゼンの操作バーを差し込む（main.ts が同期）。
   chromeSync?.();
+
+  // 発表専用ウィンドウ: 起動予約があれば指定スライドから直ちに発表を開始し、
+  // オーバーレイが整ってから非表示のウィンドウを表示する（黒画面すら見せない）。
+  if (presWindow) {
+    setIndex(Math.min(Math.max(0, presWindow.index), Math.max(0, total - 1)));
+    enterFullscreen();
+    revealPresentationWindow();
+  }
 }
 
 /** F5/Shift+F5 用: 指定プレビュータブの発表を開始する（fromStart=先頭から）。 */

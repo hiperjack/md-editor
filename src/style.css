@@ -1397,6 +1397,17 @@ body.is-resizing-outline {
   background: var(--tab-hover-bg);
 }
 
+/* 発表専用ウィンドウの起動中: 発表オーバーレイが出るまで通常UIを隠す
+   （黒画面のまま起動し、エディタUIが一瞬見えるのを防ぐ）。
+   クラスは presentation.ts が自動発表の開始時に外す。 */
+body.pres-window-boot {
+  background: #000;
+}
+
+body.pres-window-boot #app {
+  opacity: 0;
+}
+
 /* 印刷（Ctrl+P）はエディタDOMではなく、非表示 iframe に流し込んだ
    自己完結HTMLを印刷する方式（print.ts / print-doc.ts）。 */
 
