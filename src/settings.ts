@@ -65,6 +65,8 @@ export type Settings = {
   outlineWidth: number;
   /** エディタ内Mermaidプレビューの表示幅モード。fit=エディタ幅に縮小, native=原寸+横スクロール。 */
   mermaidWidthMode: "fit" | "native";
+  /** 文字色ボタンが直近に適用した色（"#rrggbb"）。ボタン本体クリックで再適用する。 */
+  lastTextColor: string;
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -78,6 +80,7 @@ const DEFAULT_SETTINGS: Settings = {
   theme: "system",
   outlineWidth: 250,
   mermaidWidthMode: "fit",
+  lastTextColor: "#ff0000",
 };
 
 const MIN_SIZE = 8;
@@ -142,6 +145,11 @@ function loadFromStorage(): Settings {
         parsed.mermaidWidthMode === "fit" || parsed.mermaidWidthMode === "native"
           ? parsed.mermaidWidthMode
           : DEFAULT_SETTINGS.mermaidWidthMode,
+      lastTextColor:
+        typeof parsed.lastTextColor === "string" &&
+        /^#[0-9a-fA-F]{6}$/.test(parsed.lastTextColor)
+          ? parsed.lastTextColor
+          : DEFAULT_SETTINGS.lastTextColor,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -205,6 +213,8 @@ function applyToDom(): void {
   root.setAttribute("data-theme", effectiveTheme());
   root.style.setProperty("--outline-w", `${current.outlineWidth}px`);
   root.setAttribute("data-mermaid-width", current.mermaidWidthMode);
+  // ツールバーの文字色ボタンのカラーバーが参照する。
+  root.style.setProperty("--last-text-color", current.lastTextColor);
 }
 
 function notify(): void {
@@ -304,6 +314,14 @@ export const settings = {
     const next = clampOutlineWidth(v);
     if (next === current.outlineWidth) return;
     current = { ...current, outlineWidth: next };
+    saveToStorage(current);
+    applyToDom();
+    notify();
+  },
+
+  setLastTextColor(v: string): void {
+    if (!/^#[0-9a-fA-F]{6}$/.test(v) || v === current.lastTextColor) return;
+    current = { ...current, lastTextColor: v };
     saveToStorage(current);
     applyToDom();
     notify();

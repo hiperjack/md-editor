@@ -23,13 +23,108 @@
  *   - 本文: それ以降すべて（はみ出たら zoom で fit→下限超でゾーン内スクロール）
  */
 
+import {
+  getCurrentWindow,
+  PhysicalPosition,
+  PhysicalSize,
+} from "@tauri-apps/api/window";
 import { t, onLangChange } from "./i18n";
 // プレゼンのスタイルはこのモジュールと一緒に遅延ロードする（起動バンドルから除外）。
 import "./styles/presentation.css";
 
+/**
+ * フルスクリーン前のウィンドウ状態（位置・サイズ・最大化）。
+ *
+ * WebView2 では HTML Fullscreen API がホストウィンドウごとフルスクリーン化する。
+ * 解除時の復元が WebView2 任せだと別の場所・サイズに戻ることがあるため、
+ * 発表開始時に自前で保存し、解除後に復元する。スナップ配置（画面半分/4分の1）は
+ * 位置とサイズの組で決まるため、サイズも必ず戻す。
+ */
+let savedWindowState: {
+  pos: { x: number; y: number };
+  size: { w: number; h: number };
+  maximized: boolean;
+} | null = null;
+
+function isTauriContext(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+async function saveWindowState(): Promise<void> {
+  if (!isTauriContext()) return;
+  try {
+    const w = getCurrentWindow();
+    const [maximized, p, s] = await Promise.all([
+      w.isMaximized(),
+      w.outerPosition(),
+      w.outerSize(),
+    ]);
+    savedWindowState = {
+      pos: { x: p.x, y: p.y },
+      size: { w: s.width, h: s.height },
+      maximized,
+    };
+  } catch (e) {
+    // 権限不足等で取得できない場合は復元も行わない（原因調査用にログは残す）。
+    console.warn("saveWindowState failed:", e);
+    savedWindowState = null;
+  }
+}
+
+async function restoreWindowState(): Promise<void> {
+  if (!savedWindowState || !isTauriContext()) return;
+  const s = savedWindowState;
+  savedWindowState = null;
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  try {
+    // OSフルスクリーンの解除完了を待ってから直す。
+    for (let i = 0; i < 20 && document.fullscreenElement; i++) {
+      await sleep(50);
+    }
+    const w = getCurrentWindow();
+    if (s.maximized) {
+      await w.maximize();
+      return;
+    }
+    // WebView2 は解除後にウィンドウを最大化のまま残したり、遅れて自前の復元で
+    // 上書きしてくることがある。待たずに直ちに強制し（別位置が見える時間を
+    // 最小化）、期待どおりの状態が2回連続で観測できるまで強制し直す。
+    let stable = 0;
+    for (let i = 0; i < 20; i++) {
+      if (i > 0) await sleep(60);
+      // 発表へ再突入したら復元を中止する（新しい保存が優先）。
+      if (document.fullscreenElement) return;
+      const [maximized, p, sz] = await Promise.all([
+        w.isMaximized(),
+        w.outerPosition(),
+        w.outerSize(),
+      ]);
+      const ok =
+        !maximized &&
+        Math.abs(p.x - s.pos.x) <= 1 &&
+        Math.abs(p.y - s.pos.y) <= 1 &&
+        Math.abs(sz.width - s.size.w) <= 1 &&
+        Math.abs(sz.height - s.size.h) <= 1;
+      if (ok) {
+        stable++;
+        if (stable >= 2) return;
+        continue;
+      }
+      stable = 0;
+      // 最大化中は setSize/setPosition が効かないため先に解除する。
+      if (maximized) await w.unmaximize();
+      await w.setSize(new PhysicalSize(s.size.w, s.size.h));
+      await w.setPosition(new PhysicalPosition(s.pos.x, s.pos.y));
+    }
+  } catch (e) {
+    // 復元失敗は致命的でないが、権限不足等に気づけるようログは残す。
+    console.warn("restoreWindowState failed:", e);
+  }
+}
+
 /** 論理キャンバスサイズ（16:9固定）。外側スケールはこの座標系を変えない。 */
-const CANVAS_W = 1280;
-const CANVAS_H = 720;
+export const CANVAS_W = 1280;
+export const CANVAS_H = 720;
 /** 本文 fit の縮小下限。これを下回るとそのスライドだけ枠内スクロールにする。 */
 const MIN_BODY_ZOOM = 0.55;
 /** サイドバー幅の保存キーと可動範囲(px)。 */
@@ -43,7 +138,7 @@ const GRID_COL_MAX = 520;
 const GRID_COL_STEP = 28;
 
 /** 分割後の1スライド。3ゾーンに割り当て済みの要素を保持する。 */
-type Slide = {
+export type Slide = {
   /** 先頭見出し（無ければ null）。 */
   title: Element | null;
   /** 見出し直後の最初の段落（無ければ null）。 */
@@ -105,7 +200,7 @@ function isHeading(el: Element): boolean {
  * とスライド配列を返す。main はクラス・テーマCSS変数を保持しており、各スライドの
  * キャンバスでクローンして使うことでテーマがそのまま効く。
  */
-function parseSlides(html: string): { template: HTMLElement; slides: Slide[] } {
+export function parseSlides(html: string): { template: HTMLElement; slides: Slide[] } {
   const wrap = document.createElement("div");
   wrap.innerHTML = html;
   const main =
@@ -166,7 +261,7 @@ function parseSlides(html: string): { template: HTMLElement; slides: Slide[] } {
  * main(.document) を流用してテーマを適用し、ヘッダー（タイトル＋メッセージ）固定 ＋
  * 本文（fit/スクロール）の構造を作る。本文 fit は fitBody で後から計算する。
  */
-function buildCanvas(slide: Slide, template: HTMLElement): HTMLElement {
+export function buildCanvas(slide: Slide, template: HTMLElement): HTMLElement {
   const canvas = document.createElement("div");
   canvas.className = "slide-canvas";
 
@@ -204,8 +299,11 @@ function buildCanvas(slide: Slide, template: HTMLElement): HTMLElement {
  * zoom は（transform と違い）レイアウト・スクロール量に反映されるため、
  * 下限到達時のゾーン内スクロールが自然に効く。キャンバスは論理1280×720で固定の
  * ため、外側スケールには依存しない。表示サイズが確定してから計算する。
+ *
+ * minZoom: 縮小下限。既定は MIN_BODY_ZOOM（下限到達でゾーン内スクロール）。
+ * PDF出力はスクロールできないため 0 を渡し、収まるまで縮小して内容を欠かさない。
  */
-function fitBody(canvas: HTMLElement): void {
+export function fitBody(canvas: HTMLElement, minZoom: number = MIN_BODY_ZOOM): void {
   const body = canvas.querySelector<HTMLElement>(".slide-body");
   const inner = canvas.querySelector<HTMLElement>(".slide-body-inner");
   if (!body || !inner) return;
@@ -219,8 +317,8 @@ function fitBody(canvas: HTMLElement): void {
   const content = body.scrollHeight;
   if (avail <= 0 || content <= avail) return;
   const z = avail / content;
-  if (z < MIN_BODY_ZOOM) {
-    inner.style.zoom = String(MIN_BODY_ZOOM);
+  if (z < minZoom) {
+    inner.style.zoom = String(minZoom);
     body.classList.add("scrollable");
   } else {
     inner.style.zoom = String(z);
@@ -559,6 +657,8 @@ export function mountPresentation(
     if (document.fullscreenElement) {
       void document.exitFullscreen().catch(() => {});
     }
+    // フルスクリーン前のウィンドウ位置・最大化状態へ戻す（WebView2の復元は当てにしない）。
+    void restoreWindowState();
     fsOverlay?.remove();
     fsOverlay = null;
     fsFrame = null;
@@ -596,8 +696,11 @@ export function mountPresentation(
     };
     document.addEventListener("fullscreenchange", onFsChange);
     const overlay = fsOverlay;
-    void overlay.requestFullscreen?.().catch(() => {
-      // フルスクリーンAPIが使えない環境ではオーバーレイ表示のみで代替する。
+    // フルスクリーン化の前にウィンドウ位置・最大化状態を保存する（解除時に復元）。
+    void saveWindowState().then(() => {
+      void overlay.requestFullscreen?.().catch(() => {
+        // フルスクリーンAPIが使えない環境ではオーバーレイ表示のみで代替する。
+      });
     });
     // フルスクリーン中でもキー操作を確実に受けるためフォーカスをオーバーレイへ。
     requestAnimationFrame(() => overlay.focus({ preventScroll: true }));

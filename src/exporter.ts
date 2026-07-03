@@ -99,9 +99,9 @@ ${bodyHtml}
  */
 /**
  * タブの出力対象 markdown と filePath（既定パス・mmd判定用）を決める。
- * 通常タブはその内容を、export プレビュータブは元ソース（同一ウィンドウの編集内容
- * 優先、無ければ元ファイルをディスクから読み直す）を返す。htmlfile プレビューや
- * 解決不可の場合は markdown = null。印刷（print.ts）とHTML出力で共用する。
+ * 通常タブはその内容を、export/slideshow プレビュータブは元ソース（同一ウィンドウの
+ * 編集内容優先、無ければ元ファイルをディスクから読み直す）を返す。htmlfile プレビューや
+ * 解決不可の場合は markdown = null。印刷（print.ts）・HTML出力・プレゼン出力で共用する。
  */
 export async function resolveTabMarkdown(
   editor: EditorHost,
@@ -111,7 +111,8 @@ export async function resolveTabMarkdown(
   if (tab.kind !== "preview") {
     return { markdown: editor.getMarkdown(tab.id), filePath };
   }
-  if (tab.previewMode !== "export") return { markdown: null, filePath };
+  if (tab.previewMode !== "export" && tab.previewMode !== "slideshow")
+    return { markdown: null, filePath };
   let markdown: string | null = null;
   if (tab.sourceTabId) {
     const live = editor.getMarkdown(tab.sourceTabId);
@@ -137,32 +138,8 @@ export async function exportActiveTabAsHtml(editor: EditorHost): Promise<void> {
   if (!tab) return;
 
   // 出力対象の markdown と filePath（既定パス・mmd判定に使う）を決める。
-  // 通常の編集タブはその内容を、HTML出力プレビュー（export）タブは元ソースを使う。
-  let markdown: string | null = null;
-  let filePath: string | null = tab.filePath;
-
-  if (tab.kind === "preview") {
-    // 外部HTMLファイル（htmlfile）プレビューは出力対象外。
-    if (tab.previewMode !== "export") return;
-    // 元タブが同一ウィンドウに残っていれば現在の編集内容を優先し、
-    // 無ければ元ファイルをディスクから読み直す（refreshPreviewTabと同じ方針）。
-    if (tab.sourceTabId) {
-      const live = editor.getMarkdown(tab.sourceTabId);
-      if (live !== null) {
-        markdown = live;
-        const src = store
-          .getState()
-          .tabs.find((t) => t.id === tab.sourceTabId);
-        filePath = src ? src.filePath : tab.sourceFilePath ?? null;
-      }
-    }
-    if (markdown === null && tab.sourceFilePath) {
-      markdown = await invoke<string>("read_file", { path: tab.sourceFilePath });
-      filePath = tab.sourceFilePath;
-    }
-  } else {
-    markdown = editor.getMarkdown(tab.id);
-  }
+  // 通常の編集タブはその内容を、export/slideshow プレビュータブは元ソースを使う。
+  const { markdown, filePath } = await resolveTabMarkdown(editor, tab);
   if (markdown === null) return;
 
   const picked = await saveDialog({
@@ -213,8 +190,9 @@ export async function exportActiveTabAsHtml(editor: EditorHost): Promise<void> {
 /**
  * 元タブ(markdown)からプレビュー用の文書HTMLをレンダリングして返す。
  * HTML出力と同一パイプラインを通すため「見たまま出力される」ことを保証する。
+ * プレゼンのPDF/HTML出力（presentation-export.ts）もこの結果を流用する。
  */
-async function renderExportPreview(
+export async function renderExportPreview(
   filePath: string | null,
   markdown: string,
 ): Promise<{ html: string; title: string }> {

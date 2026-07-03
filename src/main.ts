@@ -439,6 +439,14 @@ async function bootstrap(): Promise<void> {
     file_export_html: () => void exportActiveTabAsHtml(editor),
     file_html_preview: () => void openHtmlPreviewTab(editor),
     file_presentation: () => void openPresentationPreviewTab(editor),
+    file_pres_pdf: () =>
+      void import("./presentation-export").then((m) =>
+        m.exportPresentationPdf(editor),
+      ),
+    file_pres_html: () =>
+      void import("./presentation-export").then((m) =>
+        m.exportPresentationAsHtml(editor),
+      ),
     file_print: () =>
       void import("./print").then((m) => m.printActiveTab(editor)),
     file_close: () => {
@@ -554,7 +562,19 @@ async function bootstrap(): Promise<void> {
         const items: MenuEntry[] = [
           { type: "item", label: t("menu.new"), mnemonic: "N", accel: "Ctrl+N", run: fileActions.file_new },
           { type: "item", label: t("menu.open"), mnemonic: "O", accel: "Ctrl+O", run: fileActions.file_open },
+          { type: "sep" },
+          { type: "item", label: t("menu.save"), mnemonic: "S", accel: "Ctrl+S", run: fileActions.file_save },
+          { type: "item", label: t("menu.saveAs"), mnemonic: "A", accel: "Ctrl+Shift+S", run: fileActions.file_save_as },
+          { type: "sep" },
+          // 出力・表示系は「プレビュー → 出力 → 印刷 → プレゼン → プレゼン出力」の順。
+          { type: "item", label: t("menu.htmlPreview"), mnemonic: "H", accel: "Ctrl+Shift+V", run: fileActions.file_html_preview },
+          { type: "item", label: t("menu.exportHtml"), mnemonic: "E", accel: "Ctrl+Shift+E", run: fileActions.file_export_html },
+          { type: "item", label: t("menu.print"), mnemonic: "P", accel: "Ctrl+P", run: fileActions.file_print },
+          { type: "item", label: t("menu.presentation"), mnemonic: "R", accel: "Ctrl+Shift+P", run: fileActions.file_presentation },
+          { type: "item", label: t("menu.presentationHtml"), mnemonic: "L", run: fileActions.file_pres_html },
+          { type: "item", label: t("menu.presentationPdf"), mnemonic: "D", run: fileActions.file_pres_pdf },
         ];
+        // 最近開いたファイルは「閉じる」の区切り線の直前に置く。
         if (settings.get().showRecent && recentFiles.length > 0) {
           items.push({ type: "sep" });
           for (const path of recentFiles.slice(0, 10)) {
@@ -562,14 +582,6 @@ async function bootstrap(): Promise<void> {
           }
         }
         items.push(
-          { type: "sep" },
-          { type: "item", label: t("menu.save"), mnemonic: "S", accel: "Ctrl+S", run: fileActions.file_save },
-          { type: "item", label: t("menu.saveAs"), mnemonic: "A", accel: "Ctrl+Shift+S", run: fileActions.file_save_as },
-          { type: "sep" },
-          { type: "item", label: t("menu.exportHtml"), mnemonic: "E", accel: "Ctrl+Shift+E", run: fileActions.file_export_html },
-          { type: "item", label: t("menu.htmlPreview"), mnemonic: "H", accel: "Ctrl+Shift+V", run: fileActions.file_html_preview },
-          { type: "item", label: t("menu.presentation"), mnemonic: "R", accel: "Ctrl+Shift+P", run: fileActions.file_presentation },
-          { type: "item", label: t("menu.print"), mnemonic: "P", accel: "Ctrl+P", run: fileActions.file_print },
           { type: "sep" },
           { type: "item", label: t("menu.close"), mnemonic: "C", accel: "Ctrl+W", run: fileActions.file_close },
           { type: "sep" },
@@ -600,6 +612,7 @@ async function bootstrap(): Promise<void> {
         { type: "item", label: t("menu.bold"), mnemonic: "B", accel: "Ctrl+B", run: fmtActions.fmt_bold },
         { type: "item", label: t("menu.italic"), mnemonic: "I", accel: "Ctrl+I", run: fmtActions.fmt_italic },
         { type: "item", label: t("menu.underline"), mnemonic: "D", accel: "Ctrl+U", run: fmtActions.fmt_underline },
+        { type: "item", label: t("menu.textColor"), mnemonic: "F", run: fmtActions.fmt_text_color_menu },
         { type: "item", label: t("menu.strike"), mnemonic: "S", accel: "Ctrl+Shift+X", run: fmtActions.fmt_strike },
         { type: "item", label: t("menu.code"), mnemonic: "C", accel: "Ctrl+E", run: fmtActions.fmt_code },
         { type: "sep" },
@@ -782,6 +795,18 @@ async function bootstrap(): Promise<void> {
             shortcut: "Ctrl+Shift+E",
             disabled: !exportable,
             action: () => activateThenRun(() => fileActions.file_export_html?.()),
+          },
+          {
+            type: "item",
+            label: t("menu.presentationPdf"),
+            disabled: !exportable,
+            action: () => activateThenRun(() => fileActions.file_pres_pdf?.()),
+          },
+          {
+            type: "item",
+            label: t("menu.presentationHtml"),
+            disabled: !exportable,
+            action: () => activateThenRun(() => fileActions.file_pres_html?.()),
           },
         );
         showContextMenu(e.clientX, e.clientY, items);

@@ -6,6 +6,7 @@ import { type DocSettings, isLightColor } from "./theme";
 import { renderMermaidSvg } from "./mermaid-renderer";
 import { ensureBlankLineBeforeTables } from "./md-normalize";
 import { underlineTagPlugin } from "./markdown-it-underline";
+import { textColorTagPlugin } from "./markdown-it-text-color";
 
 /**
  * 出力用レンダリングパイプライン（markdown → 文書HTML）。
@@ -124,6 +125,7 @@ function buildMarkdownIt(settings: DocSettings, hljs: Hljs | null): MarkdownIt {
     md.use(githubAlerts);
   }
   underlineTagPlugin(md);
+  textColorTagPlugin(md);
   taskListPlugin(md);
   tableWrapPlugin(md);
   mermaidFencePlugin(md);

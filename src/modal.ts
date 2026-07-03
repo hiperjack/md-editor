@@ -157,8 +157,8 @@ export function confirmCloseAll(): Promise<CloseAllChoice> {
     title: t("dlg.closeAll.title"),
     body: t("dlg.closeAll.body"),
     buttons: [
-      { label: t("dlg.closeAll.review"), value: "review", kind: "primary" },
-      { label: t("dlg.closeAll.discard"), value: "discard", kind: "danger" },
+      { label: t("dlg.closeAll.review"), value: "review", kind: "primary", altKey: "y" },
+      { label: t("dlg.closeAll.discard"), value: "discard", kind: "danger", altKey: "n" },
       { label: t("dlg.closeAll.cancel"), value: "cancel" },
     ],
     defaultValue: "cancel",
