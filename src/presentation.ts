@@ -83,16 +83,15 @@ async function restoreWindowState(): Promise<void> {
     }
     const w = getCurrentWindow();
     if (s.maximized) {
-      await sleep(150);
       await w.maximize();
       return;
     }
     // WebView2 は解除後にウィンドウを最大化のまま残したり、遅れて自前の復元で
-    // 上書きしてくることがある。最大化を解いてから位置・サイズを設定し、
-    // 期待どおりの状態が2回連続で観測できるまで数回強制し直す。
+    // 上書きしてくることがある。待たずに直ちに強制し（別位置が見える時間を
+    // 最小化）、期待どおりの状態が2回連続で観測できるまで強制し直す。
     let stable = 0;
-    for (let i = 0; i < 10; i++) {
-      await sleep(i === 0 ? 150 : 200);
+    for (let i = 0; i < 20; i++) {
+      if (i > 0) await sleep(60);
       // 発表へ再突入したら復元を中止する（新しい保存が優先）。
       if (document.fullscreenElement) return;
       const [maximized, p, sz] = await Promise.all([
