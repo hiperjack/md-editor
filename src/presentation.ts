@@ -50,6 +50,27 @@ let presWindow: {
   sourceTabId: string | null;
 } | null = null;
 
+/** 発表準備が整う前にウィンドウを出してしまわないための安全タイマー。 */
+let presWindowRevealTimer: number | null = null;
+
+/**
+ * 発表専用ウィンドウを表示する（非表示で生成されている）。
+ * 自動発表の開始時に呼ぶほか、マウントに失敗した場合でもウィンドウが
+ * 永遠に不可視のまま残らないよう、armから一定時間で強制表示する。
+ */
+function revealPresentationWindow(): void {
+  if (presWindowRevealTimer !== null) {
+    clearTimeout(presWindowRevealTimer);
+    presWindowRevealTimer = null;
+  }
+  document.body.classList.remove("pres-window-boot");
+  const w = getCurrentWindow();
+  void w
+    .show()
+    .then(() => w.setFocus())
+    .catch((e) => console.warn("show presentation window failed:", e));
+}
+
 /** 発表専用ウィンドウの起動予約（mountPresentation より先に呼ぶこと）。 */
 export function armPresentationWindow(opts: {
   index: number;
@@ -57,6 +78,8 @@ export function armPresentationWindow(opts: {
   sourceTabId: string | null;
 }): void {
   presWindow = opts;
+  // マウントが完了しない異常時でも、不可視のウィンドウを残さない保険。
+  presWindowRevealTimer = window.setTimeout(() => revealPresentationWindow(), 8000);
 }
 
 /** 発表専用ウィンドウの生成中フラグ（F5連打等での二重生成を防ぐ）。 */
@@ -901,12 +924,12 @@ export function mountPresentation(
   // アプリ上部ツールバーへこのプレゼンの操作バーを差し込む（main.ts が同期）。
   chromeSync?.();
 
-  // 発表専用ウィンドウ: 起動予約があれば指定スライドから直ちに発表を開始する。
+  // 発表専用ウィンドウ: 起動予約があれば指定スライドから直ちに発表を開始し、
+  // オーバーレイが整ってから非表示のウィンドウを表示する（黒画面すら見せない）。
   if (presWindow) {
     setIndex(Math.min(Math.max(0, presWindow.index), Math.max(0, total - 1)));
     enterFullscreen();
-    // オーバーレイが表示されたので、起動時の目隠し（黒画面）を外す。
-    document.body.classList.remove("pres-window-boot");
+    revealPresentationWindow();
   }
 }
 

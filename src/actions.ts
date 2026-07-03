@@ -546,11 +546,13 @@ export async function openPresentationWindow(opts: {
     return false;
   }
 
+  // 非表示で生成し、発表オーバーレイの準備完了後に presentation.ts 側が
+  // show() する（起動中のエディタUIが全画面で見えるのを防ぐ）。
   const w = new WebviewWindow(label, {
     url: "index.html",
     title: opts.title,
     fullscreen: true,
-    focus: true,
+    visible: false,
   });
   const created = await new Promise<boolean>((resolve) => {
     let settled = false;
