@@ -1397,6 +1397,17 @@ body.is-resizing-outline {
   background: var(--tab-hover-bg);
 }
 
+/* ハイライトパレットの「標準マーカー」ボタン（既定の黄色見本を兼ねる） */
+.color-palette__mark-default {
+  margin-bottom: 4px;
+  background: #ffff00;
+  color: #1f2937;
+}
+
+.color-palette__mark-default:hover {
+  background: #ffef60;
+}
+
 /* 発表専用ウィンドウの起動中: 発表オーバーレイが出るまで通常UIを隠す
    （黒画面のまま起動し、エディタUIが一瞬見えるのを防ぐ）。
    クラスは presentation.ts が自動発表の開始時に外す。 */

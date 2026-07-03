@@ -270,3 +270,13 @@
   padding-left: 1.4em;
 }
 .document nav.table-of-contents li { margin: 0.2em 0; }
+
+/* ── ハイライト（<mark>） ─────────────────────────── */
+
+/* 背景は淡色（標準の黄色 or パレットのパステル）のため、ダーク系の
+   文書テーマでも読めるよう文字色は濃色に固定する。 */
+.document mark {
+  color: #1f2937;
+  padding: 0 0.15em;
+  border-radius: 2px;
+}

@@ -7,6 +7,8 @@ import { renderMermaidSvg } from "./mermaid-renderer";
 import { ensureBlankLineBeforeTables } from "./md-normalize";
 import { underlineTagPlugin } from "./markdown-it-underline";
 import { textColorTagPlugin } from "./markdown-it-text-color";
+import { highlightTagPlugin } from "./markdown-it-highlight";
+import { supSubTagPlugin } from "./markdown-it-supsub";
 
 /**
  * 出力用レンダリングパイプライン（markdown → 文書HTML）。
@@ -126,6 +128,8 @@ function buildMarkdownIt(settings: DocSettings, hljs: Hljs | null): MarkdownIt {
   }
   underlineTagPlugin(md);
   textColorTagPlugin(md);
+  highlightTagPlugin(md);
+  supSubTagPlugin(md);
   taskListPlugin(md);
   tableWrapPlugin(md);
   mermaidFencePlugin(md);
