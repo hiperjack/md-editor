@@ -23,9 +23,58 @@
  *   - 本文: それ以降すべて（はみ出たら zoom で fit→下限超でゾーン内スクロール）
  */
 
+import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
 import { t, onLangChange } from "./i18n";
 // プレゼンのスタイルはこのモジュールと一緒に遅延ロードする（起動バンドルから除外）。
 import "./styles/presentation.css";
+
+/**
+ * フルスクリーン前のウィンドウ状態（位置・最大化）。
+ *
+ * WebView2 では HTML Fullscreen API がホストウィンドウごとフルスクリーン化する。
+ * 解除時の位置復元が WebView2 任せだと別の場所に戻ることがあるため、
+ * 発表開始時に自前で保存し、解除後に復元する。
+ */
+let savedWindowState: {
+  pos: { x: number; y: number };
+  maximized: boolean;
+} | null = null;
+
+function isTauriContext(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+async function saveWindowState(): Promise<void> {
+  if (!isTauriContext()) return;
+  try {
+    const w = getCurrentWindow();
+    const [maximized, p] = await Promise.all([w.isMaximized(), w.outerPosition()]);
+    savedWindowState = { pos: { x: p.x, y: p.y }, maximized };
+  } catch {
+    savedWindowState = null;
+  }
+}
+
+async function restoreWindowState(): Promise<void> {
+  if (!savedWindowState || !isTauriContext()) return;
+  const s = savedWindowState;
+  savedWindowState = null;
+  try {
+    // OSフルスクリーンの解除完了（→ WebView2 のウィンドウ復元）を待ってから直す。
+    for (let i = 0; i < 20 && document.fullscreenElement; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    await new Promise((r) => setTimeout(r, 150));
+    const w = getCurrentWindow();
+    if (s.maximized) {
+      await w.maximize();
+    } else {
+      await w.setPosition(new PhysicalPosition(s.pos.x, s.pos.y));
+    }
+  } catch {
+    // 復元失敗は致命的でないため黙って無視する。
+  }
+}
 
 /** 論理キャンバスサイズ（16:9固定）。外側スケールはこの座標系を変えない。 */
 export const CANVAS_W = 1280;
@@ -562,6 +611,8 @@ export function mountPresentation(
     if (document.fullscreenElement) {
       void document.exitFullscreen().catch(() => {});
     }
+    // フルスクリーン前のウィンドウ位置・最大化状態へ戻す（WebView2の復元は当てにしない）。
+    void restoreWindowState();
     fsOverlay?.remove();
     fsOverlay = null;
     fsFrame = null;
@@ -599,8 +650,11 @@ export function mountPresentation(
     };
     document.addEventListener("fullscreenchange", onFsChange);
     const overlay = fsOverlay;
-    void overlay.requestFullscreen?.().catch(() => {
-      // フルスクリーンAPIが使えない環境ではオーバーレイ表示のみで代替する。
+    // フルスクリーン化の前にウィンドウ位置・最大化状態を保存する（解除時に復元）。
+    void saveWindowState().then(() => {
+      void overlay.requestFullscreen?.().catch(() => {
+        // フルスクリーンAPIが使えない環境ではオーバーレイ表示のみで代替する。
+      });
     });
     // フルスクリーン中でもキー操作を確実に受けるためフォーカスをオーバーレイへ。
     requestAnimationFrame(() => overlay.focus({ preventScroll: true }));

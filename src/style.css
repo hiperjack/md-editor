@@ -342,7 +342,8 @@ body {
 .toolbar-colorbar {
   position: absolute;
   left: 6px;
-  right: 6px;
+  /* 右下の ▼ バッジ（.toolbar-caret, right:2px + 幅6px）と被らないよう右側を空ける */
+  right: 11px;
   bottom: 3px;
   height: 3px;
   border-radius: 1px;
