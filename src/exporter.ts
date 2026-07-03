@@ -213,8 +213,9 @@ export async function exportActiveTabAsHtml(editor: EditorHost): Promise<void> {
 /**
  * 元タブ(markdown)からプレビュー用の文書HTMLをレンダリングして返す。
  * HTML出力と同一パイプラインを通すため「見たまま出力される」ことを保証する。
+ * プレゼンのPDF/HTML出力（presentation-export.ts）もこの結果を流用する。
  */
-async function renderExportPreview(
+export async function renderExportPreview(
   filePath: string | null,
   markdown: string,
 ): Promise<{ html: string; title: string }> {

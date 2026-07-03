@@ -49,8 +49,9 @@ function baseNameWithoutExt(filePath: string | null): string {
  *   印刷プレビューが生成されないことがあるため）。
  * - 破棄はプレビューが閉じた後（afterprint）に行う。print() 直後に破棄すると
  *   プレビュー生成中に文書が消えてプレビューが回り続けるため。
+ * プレゼンPDF出力（presentation-export.ts）も同じ経路を使う。
  */
-async function printViaIframe(html: string): Promise<void> {
+export async function printViaIframe(html: string): Promise<void> {
   document.getElementById(PRINT_FRAME_ID)?.remove();
 
   const iframe = document.createElement("iframe");

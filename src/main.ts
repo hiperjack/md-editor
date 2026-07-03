@@ -439,6 +439,14 @@ async function bootstrap(): Promise<void> {
     file_export_html: () => void exportActiveTabAsHtml(editor),
     file_html_preview: () => void openHtmlPreviewTab(editor),
     file_presentation: () => void openPresentationPreviewTab(editor),
+    file_pres_pdf: () =>
+      void import("./presentation-export").then((m) =>
+        m.exportPresentationPdf(editor),
+      ),
+    file_pres_html: () =>
+      void import("./presentation-export").then((m) =>
+        m.exportPresentationAsHtml(editor),
+      ),
     file_print: () =>
       void import("./print").then((m) => m.printActiveTab(editor)),
     file_close: () => {
@@ -569,6 +577,8 @@ async function bootstrap(): Promise<void> {
           { type: "item", label: t("menu.exportHtml"), mnemonic: "E", accel: "Ctrl+Shift+E", run: fileActions.file_export_html },
           { type: "item", label: t("menu.htmlPreview"), mnemonic: "H", accel: "Ctrl+Shift+V", run: fileActions.file_html_preview },
           { type: "item", label: t("menu.presentation"), mnemonic: "R", accel: "Ctrl+Shift+P", run: fileActions.file_presentation },
+          { type: "item", label: t("menu.presentationPdf"), mnemonic: "D", run: fileActions.file_pres_pdf },
+          { type: "item", label: t("menu.presentationHtml"), mnemonic: "L", run: fileActions.file_pres_html },
           { type: "item", label: t("menu.print"), mnemonic: "P", accel: "Ctrl+P", run: fileActions.file_print },
           { type: "sep" },
           { type: "item", label: t("menu.close"), mnemonic: "C", accel: "Ctrl+W", run: fileActions.file_close },
@@ -783,6 +793,18 @@ async function bootstrap(): Promise<void> {
             shortcut: "Ctrl+Shift+E",
             disabled: !exportable,
             action: () => activateThenRun(() => fileActions.file_export_html?.()),
+          },
+          {
+            type: "item",
+            label: t("menu.presentationPdf"),
+            disabled: !exportable,
+            action: () => activateThenRun(() => fileActions.file_pres_pdf?.()),
+          },
+          {
+            type: "item",
+            label: t("menu.presentationHtml"),
+            disabled: !exportable,
+            action: () => activateThenRun(() => fileActions.file_pres_html?.()),
           },
         );
         showContextMenu(e.clientX, e.clientY, items);

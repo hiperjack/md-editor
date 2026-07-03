@@ -28,8 +28,8 @@ import { t, onLangChange } from "./i18n";
 import "./styles/presentation.css";
 
 /** 論理キャンバスサイズ（16:9固定）。外側スケールはこの座標系を変えない。 */
-const CANVAS_W = 1280;
-const CANVAS_H = 720;
+export const CANVAS_W = 1280;
+export const CANVAS_H = 720;
 /** 本文 fit の縮小下限。これを下回るとそのスライドだけ枠内スクロールにする。 */
 const MIN_BODY_ZOOM = 0.55;
 /** サイドバー幅の保存キーと可動範囲(px)。 */
@@ -43,7 +43,7 @@ const GRID_COL_MAX = 520;
 const GRID_COL_STEP = 28;
 
 /** 分割後の1スライド。3ゾーンに割り当て済みの要素を保持する。 */
-type Slide = {
+export type Slide = {
   /** 先頭見出し（無ければ null）。 */
   title: Element | null;
   /** 見出し直後の最初の段落（無ければ null）。 */
@@ -105,7 +105,7 @@ function isHeading(el: Element): boolean {
  * とスライド配列を返す。main はクラス・テーマCSS変数を保持しており、各スライドの
  * キャンバスでクローンして使うことでテーマがそのまま効く。
  */
-function parseSlides(html: string): { template: HTMLElement; slides: Slide[] } {
+export function parseSlides(html: string): { template: HTMLElement; slides: Slide[] } {
   const wrap = document.createElement("div");
   wrap.innerHTML = html;
   const main =
@@ -166,7 +166,7 @@ function parseSlides(html: string): { template: HTMLElement; slides: Slide[] } {
  * main(.document) を流用してテーマを適用し、ヘッダー（タイトル＋メッセージ）固定 ＋
  * 本文（fit/スクロール）の構造を作る。本文 fit は fitBody で後から計算する。
  */
-function buildCanvas(slide: Slide, template: HTMLElement): HTMLElement {
+export function buildCanvas(slide: Slide, template: HTMLElement): HTMLElement {
   const canvas = document.createElement("div");
   canvas.className = "slide-canvas";
 
@@ -204,8 +204,11 @@ function buildCanvas(slide: Slide, template: HTMLElement): HTMLElement {
  * zoom は（transform と違い）レイアウト・スクロール量に反映されるため、
  * 下限到達時のゾーン内スクロールが自然に効く。キャンバスは論理1280×720で固定の
  * ため、外側スケールには依存しない。表示サイズが確定してから計算する。
+ *
+ * minZoom: 縮小下限。既定は MIN_BODY_ZOOM（下限到達でゾーン内スクロール）。
+ * PDF出力はスクロールできないため 0 を渡し、収まるまで縮小して内容を欠かさない。
  */
-function fitBody(canvas: HTMLElement): void {
+export function fitBody(canvas: HTMLElement, minZoom: number = MIN_BODY_ZOOM): void {
   const body = canvas.querySelector<HTMLElement>(".slide-body");
   const inner = canvas.querySelector<HTMLElement>(".slide-body-inner");
   if (!body || !inner) return;
@@ -219,8 +222,8 @@ function fitBody(canvas: HTMLElement): void {
   const content = body.scrollHeight;
   if (avail <= 0 || content <= avail) return;
   const z = avail / content;
-  if (z < MIN_BODY_ZOOM) {
-    inner.style.zoom = String(MIN_BODY_ZOOM);
+  if (z < minZoom) {
+    inner.style.zoom = String(minZoom);
     body.classList.add("scrollable");
   } else {
     inner.style.zoom = String(z);
