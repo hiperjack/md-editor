@@ -882,6 +882,14 @@ async function bootstrap(): Promise<void> {
     await appWin.onMoved(() => void registerTabbarRect());
     await appWin.onResized(() => void registerTabbarRect());
 
+    // 発表専用ウィンドウの終了時、発表元プレゼンタブのスライド位置を同期する。
+    await appWin.listen<{ tabId: string; index: number }>(
+      "pres-window-exit",
+      (event) => {
+        void selectPresentationSlide(event.payload.tabId, event.payload.index);
+      },
+    );
+
     // 別ウィンドウから移送されてきたタブを受け取って追加する（このウィンドウ宛てのみ）。
     await appWin.listen<MovedTabPayload>("add-moved-tab", (event) => {
       // 結合が成立したので青線は確実に消す（イベント順序に依存しない保険）。

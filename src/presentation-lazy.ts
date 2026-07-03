@@ -38,6 +38,16 @@ export async function selectPresentationSlide(
   (await load()).selectPresentationSlide(tabId, index);
 }
 
+// 発表専用ウィンドウの起動予約（actions.ts の openMovedTab から使用）。
+// mountPresentation より先に await して、マウント時に確実に自動発表させる。
+export async function armPresentationWindow(opts: {
+  index: number;
+  openerLabel: string | null;
+  sourceTabId: string | null;
+}): Promise<void> {
+  (await load()).armPresentationWindow(opts);
+}
+
 // スライドショープレビューのマウント（editor.ts の makePreview から使用）。
 // makePreview は同期関数だが、container は先に DOM へ挿入済みのため、
 // ロード完了後に中身を流し込めば足りる（初回マウント時のみ僅かな遅延）。

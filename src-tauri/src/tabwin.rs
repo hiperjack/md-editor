@@ -45,6 +45,16 @@ pub struct TabPayload {
     /// preview タブ: リフレッシュ元のファイルパス。
     #[serde(default)]
     pub source_file_path: Option<String>,
+    /// 発表専用ウィンドウ: 起動後この番号のスライドから自動で発表を開始する。
+    /// None なら通常の移送タブ。
+    #[serde(default)]
+    pub present_at: Option<u32>,
+    /// 発表専用ウィンドウ: 発表元ウィンドウのラベル（終了時のスライド番号同期先）。
+    #[serde(default)]
+    pub opener_label: Option<String>,
+    /// 発表専用ウィンドウ: 発表元のプレゼンタブID（スライド番号同期用）。
+    #[serde(default)]
+    pub source_tab_id: Option<String>,
 }
 
 /// ラベル → 移送待ちタブ内容。
