@@ -23,20 +23,26 @@
  *   - 本文: それ以降すべて（はみ出たら zoom で fit→下限超でゾーン内スクロール）
  */
 
-import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
+import {
+  getCurrentWindow,
+  PhysicalPosition,
+  PhysicalSize,
+} from "@tauri-apps/api/window";
 import { t, onLangChange } from "./i18n";
 // プレゼンのスタイルはこのモジュールと一緒に遅延ロードする（起動バンドルから除外）。
 import "./styles/presentation.css";
 
 /**
- * フルスクリーン前のウィンドウ状態（位置・最大化）。
+ * フルスクリーン前のウィンドウ状態（位置・サイズ・最大化）。
  *
  * WebView2 では HTML Fullscreen API がホストウィンドウごとフルスクリーン化する。
- * 解除時の位置復元が WebView2 任せだと別の場所に戻ることがあるため、
- * 発表開始時に自前で保存し、解除後に復元する。
+ * 解除時の復元が WebView2 任せだと別の場所・サイズに戻ることがあるため、
+ * 発表開始時に自前で保存し、解除後に復元する。スナップ配置（画面半分/4分の1）は
+ * 位置とサイズの組で決まるため、サイズも必ず戻す。
  */
 let savedWindowState: {
   pos: { x: number; y: number };
+  size: { w: number; h: number };
   maximized: boolean;
 } | null = null;
 
@@ -48,8 +54,16 @@ async function saveWindowState(): Promise<void> {
   if (!isTauriContext()) return;
   try {
     const w = getCurrentWindow();
-    const [maximized, p] = await Promise.all([w.isMaximized(), w.outerPosition()]);
-    savedWindowState = { pos: { x: p.x, y: p.y }, maximized };
+    const [maximized, p, s] = await Promise.all([
+      w.isMaximized(),
+      w.outerPosition(),
+      w.outerSize(),
+    ]);
+    savedWindowState = {
+      pos: { x: p.x, y: p.y },
+      size: { w: s.width, h: s.height },
+      maximized,
+    };
   } catch {
     savedWindowState = null;
   }
@@ -69,6 +83,7 @@ async function restoreWindowState(): Promise<void> {
     if (s.maximized) {
       await w.maximize();
     } else {
+      await w.setSize(new PhysicalSize(s.size.w, s.size.h));
       await w.setPosition(new PhysicalPosition(s.pos.x, s.pos.y));
     }
   } catch {
