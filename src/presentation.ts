@@ -73,16 +73,45 @@ async function restoreWindowState(): Promise<void> {
   if (!savedWindowState || !isTauriContext()) return;
   const s = savedWindowState;
   savedWindowState = null;
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   try {
-    // OSフルスクリーンの解除完了（→ WebView2 のウィンドウ復元）を待ってから直す。
+    // OSフルスクリーンの解除完了を待ってから直す。
     for (let i = 0; i < 20 && document.fullscreenElement; i++) {
-      await new Promise((r) => setTimeout(r, 50));
+      await sleep(50);
     }
-    await new Promise((r) => setTimeout(r, 150));
     const w = getCurrentWindow();
     if (s.maximized) {
+      await sleep(150);
       await w.maximize();
-    } else {
+      return;
+    }
+    // WebView2 は解除後にウィンドウを最大化のまま残したり、遅れて自前の復元で
+    // 上書きしてくることがある。最大化を解いてから位置・サイズを設定し、
+    // 期待どおりの状態が2回連続で観測できるまで数回強制し直す。
+    let stable = 0;
+    for (let i = 0; i < 10; i++) {
+      await sleep(i === 0 ? 150 : 200);
+      // 発表へ再突入したら復元を中止する（新しい保存が優先）。
+      if (document.fullscreenElement) return;
+      const [maximized, p, sz] = await Promise.all([
+        w.isMaximized(),
+        w.outerPosition(),
+        w.outerSize(),
+      ]);
+      const ok =
+        !maximized &&
+        Math.abs(p.x - s.pos.x) <= 1 &&
+        Math.abs(p.y - s.pos.y) <= 1 &&
+        Math.abs(sz.width - s.size.w) <= 1 &&
+        Math.abs(sz.height - s.size.h) <= 1;
+      if (ok) {
+        stable++;
+        if (stable >= 2) return;
+        continue;
+      }
+      stable = 0;
+      // 最大化中は setSize/setPosition が効かないため先に解除する。
+      if (maximized) await w.unmaximize();
       await w.setSize(new PhysicalSize(s.size.w, s.size.h));
       await w.setPosition(new PhysicalPosition(s.pos.x, s.pos.y));
     }
