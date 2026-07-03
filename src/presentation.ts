@@ -64,7 +64,9 @@ async function saveWindowState(): Promise<void> {
       size: { w: s.width, h: s.height },
       maximized,
     };
-  } catch {
+  } catch (e) {
+    // 権限不足等で取得できない場合は復元も行わない（原因調査用にログは残す）。
+    console.warn("saveWindowState failed:", e);
     savedWindowState = null;
   }
 }
@@ -115,8 +117,9 @@ async function restoreWindowState(): Promise<void> {
       await w.setSize(new PhysicalSize(s.size.w, s.size.h));
       await w.setPosition(new PhysicalPosition(s.pos.x, s.pos.y));
     }
-  } catch {
-    // 復元失敗は致命的でないため黙って無視する。
+  } catch (e) {
+    // 復元失敗は致命的でないが、権限不足等に気づけるようログは残す。
+    console.warn("restoreWindowState failed:", e);
   }
 }
 
