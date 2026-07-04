@@ -527,6 +527,7 @@ export function createToolbar(
       items.push({
         type: "item",
         label: t(c.spec.titleKey),
+        icon: svg(c.spec.icon),
         action: () => fn?.(),
       });
     }

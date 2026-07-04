@@ -1328,6 +1328,23 @@ body.is-resizing-outline {
   font-size: 12px;
 }
 
+/* アイコン付き項目（ツールバーのオーバーフローメニュー等） */
+.context-menu__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.context-menu__icon {
+  display: inline-flex;
+  color: var(--fg-1);
+  flex-shrink: 0;
+}
+
+.context-menu__icon svg {
+  display: block;
+}
+
 .context-menu__item:hover:not(:disabled) {
   background: var(--tab-hover-bg);
 }
