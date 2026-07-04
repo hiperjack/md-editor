@@ -13,6 +13,8 @@ export type MenuItem =
       disabled?: boolean;
       /** 右側に淡色で表示するショートカット表記（例: "F5", "Ctrl+P"）。 */
       shortcut?: string;
+      /** ラベル左に表示するアイコン（信頼できるSVGマークアップのみ渡すこと）。 */
+      icon?: string;
     }
   | { type: "separator" };
 
@@ -67,7 +69,17 @@ export function showContextMenu(x: number, y: number, items: MenuItem[]): void {
     btn.className = "context-menu__item";
     const labelSpan = document.createElement("span");
     labelSpan.className = "context-menu__label";
-    labelSpan.textContent = item.label;
+    if (item.icon) {
+      // アイコン付き項目（ツールバーのオーバーフローメニュー等）。
+      // icon は自前の ICONS 定数由来のSVGのみを想定する。
+      const iconSpan = document.createElement("span");
+      iconSpan.className = "context-menu__icon";
+      iconSpan.innerHTML = item.icon;
+      labelSpan.appendChild(iconSpan);
+      labelSpan.appendChild(document.createTextNode(item.label));
+    } else {
+      labelSpan.textContent = item.label;
+    }
     btn.appendChild(labelSpan);
     if (item.shortcut) {
       const accel = document.createElement("span");

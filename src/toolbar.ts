@@ -11,6 +11,15 @@ import {
   toggleLinkCommand,
 } from "@milkdown/kit/preset/commonmark";
 import { toggleStrikethroughCommand, insertTableCommand } from "@milkdown/kit/preset/gfm";
+import { setHighlightCommand } from "./highlight";
+import { toggleSuperscriptCommand, toggleSubscriptCommand } from "./supsub";
+import {
+  toggleTaskListCommand,
+  insertCalloutCommand,
+  clearFormattingCommand,
+  CALLOUT_TYPES,
+  type CalloutType,
+} from "./format-commands";
 
 import { type EditorHost, createCodeBlockFromSelection } from "./editor";
 import { imageActionFromMenu } from "./image-edit";
@@ -18,6 +27,7 @@ import { toggleUnderlineCommand } from "./underline";
 import { setTextColorCommand } from "./text-color";
 import {
   showColorPalette,
+  showHighlightPalette,
   closeColorPalette,
   getColorPaletteEl,
 } from "./color-palette";
@@ -25,6 +35,7 @@ import {
   showContextMenu,
   closeContextMenu,
   getContextMenuEl,
+  type MenuItem,
 } from "./context-menu";
 import { settings } from "./settings";
 import { t, onLangChange } from "./i18n";
@@ -69,6 +80,15 @@ const ICONS: Record<string, string> = {
   underline: "M6 4v6a6 6 0 0 0 12 0V4M4 20h16",
   // 文字色: "A"。下のカラーバーと右下の▼は createToolbar が別要素で描く。
   text_color: "m7 16 5-12 5 12M8.9 12h6.2",
+  // ハイライト: マーカーペン（lucide highlighter）。カラーバー・▼は文字色と同様。
+  highlight: "m9 11-6 6v3h9l3-3M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4z",
+  sup: "m4 19 8-12m-8 0 8 12M20 12h-4c0-1.5.44-2 1.5-2.5S20 8.33 20 7c0-1-.8-2-2-2s-2 .7-2 2",
+  sub: "m4 5 8 12M4 17 12 5M20 19h-4c0-1.5.44-2 1.5-2.5S20 15.33 20 14c0-1-.8-2-2-2s-2 .7-2 2",
+  tasklist: "M3 5h6v6H3zM5.2 7.6l1.3 1.3 2.2-2.6M13 8h8M3 14h6v6H3zM13 17h8",
+  callout: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM12 7v4M12 15h.01",
+  eraser: "m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21M22 21H7M5 11l9 9",
+  // オーバーフロー「»」（隠れたボタンのメニューを開く）
+  chevrons_right: "m6 17 5-5-5-5M13 17l5-5-5-5",
   strike: "M16 4H9a3 3 0 0 0-2.83 4M14 12a4 4 0 0 1 0 8H6M4 12h16",
   code: "m16 18 6-6-6-6M8 6l-6 6 6 6",
   h1: "M4 12h8M4 18V6M12 18V6M17 12l3-2v8",
@@ -121,14 +141,21 @@ const BUTTONS: ButtonSpec[] = [
   { key: "fmt_bold", icon: ICONS.bold, titleKey: "tb.bold", vis: "editor" },
   { key: "fmt_italic", icon: ICONS.italic, titleKey: "tb.italic", vis: "editor" },
   { key: "fmt_underline", icon: ICONS.underline, titleKey: "tb.underline", vis: "editor" },
-  // 文字色: クリック=直近色を適用、ホバー=パレットを開く（右下に▼バッジ）。
+  // 文字色/ハイライト: クリック=直近色を適用、ホバー=パレットを開く（右下に▼バッジ）。
   { key: "fmt_text_color", icon: ICONS.text_color, titleKey: "tb.textColor", vis: "editor" },
+  { key: "fmt_highlight", icon: ICONS.highlight, titleKey: "tb.highlight", vis: "editor" },
   { key: "fmt_strike", icon: ICONS.strike, titleKey: "tb.strike", vis: "editor" },
   { key: "fmt_code", icon: ICONS.code, titleKey: "tb.code", vis: "editor" },
+  { key: "fmt_sup", icon: ICONS.sup, titleKey: "tb.sup", vis: "editor" },
+  { key: "fmt_sub", icon: ICONS.sub, titleKey: "tb.sub", vis: "editor" },
+  { key: "fmt_clear", icon: ICONS.eraser, titleKey: "tb.clearFormat", vis: "editor" },
   { key: "sep", icon: "", titleKey: "", vis: "editor" },
   { key: "fmt_bullet", icon: ICONS.bullet, titleKey: "tb.bullet", vis: "editor" },
   { key: "fmt_ordered", icon: ICONS.ordered, titleKey: "tb.ordered", vis: "editor" },
+  { key: "fmt_task", icon: ICONS.tasklist, titleKey: "tb.tasklist", vis: "editor" },
   { key: "fmt_quote", icon: ICONS.quote, titleKey: "tb.quote", vis: "editor" },
+  // コールアウト: ホバー/クリックで種類（NOTE/TIP/…）のメニューを開く。
+  { key: "fmt_callout", icon: ICONS.callout, titleKey: "tb.callout", vis: "editor" },
   { key: "fmt_codeblock", icon: ICONS.codeblock, titleKey: "tb.codeblock", vis: "editor" },
   { key: "sep", icon: "", titleKey: "", vis: "editor" },
   { key: "fmt_table", icon: ICONS.table, titleKey: "tb.table", vis: "editor" },
@@ -144,6 +171,29 @@ const BUTTONS: ButtonSpec[] = [
 
 function svg(d: string): string {
   return `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+}
+
+/**
+ * ポップアップのアンカー座標。ツールバーの該当ボタンが可視ならその直下、
+ * 不可視（メニュー起動等）ならキャレット位置、どちらも無ければ画面上部中央。
+ */
+function anchorForButton(
+  editor: EditorHost,
+  key: string,
+): { x: number; y: number } {
+  const btn = document.querySelector<HTMLElement>(
+    `.toolbar-btn[data-action="${key}"]`,
+  );
+  if (btn && btn.offsetParent !== null) {
+    const r = btn.getBoundingClientRect();
+    return { x: r.left, y: r.bottom + 4 };
+  }
+  const view = editor.getActiveView();
+  if (view) {
+    const c = view.coordsAtPos(view.state.selection.head);
+    return { x: c.left, y: c.bottom + 4 };
+  }
+  return { x: window.innerWidth / 2, y: 80 };
 }
 
 /**
@@ -173,25 +223,43 @@ export function makeToolbarActions(editor: EditorHost): Record<string, Action> {
       run((c) => c.call(setTextColorCommand.key, settings.get().lastTextColor)),
     // ホバー（および書式メニュー）: パレットを開いて選んだ色を適用。
     fmt_text_color_menu: () => {
-      // アンカーはツールバーの文字色ボタン直下。不可視（メニュー起動等）ならキャレット位置。
-      const btn = document.querySelector<HTMLElement>(
-        '.toolbar-btn[data-action="fmt_text_color"]',
-      );
-      let anchor = { x: window.innerWidth / 2, y: 80 };
-      if (btn && btn.offsetParent !== null) {
-        const r = btn.getBoundingClientRect();
-        anchor = { x: r.left, y: r.bottom + 4 };
-      } else {
-        const view = editor.getActiveView();
-        if (view) {
-          const c = view.coordsAtPos(view.state.selection.head);
-          anchor = { x: c.left, y: c.bottom + 4 };
-        }
-      }
+      const anchor = anchorForButton(editor, "fmt_text_color");
       showColorPalette(anchor, (color) => {
         if (color) settings.setLastTextColor(color);
         run((c) => c.call(setTextColorCommand.key, color ?? undefined));
       });
+    },
+    // ハイライト: クリック=直近（""=標準マーカー）、ホバー/メニュー=パレット。
+    fmt_highlight: () =>
+      run((c) => c.call(setHighlightCommand.key, settings.get().lastHighlightColor)),
+    fmt_highlight_menu: () => {
+      const anchor = anchorForButton(editor, "fmt_highlight");
+      showHighlightPalette(anchor, (color) => {
+        if (color !== null) settings.setLastHighlightColor(color);
+        run((c) => c.call(setHighlightCommand.key, color ?? undefined));
+      });
+    },
+    fmt_sup: () => run((c) => c.call(toggleSuperscriptCommand.key)),
+    fmt_sub: () => run((c) => c.call(toggleSubscriptCommand.key)),
+    fmt_clear: () => run((c) => c.call(clearFormattingCommand.key)),
+    // タスクリスト: リスト外なら箇条書き化してからチェックボックスをトグルする。
+    fmt_task: () =>
+      run((c) => {
+        c.call(wrapInBulletListCommand.key);
+        c.call(toggleTaskListCommand.key);
+      }),
+    // コールアウト: 種類メニューを開く（ホバー・書式メニュー共用）。
+    fmt_callout_menu: () => {
+      const anchor = anchorForButton(editor, "fmt_callout");
+      showContextMenu(
+        anchor.x,
+        anchor.y,
+        CALLOUT_TYPES.map((kind) => ({
+          type: "item" as const,
+          label: kind,
+          action: () => run((c) => c.call(insertCalloutCommand.key, kind as CalloutType)),
+        })),
+      );
     },
     fmt_strike: () => run((c) => c.call(toggleStrikethroughCommand.key)),
     fmt_code: () => run((c) => c.call(toggleInlineCodeCommand.key)),
@@ -238,6 +306,11 @@ function wireHoverPopup(
 ): void {
   let openTimer: number | null = null;
   let closeTimer: number | null = null;
+  // このボタンが開いたポップアップ要素。パレット等は複数ボタンで共有されるため、
+  // 「開いているか」ではなく「自分が開いたものか」で開閉を判断する。
+  // （隣のボタンへ直接移動したとき、開き直しをスキップしたり、古い遅延クローズが
+  //  新しいポップアップを巻き添えで閉じたりするのを防ぐ。）
+  let ownedEl: HTMLElement | null = null;
   const cancelClose = (): void => {
     if (closeTimer !== null) {
       clearTimeout(closeTimer);
@@ -246,16 +319,20 @@ function wireHoverPopup(
   };
   const scheduleClose = (): void => {
     cancelClose();
-    closeTimer = window.setTimeout(() => close(), 300);
+    closeTimer = window.setTimeout(() => {
+      if (ownedEl && getEl() === ownedEl) close();
+      ownedEl = null;
+    }, 300);
   };
   const openNow = (): void => {
     cancelClose();
-    if (getEl()) return;
+    // 自分のポップアップが開いたままなら何もしない。他のボタンのものなら開き直す。
+    if (ownedEl && getEl() === ownedEl) return;
     open();
-    const el = getEl();
-    if (el) {
-      el.addEventListener("mouseenter", cancelClose);
-      el.addEventListener("mouseleave", scheduleClose);
+    ownedEl = getEl();
+    if (ownedEl) {
+      ownedEl.addEventListener("mouseenter", cancelClose);
+      ownedEl.addEventListener("mouseleave", scheduleClose);
     }
   };
   btn.addEventListener("mouseenter", () => {
@@ -292,6 +369,17 @@ export function createToolbar(
 
   const titleUpdaters: Array<() => void> = [];
   let spacerInserted = false;
+
+  // オーバーフロー対象（spacer より左のボタン・区切り）と「»」ボタン。
+  const collapsibles: { el: HTMLElement; spec: ButtonSpec }[] = [];
+  const moreBtn = document.createElement("button");
+  moreBtn.className = "toolbar-btn toolbar-overflow-hidden";
+  moreBtn.title = t("tb.more");
+  moreBtn.dataset.action = "toolbar_more";
+  moreBtn.innerHTML = svg(ICONS.chevrons_right);
+  titleUpdaters.push(() => {
+    moreBtn.title = t("tb.more");
+  });
   // タブ種別による表示制御クラス（CSSが body[data-tabkind] と組で出し分ける）。
   const visClass = (spec: ButtonSpec): string =>
     spec.vis === "editor"
@@ -311,9 +399,10 @@ export function createToolbar(
       parent.appendChild(slot);
       continue;
     }
-    // 最初に出現した右寄せ要素（sepでも可）の直前に flex spacer を挿入して、
-    // 以降を右端へ追いやる。
+    // 最初に出現した右寄せ要素（sepでも可）の直前に、オーバーフロー「»」ボタンと
+    // flex spacer を挿入して、以降を右端へ追いやる。
     if (spec.align === "right" && !spacerInserted) {
+      parent.appendChild(moreBtn);
       const spacer = document.createElement("span");
       spacer.className = "toolbar-spacer";
       parent.appendChild(spacer);
@@ -323,6 +412,7 @@ export function createToolbar(
       const sep = document.createElement("span");
       sep.className = "toolbar-sep" + visClass(spec);
       parent.appendChild(sep);
+      if (!spacerInserted) collapsibles.push({ el: sep, spec });
       continue;
     }
     const btn = document.createElement("button");
@@ -330,20 +420,37 @@ export function createToolbar(
     btn.title = t(spec.titleKey);
     btn.dataset.action = spec.key;
     btn.innerHTML = svg(spec.icon);
-    // 文字色ボタン: アイコン下に直近色のカラーバー、右下に▼バッジ。
+    // 文字色/ハイライトボタン: アイコン下に直近色のカラーバー、右下に▼バッジ。
     // クリック=直近色を適用、ホバー=パレットを開く。
-    if (spec.key === "fmt_text_color") {
+    if (spec.key === "fmt_text_color" || spec.key === "fmt_highlight") {
       const bar = document.createElement("span");
       bar.className = "toolbar-colorbar";
+      if (spec.key === "fmt_highlight") {
+        bar.style.background = "var(--last-highlight-color, #ffff00)";
+      }
       btn.appendChild(bar);
+      const caret = document.createElement("span");
+      caret.className = "toolbar-caret";
+      btn.appendChild(caret);
+      const menuAction =
+        spec.key === "fmt_highlight" ? "fmt_highlight_menu" : "fmt_text_color_menu";
+      wireHoverPopup(
+        btn,
+        () => actions[menuAction]?.(),
+        getColorPaletteEl,
+        closeColorPalette,
+      );
+    }
+    // コールアウトボタン: ホバー/クリックで種類メニューを開く（右下に▼バッジ）。
+    if (spec.key === "fmt_callout") {
       const caret = document.createElement("span");
       caret.className = "toolbar-caret";
       btn.appendChild(caret);
       wireHoverPopup(
         btn,
-        () => actions.fmt_text_color_menu?.(),
-        getColorPaletteEl,
-        closeColorPalette,
+        () => actions.fmt_callout_menu?.(),
+        getContextMenuEl,
+        closeContextMenu,
       );
     }
     // 出力ボタン: ホバー/クリックで出力メニューを開く（右下に▼バッジ）。
@@ -373,13 +480,75 @@ export function createToolbar(
       if (fn) fn();
     });
     parent.appendChild(btn);
+    if (!spacerInserted) collapsibles.push({ el: btn, spec });
     titleUpdaters.push(() => {
       btn.title = t(spec.titleKey);
     });
   }
 
+  // ── オーバーフロー処理 ──
+  // 狭いウィンドウでは左グループのボタンを末尾から隠し、「»」メニューへ逃がす。
+  const fits = (): boolean => parent.scrollWidth <= parent.clientWidth + 1;
+  const relayout = (): void => {
+    for (const c of collapsibles) c.el.classList.remove("toolbar-overflow-hidden");
+    moreBtn.classList.add("toolbar-overflow-hidden");
+    if (fits()) return;
+    moreBtn.classList.remove("toolbar-overflow-hidden");
+    for (let i = collapsibles.length - 1; i >= 0 && !fits(); i--) {
+      const c = collapsibles[i];
+      // tabkind別のCSSで既に非表示のもの（プレゼンタブの書式ボタン等）は対象外。
+      if (c.el.offsetParent === null) continue;
+      c.el.classList.add("toolbar-overflow-hidden");
+    }
+  };
+
+  moreBtn.addEventListener("mousedown", (e) => e.preventDefault());
+  moreBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    // 隠れているボタンをリスト表示する。文字色/ハイライト/コールアウト/出力は
+    // パレット・種類メニューを開くアクションに割り当てる（直接適用より選べる方が親切）。
+    const menuActionOf = (key: string): (() => void) | undefined => {
+      if (key === "fmt_text_color") return actions.fmt_text_color_menu;
+      if (key === "fmt_highlight") return actions.fmt_highlight_menu;
+      if (key === "fmt_callout") return actions.fmt_callout_menu;
+      if (key === "file_export_menu") return () => openExportMenu(moreBtn);
+      return actions[key];
+    };
+    const items: MenuItem[] = [];
+    for (const c of collapsibles) {
+      if (!c.el.classList.contains("toolbar-overflow-hidden")) continue;
+      if (c.spec.key === "sep") {
+        if (items.length > 0 && items[items.length - 1].type !== "separator") {
+          items.push({ type: "separator" });
+        }
+        continue;
+      }
+      const fn = menuActionOf(c.spec.key);
+      items.push({
+        type: "item",
+        label: t(c.spec.titleKey),
+        icon: svg(c.spec.icon),
+        action: () => fn?.(),
+      });
+    }
+    if (items.length && items[items.length - 1].type === "separator") items.pop();
+    if (!items.length) return;
+    const r = moreBtn.getBoundingClientRect();
+    showContextMenu(r.left, r.bottom + 2, items);
+  });
+
+  // 幅の変化・タブ種別の切替（表示ボタンが変わる）・言語切替で再計算する。
+  const ro = new ResizeObserver(() => relayout());
+  ro.observe(parent);
+  new MutationObserver(() => relayout()).observe(document.body, {
+    attributes: true,
+    attributeFilter: ["data-tabkind"],
+  });
+  requestAnimationFrame(relayout);
+
   // 言語切替時にtooltipを更新
   onLangChange(() => {
     for (const fn of titleUpdaters) fn();
+    relayout();
   });
 }

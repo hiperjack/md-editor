@@ -285,13 +285,15 @@ body {
   background: var(--bg-1);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  /* ウィンドウが狭いときは toolbar.ts の relayout が末尾のボタンから隠し、
+     「»」ボタンのメニューに逃がす（オーバーフローメニュー方式）。 */
   flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
+  overflow: hidden;
 }
 
-#toolbar::-webkit-scrollbar {
-  display: none;
+/* オーバーフローで隠したボタン/区切り（tabkind別の表示制御より優先） */
+#toolbar .toolbar-overflow-hidden {
+  display: none !important;
 }
 
 .toolbar-btn {
@@ -1326,6 +1328,23 @@ body.is-resizing-outline {
   font-size: 12px;
 }
 
+/* アイコン付き項目（ツールバーのオーバーフローメニュー等） */
+.context-menu__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.context-menu__icon {
+  display: inline-flex;
+  color: var(--fg-1);
+  flex-shrink: 0;
+}
+
+.context-menu__icon svg {
+  display: block;
+}
+
 .context-menu__item:hover:not(:disabled) {
   background: var(--tab-hover-bg);
 }
@@ -1395,6 +1414,25 @@ body.is-resizing-outline {
 
 .color-palette__clear:hover {
   background: var(--tab-hover-bg);
+}
+
+/* ハイライトパレットの「標準マーカー」ボタン（既定の黄色見本を兼ねる） */
+.color-palette__mark-default {
+  margin-bottom: 4px;
+  background: #ffff00;
+  color: #1f2937;
+}
+
+.color-palette__mark-default:hover {
+  background: #ffef60;
+}
+
+/* ダークテーマ: ハイライト（<mark>）内の文字は濃色固定のため、テキスト選択中は
+   選択背景（グレー）に黄色が覆われて黒文字が沈む。選択中だけ文字色を明色へ反転して
+   読めるようにする（エディタ・プレビュー共通）。 */
+[data-theme="dark"] mark::selection,
+[data-theme="dark"] mark *::selection {
+  color: #f2f2f2;
 }
 
 /* 発表専用ウィンドウの起動中: 発表オーバーレイが出るまで通常UIを隠す

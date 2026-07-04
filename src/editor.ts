@@ -41,6 +41,26 @@ import {
   setTextColorCommand,
   textColorHandler,
 } from "./text-color";
+import {
+  remarkHighlight,
+  highlightSchema,
+  setHighlightCommand,
+  highlightHandler,
+} from "./highlight";
+import {
+  remarkSupSub,
+  superscriptSchema,
+  subscriptSchema,
+  toggleSuperscriptCommand,
+  toggleSubscriptCommand,
+  superscriptHandler,
+  subscriptHandler,
+} from "./supsub";
+import {
+  toggleTaskListCommand,
+  insertCalloutCommand,
+  clearFormattingCommand,
+} from "./format-commands";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame-dark.css";
 
@@ -657,13 +677,24 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     });
 
     // 下線マーク（<u>）。スキーマ・トグルコマンド・Mod-u キーマップを登録する。
-    // 文字色マーク（<span style="color:#hex">）。スキーマと適用/解除コマンドを登録する。
+    // 文字色（<span style="color:#hex">）・ハイライト（<mark>）・上付き/下付き
+    // （<sup>/<sub>）の各マークと、タスクリスト/コールアウト/書式クリアの
+    // コマンドも登録する。
     crepe.editor
       .use(underlineSchema)
       .use(toggleUnderlineCommand)
       .use(underlineKeymap)
       .use(textColorSchema)
-      .use(setTextColorCommand);
+      .use(setTextColorCommand)
+      .use(highlightSchema)
+      .use(setHighlightCommand)
+      .use(superscriptSchema)
+      .use(subscriptSchema)
+      .use(toggleSuperscriptCommand)
+      .use(toggleSubscriptCommand)
+      .use(toggleTaskListCommand)
+      .use(insertCalloutCommand)
+      .use(clearFormattingCommand);
 
     // Enter は既定の段落分割 (一般的なエディタ挙動)。同じ段落内のソフト改行は
     // Shift+Enter (hardbreak)。キーマップは後段の keymap({...}) で定義する。
@@ -1303,6 +1334,10 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         { plugin: remarkUnderline, options: {} },
         // <span style="color:#hex">/</span> の html ノードペアを textColor ノードへ畳む。
         { plugin: remarkTextColor, options: {} },
+        // <mark…>/</mark> の html ノードペアを highlight ノードへ畳む。
+        { plugin: remarkHighlight, options: {} },
+        // <sup>/<sub> の html ノードペアを superscript/subscript ノードへ畳む。
+        { plugin: remarkSupSub, options: {} },
       ]);
       ctx.update(remarkStringifyOptionsCtx, (opts) => ({
         ...opts,
@@ -1364,6 +1399,11 @@ export function createEditorHost(root: HTMLElement): EditorHost {
             <span style="color:#hex"> + 子要素 + </span> に直列化する。
           */
           textColor: (textColorHandler) as never,
+          // highlight → <mark> / <mark style="background:#hex">
+          highlight: (highlightHandler) as never,
+          // superscript/subscript → <sup>/<sub>
+          superscript: (superscriptHandler) as never,
+          subscript: (subscriptHandler) as never,
         },
         /*
           ブロック間は原則「単一 \n 区切り (空行 0)」にする。

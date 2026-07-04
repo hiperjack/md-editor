@@ -67,6 +67,8 @@ export type Settings = {
   mermaidWidthMode: "fit" | "native";
   /** 文字色ボタンが直近に適用した色（"#rrggbb"）。ボタン本体クリックで再適用する。 */
   lastTextColor: string;
+  /** ハイライトボタンが直近に適用した色。"" は標準マーカー（属性なし <mark>）。 */
+  lastHighlightColor: string;
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -81,6 +83,7 @@ const DEFAULT_SETTINGS: Settings = {
   outlineWidth: 250,
   mermaidWidthMode: "fit",
   lastTextColor: "#ff0000",
+  lastHighlightColor: "",
 };
 
 const MIN_SIZE = 8;
@@ -150,6 +153,12 @@ function loadFromStorage(): Settings {
         /^#[0-9a-fA-F]{6}$/.test(parsed.lastTextColor)
           ? parsed.lastTextColor
           : DEFAULT_SETTINGS.lastTextColor,
+      lastHighlightColor:
+        typeof parsed.lastHighlightColor === "string" &&
+        (parsed.lastHighlightColor === "" ||
+          /^#[0-9a-fA-F]{6}$/.test(parsed.lastHighlightColor))
+          ? parsed.lastHighlightColor
+          : DEFAULT_SETTINGS.lastHighlightColor,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -213,8 +222,12 @@ function applyToDom(): void {
   root.setAttribute("data-theme", effectiveTheme());
   root.style.setProperty("--outline-w", `${current.outlineWidth}px`);
   root.setAttribute("data-mermaid-width", current.mermaidWidthMode);
-  // ツールバーの文字色ボタンのカラーバーが参照する。
+  // ツールバーの文字色/ハイライトボタンのカラーバーが参照する。
   root.style.setProperty("--last-text-color", current.lastTextColor);
+  root.style.setProperty(
+    "--last-highlight-color",
+    current.lastHighlightColor || "#ffff00",
+  );
 }
 
 function notify(): void {
@@ -322,6 +335,16 @@ export const settings = {
   setLastTextColor(v: string): void {
     if (!/^#[0-9a-fA-F]{6}$/.test(v) || v === current.lastTextColor) return;
     current = { ...current, lastTextColor: v };
+    saveToStorage(current);
+    applyToDom();
+    notify();
+  },
+
+  /** "" は標準マーカー（属性なし <mark>）。 */
+  setLastHighlightColor(v: string): void {
+    if (v !== "" && !/^#[0-9a-fA-F]{6}$/.test(v)) return;
+    if (v === current.lastHighlightColor) return;
+    current = { ...current, lastHighlightColor: v };
     saveToStorage(current);
     applyToDom();
     notify();

@@ -25,6 +25,12 @@ const STANDARD_ROW: readonly string[] = [
   "#00b050", "#00b0f0", "#0070c0", "#002060", "#7030a0",
 ];
 
+/** ハイライト（蛍光マーカー）用のパステル10色。濃色文字が読める明度に揃える。 */
+const HIGHLIGHT_ROW: readonly string[] = [
+  "#fff59b", "#ffe066", "#d9f7a1", "#b5f2c8", "#b3f0f7",
+  "#bcd9ff", "#dcc9ff", "#ffc9e8", "#ffc2c2", "#e3e6ea",
+];
+
 let paletteEl: HTMLElement | null = null;
 let cleanup: (() => void) | null = null;
 
@@ -105,6 +111,58 @@ export function showColorPalette(
   clearBtn.addEventListener("click", () => pick(null));
   pane.appendChild(clearBtn);
 
+  presentPane(pane, anchor);
+}
+
+/**
+ * ハイライト（蛍光マーカー）用パレット。
+ * onPick: "#rrggbb"=色付き / ""=標準マーカー（属性なし <mark>）/ null=解除。
+ */
+export function showHighlightPalette(
+  anchor: { x: number; y: number },
+  onPick: (color: string | null) => void,
+): void {
+  closeColorPalette();
+
+  const pane = document.createElement("div");
+  pane.className = "color-palette";
+
+  const pick = (color: string | null): void => {
+    closeColorPalette();
+    onPick(color);
+  };
+
+  const heading = document.createElement("div");
+  heading.className = "color-palette__heading";
+  heading.textContent = t("color.highlight");
+  pane.appendChild(heading);
+
+  const grid = document.createElement("div");
+  grid.className = "color-palette__grid";
+  addSwatchRow(grid, HIGHLIGHT_ROW, pick);
+  pane.appendChild(grid);
+
+  const defaultBtn = document.createElement("button");
+  defaultBtn.type = "button";
+  defaultBtn.className = "color-palette__clear color-palette__mark-default";
+  defaultBtn.textContent = t("color.markDefault");
+  defaultBtn.addEventListener("mousedown", (e) => e.preventDefault());
+  defaultBtn.addEventListener("click", () => pick(""));
+  pane.appendChild(defaultBtn);
+
+  const clearBtn = document.createElement("button");
+  clearBtn.type = "button";
+  clearBtn.className = "color-palette__clear";
+  clearBtn.textContent = t("color.clear");
+  clearBtn.addEventListener("mousedown", (e) => e.preventDefault());
+  clearBtn.addEventListener("click", () => pick(null));
+  pane.appendChild(clearBtn);
+
+  presentPane(pane, anchor);
+}
+
+/** パレットの共通表示処理（配置・クランプ・閉じるリスナ）。 */
+function presentPane(pane: HTMLElement, anchor: { x: number; y: number }): void {
   // サイズ測定のため一旦不可視で配置 → 画面端でクランプ（context-menu.ts と同じ）。
   pane.style.left = "0px";
   pane.style.top = "0px";
