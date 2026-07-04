@@ -281,17 +281,15 @@ body {
   display: flex;
   align-items: center;
   gap: 2px;
+  row-gap: 2px;
   padding: 4px 8px;
   background: var(--bg-1);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-#toolbar::-webkit-scrollbar {
-  display: none;
+  /* ウィンドウが狭いときは折り返して全ボタンを見える・押せる状態に保つ
+     （以前は overflow-x:auto + スクロールバー非表示で、あふれたボタンに
+     アクセスできなかった）。 */
+  flex-wrap: wrap;
 }
 
 .toolbar-btn {
@@ -1406,6 +1404,14 @@ body.is-resizing-outline {
 
 .color-palette__mark-default:hover {
   background: #ffef60;
+}
+
+/* ダークテーマ: ハイライト（<mark>）内の文字は濃色固定のため、テキスト選択中は
+   選択背景（グレー）に黄色が覆われて黒文字が沈む。選択中だけ文字色を明色へ反転して
+   読めるようにする（エディタ・プレビュー共通）。 */
+[data-theme="dark"] mark::selection,
+[data-theme="dark"] mark *::selection {
+  color: #f2f2f2;
 }
 
 /* 発表専用ウィンドウの起動中: 発表オーバーレイが出るまで通常UIを隠す
