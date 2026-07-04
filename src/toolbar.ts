@@ -35,6 +35,7 @@ import {
   showContextMenu,
   closeContextMenu,
   getContextMenuEl,
+  type MenuItem,
 } from "./context-menu";
 import { settings } from "./settings";
 import { t, onLangChange } from "./i18n";
@@ -86,6 +87,8 @@ const ICONS: Record<string, string> = {
   tasklist: "M3 5h6v6H3zM5.2 7.6l1.3 1.3 2.2-2.6M13 8h8M3 14h6v6H3zM13 17h8",
   callout: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM12 7v4M12 15h.01",
   eraser: "m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21M22 21H7M5 11l9 9",
+  // オーバーフロー「»」（隠れたボタンのメニューを開く）
+  chevrons_right: "m6 17 5-5-5-5M13 17l5-5-5-5",
   strike: "M16 4H9a3 3 0 0 0-2.83 4M14 12a4 4 0 0 1 0 8H6M4 12h16",
   code: "m16 18 6-6-6-6M8 6l-6 6 6 6",
   h1: "M4 12h8M4 18V6M12 18V6M17 12l3-2v8",
@@ -366,6 +369,17 @@ export function createToolbar(
 
   const titleUpdaters: Array<() => void> = [];
   let spacerInserted = false;
+
+  // オーバーフロー対象（spacer より左のボタン・区切り）と「»」ボタン。
+  const collapsibles: { el: HTMLElement; spec: ButtonSpec }[] = [];
+  const moreBtn = document.createElement("button");
+  moreBtn.className = "toolbar-btn toolbar-overflow-hidden";
+  moreBtn.title = t("tb.more");
+  moreBtn.dataset.action = "toolbar_more";
+  moreBtn.innerHTML = svg(ICONS.chevrons_right);
+  titleUpdaters.push(() => {
+    moreBtn.title = t("tb.more");
+  });
   // タブ種別による表示制御クラス（CSSが body[data-tabkind] と組で出し分ける）。
   const visClass = (spec: ButtonSpec): string =>
     spec.vis === "editor"
@@ -385,9 +399,10 @@ export function createToolbar(
       parent.appendChild(slot);
       continue;
     }
-    // 最初に出現した右寄せ要素（sepでも可）の直前に flex spacer を挿入して、
-    // 以降を右端へ追いやる。
+    // 最初に出現した右寄せ要素（sepでも可）の直前に、オーバーフロー「»」ボタンと
+    // flex spacer を挿入して、以降を右端へ追いやる。
     if (spec.align === "right" && !spacerInserted) {
+      parent.appendChild(moreBtn);
       const spacer = document.createElement("span");
       spacer.className = "toolbar-spacer";
       parent.appendChild(spacer);
@@ -397,6 +412,7 @@ export function createToolbar(
       const sep = document.createElement("span");
       sep.className = "toolbar-sep" + visClass(spec);
       parent.appendChild(sep);
+      if (!spacerInserted) collapsibles.push({ el: sep, spec });
       continue;
     }
     const btn = document.createElement("button");
@@ -464,13 +480,74 @@ export function createToolbar(
       if (fn) fn();
     });
     parent.appendChild(btn);
+    if (!spacerInserted) collapsibles.push({ el: btn, spec });
     titleUpdaters.push(() => {
       btn.title = t(spec.titleKey);
     });
   }
 
+  // ── オーバーフロー処理 ──
+  // 狭いウィンドウでは左グループのボタンを末尾から隠し、「»」メニューへ逃がす。
+  const fits = (): boolean => parent.scrollWidth <= parent.clientWidth + 1;
+  const relayout = (): void => {
+    for (const c of collapsibles) c.el.classList.remove("toolbar-overflow-hidden");
+    moreBtn.classList.add("toolbar-overflow-hidden");
+    if (fits()) return;
+    moreBtn.classList.remove("toolbar-overflow-hidden");
+    for (let i = collapsibles.length - 1; i >= 0 && !fits(); i--) {
+      const c = collapsibles[i];
+      // tabkind別のCSSで既に非表示のもの（プレゼンタブの書式ボタン等）は対象外。
+      if (c.el.offsetParent === null) continue;
+      c.el.classList.add("toolbar-overflow-hidden");
+    }
+  };
+
+  moreBtn.addEventListener("mousedown", (e) => e.preventDefault());
+  moreBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    // 隠れているボタンをリスト表示する。文字色/ハイライト/コールアウト/出力は
+    // パレット・種類メニューを開くアクションに割り当てる（直接適用より選べる方が親切）。
+    const menuActionOf = (key: string): (() => void) | undefined => {
+      if (key === "fmt_text_color") return actions.fmt_text_color_menu;
+      if (key === "fmt_highlight") return actions.fmt_highlight_menu;
+      if (key === "fmt_callout") return actions.fmt_callout_menu;
+      if (key === "file_export_menu") return () => openExportMenu(moreBtn);
+      return actions[key];
+    };
+    const items: MenuItem[] = [];
+    for (const c of collapsibles) {
+      if (!c.el.classList.contains("toolbar-overflow-hidden")) continue;
+      if (c.spec.key === "sep") {
+        if (items.length > 0 && items[items.length - 1].type !== "separator") {
+          items.push({ type: "separator" });
+        }
+        continue;
+      }
+      const fn = menuActionOf(c.spec.key);
+      items.push({
+        type: "item",
+        label: t(c.spec.titleKey),
+        action: () => fn?.(),
+      });
+    }
+    if (items.length && items[items.length - 1].type === "separator") items.pop();
+    if (!items.length) return;
+    const r = moreBtn.getBoundingClientRect();
+    showContextMenu(r.left, r.bottom + 2, items);
+  });
+
+  // 幅の変化・タブ種別の切替（表示ボタンが変わる）・言語切替で再計算する。
+  const ro = new ResizeObserver(() => relayout());
+  ro.observe(parent);
+  new MutationObserver(() => relayout()).observe(document.body, {
+    attributes: true,
+    attributeFilter: ["data-tabkind"],
+  });
+  requestAnimationFrame(relayout);
+
   // 言語切替時にtooltipを更新
   onLangChange(() => {
     for (const fn of titleUpdaters) fn();
+    relayout();
   });
 }

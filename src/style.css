@@ -281,15 +281,19 @@ body {
   display: flex;
   align-items: center;
   gap: 2px;
-  row-gap: 2px;
   padding: 4px 8px;
   background: var(--bg-1);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  /* ウィンドウが狭いときは折り返して全ボタンを見える・押せる状態に保つ
-     （以前は overflow-x:auto + スクロールバー非表示で、あふれたボタンに
-     アクセスできなかった）。 */
-  flex-wrap: wrap;
+  /* ウィンドウが狭いときは toolbar.ts の relayout が末尾のボタンから隠し、
+     「»」ボタンのメニューに逃がす（オーバーフローメニュー方式）。 */
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+/* オーバーフローで隠したボタン/区切り（tabkind別の表示制御より優先） */
+#toolbar .toolbar-overflow-hidden {
+  display: none !important;
 }
 
 .toolbar-btn {
