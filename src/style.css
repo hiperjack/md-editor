@@ -125,6 +125,10 @@ body {
   position: absolute;
   top: 100%;
   min-width: 220px;
+  /* ウィンドウが低くても切れず、スクロールで全項目に届くようにする
+     （メニューバー分を差し引いた高さでクランプ）。 */
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 0 0 6px 6px;

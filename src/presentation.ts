@@ -812,6 +812,38 @@ export function mountPresentation(
 
   root.addEventListener("keydown", onKey);
 
+  // ── スライド内アンカーのナビゲーション ──
+  // 脚注（#fn1 / #fnref1）や目次・見出しアンカー（#…）のクリックで、
+  // その id を含むスライドへ移動する（スライドはDOM分割されるため、
+  // 素のアンカー遷移では飛べない）。サイドバー/一覧のサムネはボタン側の
+  // 「そのスライドを選択」を優先するため対象外。
+  const slideIndexForAnchor = (id: string): number => {
+    const sel = `#${CSS.escape(id)}`;
+    for (let i = 0; i < slides.length; i++) {
+      const s = slides[i];
+      const els = [s.title, s.message, ...s.body].filter(
+        (el): el is Element => !!el,
+      );
+      for (const el of els) {
+        if (el.id === id || el.querySelector(sel)) return i;
+      }
+    }
+    return -1;
+  };
+  root.addEventListener("click", (e) => {
+    const target = e.target as Element | null;
+    const a = target?.closest?.('a[href^="#"]');
+    if (!a) return;
+    // サムネ内のリンクはサムネクリック（スライド選択）に任せる。
+    if (target?.closest?.(".pres-sidebar, .pres-grid")) return;
+    // スライド分割された文書では素のアンカー遷移は機能しないため常に抑止する。
+    e.preventDefault();
+    const id = decodeURIComponent((a.getAttribute("href") ?? "").slice(1));
+    if (!id) return;
+    const idx = slideIndexForAnchor(id);
+    if (idx >= 0) jumpTo(idx);
+  });
+
   // クリックでフォーカスを取り、キー操作を有効にする。
   root.addEventListener("mousedown", () => {
     if (!fsOverlay) root.focus({ preventScroll: true });
