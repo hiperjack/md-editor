@@ -17,6 +17,7 @@ import type { EditorHost } from "./editor";
 import type { FindReplaceController } from "./find-replace";
 import { isImageNode } from "./image-edit";
 import { showContextMenu, type MenuItem } from "./context-menu";
+import type { SelectionToolbarController } from "./selection-toolbar";
 import { t } from "./i18n";
 
 type Actions = Record<string, () => void>;
@@ -70,6 +71,7 @@ export function createEditorContextMenu(
   editor: EditorHost,
   actions: Actions,
   find: FindReplaceController,
+  selectionBar?: SelectionToolbarController,
 ): (e: MouseEvent) => void {
   return (e: MouseEvent) => {
     const view = editor.getActiveView();
@@ -133,14 +135,8 @@ export function createEditorContextMenu(
       },
     ];
 
-    if (hasTextSelection) {
-      items.push(
-        { type: "separator" },
-        { type: "item", label: t("cm.bold"), action: () => actions.fmt_bold?.() },
-        { type: "item", label: t("cm.italic"), action: () => actions.fmt_italic?.() },
-        { type: "item", label: t("cm.link"), action: () => actions.fmt_link?.() },
-      );
-    }
+    // 書式（太字・色・ハイライト・リンク等）はメニュー上部に出る
+    // ミニ書式バーに任せる（editor-context-menu 末尾の showAt 参照）。
 
     if (isImageSelected) {
       items.push(
@@ -159,5 +155,8 @@ export function createEditorContextMenu(
     );
 
     showContextMenu(e.clientX, e.clientY, items);
+
+    // テキスト選択中はメニューの上にミニ書式バーも出す（Word風）。
+    if (hasTextSelection) selectionBar?.showAt(e.clientX, e.clientY);
   };
 }

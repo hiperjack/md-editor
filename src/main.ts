@@ -5,6 +5,8 @@ import { store } from "./store";
 import { createEditorHost } from "./editor";
 import { createTabBar } from "./tabs";
 import { createToolbar, makeToolbarActions } from "./toolbar";
+import { installSelectionToolbar } from "./selection-toolbar";
+import { installFootnoteNavigation } from "./footnote-nav";
 import { setupTitle } from "./title";
 import { openAboutModal } from "./about-modal";
 import { createMenuBar, type TopMenu, type MenuEntry } from "./menu-bar";
@@ -497,6 +499,12 @@ async function bootstrap(): Promise<void> {
   const fmtActions = makeToolbarActions(editor);
   createToolbar(toolbarEl, { ...fileActions, ...viewActions, ...fmtActions });
 
+  // ミニ書式バー（テキスト選択して右クリックしたとき、メニューの上に表示）。
+  const selectionBar = installSelectionToolbar(editor, fmtActions);
+
+  // エディタ内の脚注 Ctrl+クリックジャンプ（参照⇔定義）。
+  installFootnoteNavigation();
+
   // アクティブタブ種別に応じてツールバーを切り替える:
   //  - 編集タブ: 通常の編集ボタン。
   //  - プレビュー系タブ: 編集用ボタン（H1以降）を隠す。
@@ -706,7 +714,12 @@ async function bootstrap(): Promise<void> {
   // 右クリックメニュー:
   //  - エディタ本文の上では独自の文脈対応メニューを表示する。
   //  - それ以外（タブ・左パネル・ツールバー等）では WebView2 標準メニューを抑止。
-  const editorContextMenu = createEditorContextMenu(editor, fmtActions, find);
+  const editorContextMenu = createEditorContextMenu(
+    editor,
+    fmtActions,
+    find,
+    selectionBar,
+  );
   document.addEventListener(
     "contextmenu",
     (e) => {

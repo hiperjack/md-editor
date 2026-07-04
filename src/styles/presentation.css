@@ -356,3 +356,23 @@ body[data-tabkind="slideshow"] .toolbar-vis-hideslideshow {
   font-size: 15px;
   color: #9a9a9a;
 }
+
+/* ── スライド下部の脚注欄 ──
+ * 文書末尾の脚注セクションは独立スライドにせず、参照しているスライドの
+ * 下部に小さく表示する（parseSlides が配り直す）。 */
+.slide-canvas .slide-footnotes {
+  flex: 0 0 auto;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--doc-accent-soft, currentColor);
+  font-size: 0.55em;
+  opacity: 0.85;
+}
+.slide-canvas .slide-footnotes ol {
+  margin: 0;
+  padding-left: 1.6em;
+}
+.slide-canvas .slide-footnotes p {
+  margin: 0;
+  display: inline;
+}

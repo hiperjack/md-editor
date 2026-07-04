@@ -127,18 +127,23 @@ export function showContextMenu(x: number, y: number, items: MenuItem[]): void {
     }
   };
   const onClose = () => closeContextMenu();
+  // メニュー自身の内部スクロール（ホイール・スクロールバー操作）では閉じない。
+  const onScroll = (ev: Event) => {
+    if (menuEl && ev.target instanceof Node && menuEl.contains(ev.target)) return;
+    closeContextMenu();
+  };
 
   // capture でドキュメント全体の mousedown を先に拾い、外側クリックで閉じる。
   document.addEventListener("mousedown", onPointerDown, true);
   document.addEventListener("keydown", onKeyDown, true);
-  window.addEventListener("scroll", onClose, true);
+  window.addEventListener("scroll", onScroll, true);
   window.addEventListener("resize", onClose);
   window.addEventListener("blur", onClose);
 
   cleanup = () => {
     document.removeEventListener("mousedown", onPointerDown, true);
     document.removeEventListener("keydown", onKeyDown, true);
-    window.removeEventListener("scroll", onClose, true);
+    window.removeEventListener("scroll", onScroll, true);
     window.removeEventListener("resize", onClose);
     window.removeEventListener("blur", onClose);
   };

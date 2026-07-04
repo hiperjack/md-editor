@@ -62,7 +62,8 @@ type ButtonSpec = {
 };
 
 // Lucide由来の単純なSVGパス（24x24, stroke-based）
-const ICONS: Record<string, string> = {
+// 選択時ポップアップツールバー（selection-toolbar.ts）でも共用する。
+export const ICONS: Record<string, string> = {
   file_new:
     "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M12 11v6M9 14h6",
   file_open:
@@ -169,8 +170,45 @@ const BUTTONS: ButtonSpec[] = [
   { key: "view_font", icon: ICONS.settings, titleKey: "tb.settings", align: "right" },
 ];
 
-function svg(d: string): string {
+export function svg(d: string): string {
   return `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+}
+
+/** アクティブエディタのコマンドを実行する（ツールバー/選択バー共用）。 */
+function runOnEditor(
+  editor: EditorHost,
+  fn: (commands: CommandManager) => void,
+): void {
+  editor.runOnActive((ed) => {
+    ed.action((ctx) => {
+      fn(ctx.get(commandsCtx));
+    });
+  });
+}
+
+/**
+ * 文字色パレットを指定位置に開き、選択色を適用する（直近色も更新）。
+ * ツールバー・書式メニュー・選択時ポップアップツールバーで共用する。
+ */
+export function openTextColorPaletteAt(
+  editor: EditorHost,
+  anchor: { x: number; y: number },
+): void {
+  showColorPalette(anchor, (color) => {
+    if (color) settings.setLastTextColor(color);
+    runOnEditor(editor, (c) => c.call(setTextColorCommand.key, color ?? undefined));
+  });
+}
+
+/** ハイライトパレット版。""=標準マーカー / null=解除。 */
+export function openHighlightPaletteAt(
+  editor: EditorHost,
+  anchor: { x: number; y: number },
+): void {
+  showHighlightPalette(anchor, (color) => {
+    if (color !== null) settings.setLastHighlightColor(color);
+    runOnEditor(editor, (c) => c.call(setHighlightCommand.key, color ?? undefined));
+  });
 }
 
 /**
@@ -222,23 +260,13 @@ export function makeToolbarActions(editor: EditorHost): Record<string, Action> {
     fmt_text_color: () =>
       run((c) => c.call(setTextColorCommand.key, settings.get().lastTextColor)),
     // ホバー（および書式メニュー）: パレットを開いて選んだ色を適用。
-    fmt_text_color_menu: () => {
-      const anchor = anchorForButton(editor, "fmt_text_color");
-      showColorPalette(anchor, (color) => {
-        if (color) settings.setLastTextColor(color);
-        run((c) => c.call(setTextColorCommand.key, color ?? undefined));
-      });
-    },
+    fmt_text_color_menu: () =>
+      openTextColorPaletteAt(editor, anchorForButton(editor, "fmt_text_color")),
     // ハイライト: クリック=直近（""=標準マーカー）、ホバー/メニュー=パレット。
     fmt_highlight: () =>
       run((c) => c.call(setHighlightCommand.key, settings.get().lastHighlightColor)),
-    fmt_highlight_menu: () => {
-      const anchor = anchorForButton(editor, "fmt_highlight");
-      showHighlightPalette(anchor, (color) => {
-        if (color !== null) settings.setLastHighlightColor(color);
-        run((c) => c.call(setHighlightCommand.key, color ?? undefined));
-      });
-    },
+    fmt_highlight_menu: () =>
+      openHighlightPaletteAt(editor, anchorForButton(editor, "fmt_highlight")),
     fmt_sup: () => run((c) => c.call(toggleSuperscriptCommand.key)),
     fmt_sub: () => run((c) => c.call(toggleSubscriptCommand.key)),
     fmt_clear: () => run((c) => c.call(clearFormattingCommand.key)),
@@ -297,8 +325,9 @@ export function makeToolbarActions(editor: EditorHost): Record<string, Action> {
  * ボタンのホバーでポップアップを開閉する。
  * ボタンとポップアップの間の隙間を跨ぐ移動で閉じないよう、mouseleave からの
  * クローズは短い遅延（ポップアップ側の mouseenter でキャンセル）で行う。
+ * 選択時ポップアップツールバー（selection-toolbar.ts）でも共用する。
  */
-function wireHoverPopup(
+export function wireHoverPopup(
   btn: HTMLElement,
   open: () => void,
   getEl: () => HTMLElement | null,

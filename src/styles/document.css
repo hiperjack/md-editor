@@ -280,3 +280,34 @@
   padding: 0 0.15em;
   border-radius: 2px;
 }
+
+/* ── 脚注（markdown-it-footnote） ─────────────────── */
+
+.document .footnotes-sep {
+  margin-top: 2.5em;
+}
+
+.document .footnotes {
+  font-size: 0.85em;
+  color: var(--doc-text);
+}
+
+.document .footnote-ref a,
+.document .footnote-backref {
+  text-decoration: none;
+}
+
+.document .footnote-item p {
+  margin: 0.25em 0;
+}
+
+/* ── 数式（KaTeX MathML出力） ─────────────────────── */
+
+.document .math-block {
+  margin: 1em 0;
+  overflow-x: auto;
+}
+
+.document .math-error {
+  color: #d1242f;
+}

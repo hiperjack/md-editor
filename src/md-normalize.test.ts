@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { ensureBlankLineBeforeTables } from "./md-normalize";
+import {
+  ensureBlankLineBeforeTables,
+  ensureBlankLineBeforeFootnoteDefs,
+} from "./md-normalize";
 
 const TABLE = ["| a | b |", "| --- | --- |", "| 1 | 2 |"].join("\n");
 
@@ -58,5 +61,36 @@ describe("ensureBlankLineBeforeTables", () => {
         "| 良い | x | y |",
       ].join("\n"),
     );
+  });
+});
+
+describe("ensureBlankLineBeforeFootnoteDefs", () => {
+  it("段落直後の脚注定義の前に空行を補う", () => {
+    const src = ["note[^1]", "[^1]: test"].join("\n");
+    expect(ensureBlankLineBeforeFootnoteDefs(src)).toBe(
+      ["note[^1]", "", "[^1]: test"].join("\n"),
+    );
+  });
+
+  it("既に空行があれば何もしない", () => {
+    const src = ["note[^1]", "", "[^1]: test"].join("\n");
+    expect(ensureBlankLineBeforeFootnoteDefs(src)).toBe(src);
+  });
+
+  it("連続する定義の間には空行を入れない", () => {
+    const src = ["note[^1][^2]", "[^1]: a", "[^2]: b"].join("\n");
+    expect(ensureBlankLineBeforeFootnoteDefs(src)).toBe(
+      ["note[^1][^2]", "", "[^1]: a", "[^2]: b"].join("\n"),
+    );
+  });
+
+  it("コードフェンス内は対象外", () => {
+    const src = ["```", "[^1]: code", "```"].join("\n");
+    expect(ensureBlankLineBeforeFootnoteDefs(src)).toBe(src);
+  });
+
+  it("先頭行の定義はそのまま", () => {
+    const src = ["[^1]: top", "body[^1]"].join("\n");
+    expect(ensureBlankLineBeforeFootnoteDefs(src)).toBe(src);
   });
 });
