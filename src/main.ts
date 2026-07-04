@@ -6,6 +6,7 @@ import { createEditorHost } from "./editor";
 import { createTabBar } from "./tabs";
 import { createToolbar, makeToolbarActions } from "./toolbar";
 import { installSelectionToolbar } from "./selection-toolbar";
+import { installFootnoteNavigation } from "./footnote-nav";
 import { setupTitle } from "./title";
 import { openAboutModal } from "./about-modal";
 import { createMenuBar, type TopMenu, type MenuEntry } from "./menu-bar";
@@ -500,6 +501,9 @@ async function bootstrap(): Promise<void> {
 
   // ミニ書式バー（テキスト選択して右クリックしたとき、メニューの上に表示）。
   const selectionBar = installSelectionToolbar(editor, fmtActions);
+
+  // エディタ内の脚注 Ctrl+クリックジャンプ（参照⇔定義）。
+  installFootnoteNavigation();
 
   // アクティブタブ種別に応じてツールバーを切り替える:
   //  - 編集タブ: 通常の編集ボタン。
