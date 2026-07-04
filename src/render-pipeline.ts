@@ -5,7 +5,10 @@ import githubAlerts from "markdown-it-github-alerts";
 import footnote from "markdown-it-footnote";
 import { type DocSettings, isLightColor } from "./theme";
 import { renderMermaidSvg } from "./mermaid-renderer";
-import { ensureBlankLineBeforeTables } from "./md-normalize";
+import {
+  ensureBlankLineBeforeTables,
+  ensureBlankLineBeforeFootnoteDefs,
+} from "./md-normalize";
 import { underlineTagPlugin } from "./markdown-it-underline";
 import { textColorTagPlugin } from "./markdown-it-text-color";
 import { highlightTagPlugin } from "./markdown-it-highlight";
@@ -190,6 +193,8 @@ export async function renderDocumentBody(
   }
   // リストや段落の直後に空行なしで置かれた表を、表として認識できるよう空行を補う。
   src = ensureBlankLineBeforeTables(src);
+  // 段落の直後に空行なしで置かれた脚注定義（[^1]: …）も同様に補う。
+  src = ensureBlankLineBeforeFootnoteDefs(src);
 
   // コードフェンスが存在するときだけhighlight.jsをロードする
   const needHljs = /(^|\n)\s*(`{3,}|~{3,})/.test(src);

@@ -38,6 +38,7 @@ const BAR_BUTTONS: { key: string; icon: string; titleKey: string }[] = [
   { key: "fmt_text_color", icon: ICONS.text_color, titleKey: "tb.textColor" },
   { key: "fmt_highlight", icon: ICONS.highlight, titleKey: "tb.highlight" },
   { key: "fmt_strike", icon: ICONS.strike, titleKey: "tb.strike" },
+  { key: "fmt_link", icon: ICONS.link, titleKey: "tb.link" },
   { key: "fmt_clear", icon: ICONS.eraser, titleKey: "tb.clearFormat" },
 ];
 

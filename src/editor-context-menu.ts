@@ -135,14 +135,8 @@ export function createEditorContextMenu(
       },
     ];
 
-    if (hasTextSelection) {
-      // 書式（太字・色・ハイライト等）はメニュー上部に出るミニ書式バーに
-      // 任せ、メニュー側はバーに無い項目（リンク）だけを持つ。
-      items.push(
-        { type: "separator" },
-        { type: "item", label: t("cm.link"), action: () => actions.fmt_link?.() },
-      );
-    }
+    // 書式（太字・色・ハイライト・リンク等）はメニュー上部に出る
+    // ミニ書式バーに任せる（editor-context-menu 末尾の showAt 参照）。
 
     if (isImageSelected) {
       items.push(
