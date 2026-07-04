@@ -303,6 +303,11 @@ function wireHoverPopup(
 ): void {
   let openTimer: number | null = null;
   let closeTimer: number | null = null;
+  // このボタンが開いたポップアップ要素。パレット等は複数ボタンで共有されるため、
+  // 「開いているか」ではなく「自分が開いたものか」で開閉を判断する。
+  // （隣のボタンへ直接移動したとき、開き直しをスキップしたり、古い遅延クローズが
+  //  新しいポップアップを巻き添えで閉じたりするのを防ぐ。）
+  let ownedEl: HTMLElement | null = null;
   const cancelClose = (): void => {
     if (closeTimer !== null) {
       clearTimeout(closeTimer);
@@ -311,16 +316,20 @@ function wireHoverPopup(
   };
   const scheduleClose = (): void => {
     cancelClose();
-    closeTimer = window.setTimeout(() => close(), 300);
+    closeTimer = window.setTimeout(() => {
+      if (ownedEl && getEl() === ownedEl) close();
+      ownedEl = null;
+    }, 300);
   };
   const openNow = (): void => {
     cancelClose();
-    if (getEl()) return;
+    // 自分のポップアップが開いたままなら何もしない。他のボタンのものなら開き直す。
+    if (ownedEl && getEl() === ownedEl) return;
     open();
-    const el = getEl();
-    if (el) {
-      el.addEventListener("mouseenter", cancelClose);
-      el.addEventListener("mouseleave", scheduleClose);
+    ownedEl = getEl();
+    if (ownedEl) {
+      ownedEl.addEventListener("mouseenter", cancelClose);
+      ownedEl.addEventListener("mouseleave", scheduleClose);
     }
   };
   btn.addEventListener("mouseenter", () => {
