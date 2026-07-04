@@ -1469,6 +1469,8 @@ body.is-resizing-outline {
 .milkdown dl[data-type="footnote_definition"] > dt {
   color: var(--accent);
   flex-shrink: 0;
+  /* Ctrl+クリックで参照へ戻れる（footnote-nav.ts） */
+  cursor: pointer;
 }
 
 .milkdown dl[data-type="footnote_definition"] > dt::before {
