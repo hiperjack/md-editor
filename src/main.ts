@@ -498,8 +498,8 @@ async function bootstrap(): Promise<void> {
   const fmtActions = makeToolbarActions(editor);
   createToolbar(toolbarEl, { ...fileActions, ...viewActions, ...fmtActions });
 
-  // 選択時ポップアップツールバー（テキスト選択の上に主要書式ボタンを表示）。
-  installSelectionToolbar(editor, fmtActions);
+  // ミニ書式バー（テキスト選択して右クリックしたとき、メニューの上に表示）。
+  const selectionBar = installSelectionToolbar(editor, fmtActions);
 
   // アクティブタブ種別に応じてツールバーを切り替える:
   //  - 編集タブ: 通常の編集ボタン。
@@ -710,7 +710,12 @@ async function bootstrap(): Promise<void> {
   // 右クリックメニュー:
   //  - エディタ本文の上では独自の文脈対応メニューを表示する。
   //  - それ以外（タブ・左パネル・ツールバー等）では WebView2 標準メニューを抑止。
-  const editorContextMenu = createEditorContextMenu(editor, fmtActions, find);
+  const editorContextMenu = createEditorContextMenu(
+    editor,
+    fmtActions,
+    find,
+    selectionBar,
+  );
   document.addEventListener(
     "contextmenu",
     (e) => {

@@ -189,17 +189,23 @@ function presentPane(pane: HTMLElement, anchor: { x: number; y: number }): void 
     }
   };
   const onClose = () => closeColorPalette();
+  // パレット自身の内部スクロール（低いウィンドウでの max-height 超過時）では閉じない。
+  const onScroll = (ev: Event) => {
+    if (paletteEl && ev.target instanceof Node && paletteEl.contains(ev.target))
+      return;
+    closeColorPalette();
+  };
 
   document.addEventListener("mousedown", onPointerDown, true);
   document.addEventListener("keydown", onKeyDown, true);
-  window.addEventListener("scroll", onClose, true);
+  window.addEventListener("scroll", onScroll, true);
   window.addEventListener("resize", onClose);
   window.addEventListener("blur", onClose);
 
   cleanup = () => {
     document.removeEventListener("mousedown", onPointerDown, true);
     document.removeEventListener("keydown", onKeyDown, true);
-    window.removeEventListener("scroll", onClose, true);
+    window.removeEventListener("scroll", onScroll, true);
     window.removeEventListener("resize", onClose);
     window.removeEventListener("blur", onClose);
   };

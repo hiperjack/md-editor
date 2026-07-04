@@ -17,6 +17,7 @@ import type { EditorHost } from "./editor";
 import type { FindReplaceController } from "./find-replace";
 import { isImageNode } from "./image-edit";
 import { showContextMenu, type MenuItem } from "./context-menu";
+import type { SelectionToolbarController } from "./selection-toolbar";
 import { t } from "./i18n";
 
 type Actions = Record<string, () => void>;
@@ -70,6 +71,7 @@ export function createEditorContextMenu(
   editor: EditorHost,
   actions: Actions,
   find: FindReplaceController,
+  selectionBar?: SelectionToolbarController,
 ): (e: MouseEvent) => void {
   return (e: MouseEvent) => {
     const view = editor.getActiveView();
@@ -165,5 +167,8 @@ export function createEditorContextMenu(
     );
 
     showContextMenu(e.clientX, e.clientY, items);
+
+    // テキスト選択中はメニューの上にミニ書式バーも出す（Word風）。
+    if (hasTextSelection) selectionBar?.showAt(e.clientX, e.clientY);
   };
 }
