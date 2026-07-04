@@ -1426,6 +1426,50 @@ body.is-resizing-outline {
   background: var(--tab-hover-bg);
 }
 
+/* ===== エディタ内の脚注ノード表示 =====
+   ソース表示から戻る/ファイルを開き直すと、remark が [^1] を脚注ノードに
+   変換し、既定表示はラベルのみの上付き（例: 1）になって括弧が消えたように
+   見える。原文表記（[^1] / [^1]: …）に見えるよう括弧を描画で補う。 */
+
+.milkdown sup[data-type="footnote_reference"] {
+  color: var(--accent);
+}
+
+.milkdown sup[data-type="footnote_reference"]::before {
+  content: "[^";
+}
+
+.milkdown sup[data-type="footnote_reference"]::after {
+  content: "]";
+}
+
+.milkdown dl[data-type="footnote_definition"] {
+  display: flex;
+  gap: 0.4em;
+  margin: 0.25em 0;
+}
+
+.milkdown dl[data-type="footnote_definition"] > dt {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.milkdown dl[data-type="footnote_definition"] > dt::before {
+  content: "[^";
+}
+
+.milkdown dl[data-type="footnote_definition"] > dt::after {
+  content: "]:";
+}
+
+.milkdown dl[data-type="footnote_definition"] > dd {
+  margin: 0;
+}
+
+.milkdown dl[data-type="footnote_definition"] > dd p {
+  margin: 0;
+}
+
 /* ===== 選択時ポップアップツールバー（selection-toolbar.ts） ===== */
 
 .selection-toolbar {
