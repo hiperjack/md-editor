@@ -138,6 +138,12 @@ export function createEditorContextMenu(
         { type: "separator" },
         { type: "item", label: t("cm.bold"), action: () => actions.fmt_bold?.() },
         { type: "item", label: t("cm.italic"), action: () => actions.fmt_italic?.() },
+        { type: "item", label: t("menu.underline"), action: () => actions.fmt_underline?.() },
+        { type: "item", label: t("menu.strike"), action: () => actions.fmt_strike?.() },
+        // 文字色・ハイライトはパレットを開く（適用色を選べる方が親切）。
+        { type: "item", label: t("menu.textColor"), action: () => actions.fmt_text_color_menu?.() },
+        { type: "item", label: t("menu.highlight"), action: () => actions.fmt_highlight_menu?.() },
+        { type: "item", label: t("menu.clearFormat"), action: () => actions.fmt_clear?.() },
         { type: "item", label: t("cm.link"), action: () => actions.fmt_link?.() },
       );
     }

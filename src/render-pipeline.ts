@@ -2,6 +2,7 @@ import MarkdownIt from "markdown-it";
 import anchor from "markdown-it-anchor";
 import toc from "markdown-it-toc-done-right";
 import githubAlerts from "markdown-it-github-alerts";
+import footnote from "markdown-it-footnote";
 import { type DocSettings, isLightColor } from "./theme";
 import { renderMermaidSvg } from "./mermaid-renderer";
 import { ensureBlankLineBeforeTables } from "./md-normalize";
@@ -9,6 +10,7 @@ import { underlineTagPlugin } from "./markdown-it-underline";
 import { textColorTagPlugin } from "./markdown-it-text-color";
 import { highlightTagPlugin } from "./markdown-it-highlight";
 import { supSubTagPlugin } from "./markdown-it-supsub";
+import { mathPlugin } from "./markdown-it-math";
 
 /**
  * 出力用レンダリングパイプライン（markdown → 文書HTML）。
@@ -126,6 +128,10 @@ function buildMarkdownIt(settings: DocSettings, hljs: Hljs | null): MarkdownIt {
   if (settings.decorations.callouts) {
     md.use(githubAlerts);
   }
+  // 脚注 [^1]（GitHub / Obsidian 互換）。エディタ（remark-gfm）は元々保持できる。
+  md.use(footnote);
+  // 数式 $…$ / $$…$$（エディタの Crepe LaTeX 機能と同じ remark-math 記法）。
+  mathPlugin(md);
   underlineTagPlugin(md);
   textColorTagPlugin(md);
   highlightTagPlugin(md);

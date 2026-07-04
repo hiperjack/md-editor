@@ -5,6 +5,7 @@ import { store } from "./store";
 import { createEditorHost } from "./editor";
 import { createTabBar } from "./tabs";
 import { createToolbar, makeToolbarActions } from "./toolbar";
+import { installSelectionToolbar } from "./selection-toolbar";
 import { setupTitle } from "./title";
 import { openAboutModal } from "./about-modal";
 import { createMenuBar, type TopMenu, type MenuEntry } from "./menu-bar";
@@ -496,6 +497,9 @@ async function bootstrap(): Promise<void> {
   // ツールバー（ファイル系・表示系もボタンに含めるためmergeしてから渡す）
   const fmtActions = makeToolbarActions(editor);
   createToolbar(toolbarEl, { ...fileActions, ...viewActions, ...fmtActions });
+
+  // 選択時ポップアップツールバー（テキスト選択の上に主要書式ボタンを表示）。
+  installSelectionToolbar(editor, fmtActions);
 
   // アクティブタブ種別に応じてツールバーを切り替える:
   //  - 編集タブ: 通常の編集ボタン。
