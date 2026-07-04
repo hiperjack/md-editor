@@ -131,6 +131,8 @@ export type Slide = {
   message: Element | null;
   /** 残りの本文要素。 */
   body: Element[];
+  /** このスライドが参照している脚注（li.footnote-item）。下部の脚注欄に表示する。 */
+  footnotes: Element[];
 };
 
 /** プレビュータブごとの現在スライド番号。更新（再生成）をまたいで保持する。 */
@@ -199,10 +201,24 @@ export function parseSlides(html: string): { template: HTMLElement; slides: Slid
       return m;
     })();
 
+  // 脚注セクション（markdown-it-footnote が文書末尾に付ける <hr>＋<section>）は
+  // 要素列から取り除き、参照している各スライドの下部脚注欄へ配り直す
+  // （そのまま分割すると「タイトルなしの脚注だけの最終スライド」になるため）。
+  const footnoteLis = new Map<string, Element>();
+  const els = Array.from(main.children).filter((el) => {
+    if (el.matches("hr.footnotes-sep")) return false;
+    if (el.matches("section.footnotes")) {
+      el.querySelectorAll("li.footnote-item").forEach((li) => {
+        if (li.id) footnoteLis.set(li.id, li);
+      });
+      return false;
+    }
+    return true;
+  });
+
   // スライド境界は「区切り線(---) もしくは 見出し1/2」のどちらでも成立する。
   //  - <hr>（= ---）: 区切りそのもの。current を確定して hr 自体は捨てる。
   //  - H1/H2: 次スライドの先頭になる（見出しはそのスライドに含める）。
-  const els = Array.from(main.children);
   const groups: Element[][] = [];
   let current: Element[] = [];
   for (const el of els) {
@@ -220,6 +236,23 @@ export function parseSlides(html: string): { template: HTMLElement; slides: Slid
   }
   if (current.length) groups.push(current);
 
+  // スライド内の脚注参照（sup.footnote-ref）から、対応する定義を集める。
+  const collectFootnotes = (nodes: (Element | null)[]): Element[] => {
+    const out: Element[] = [];
+    const seen = new Set<string>();
+    for (const n of nodes) {
+      if (!n) continue;
+      n.querySelectorAll('sup.footnote-ref a[href^="#fn"]').forEach((a) => {
+        const id = (a.getAttribute("href") ?? "").slice(1);
+        if (!id || seen.has(id)) return;
+        seen.add(id);
+        const li = footnoteLis.get(id);
+        if (li) out.push(li);
+      });
+    }
+    return out;
+  };
+
   const slides: Slide[] = groups
     .filter((g) => g.length > 0)
     .map((nodes) => {
@@ -234,7 +267,13 @@ export function parseSlides(html: string): { template: HTMLElement; slides: Slid
         message = nodes[i];
         i++;
       }
-      return { title, message, body: nodes.slice(i) };
+      const body = nodes.slice(i);
+      return {
+        title,
+        message,
+        body,
+        footnotes: collectFootnotes([title, message, ...body]),
+      };
     });
 
   // テンプレート main は構造だけ使う（中身は空にする）。
@@ -276,6 +315,24 @@ export function buildCanvas(slide: Slide, template: HTMLElement): HTMLElement {
 
   main.appendChild(header);
   main.appendChild(body);
+
+  // 参照している脚注をスライド下部の脚注欄に表示する（文書全体の番号を維持）。
+  if (slide.footnotes.length > 0) {
+    const foot = document.createElement("div");
+    foot.className = "slide-footnotes";
+    const ol = document.createElement("ol");
+    for (const li of slide.footnotes) {
+      const c = li.cloneNode(true) as HTMLLIElement;
+      // 同一スライド内なので「戻る（↩︎）」リンクは不要。
+      c.querySelectorAll(".footnote-backref").forEach((b) => b.remove());
+      const m = /^fn(\d+)$/.exec(c.id);
+      if (m) c.value = Number(m[1]);
+      ol.appendChild(c);
+    }
+    foot.appendChild(ol);
+    main.appendChild(foot);
+  }
+
   canvas.appendChild(main);
   return canvas;
 }
