@@ -1433,7 +1433,12 @@ body.is-resizing-outline {
 
 .milkdown sup[data-type="footnote_reference"] {
   color: var(--accent);
-  /* Ctrl+クリックで定義へジャンプできる（footnote-nav.ts） */
+}
+
+/* Ctrl/Cmd 押下中のみ、脚注ジャンプ可能箇所をリンク風カーソルにする
+   （footnote-nav.ts が body にクラスを付与する） */
+body.footnote-ctrl-down .milkdown sup[data-type="footnote_reference"],
+body.footnote-ctrl-down .milkdown dl[data-type="footnote_definition"] > dt {
   cursor: pointer;
 }
 
@@ -1469,8 +1474,6 @@ body.is-resizing-outline {
 .milkdown dl[data-type="footnote_definition"] > dt {
   color: var(--accent);
   flex-shrink: 0;
-  /* Ctrl+クリックで参照へ戻れる（footnote-nav.ts） */
-  cursor: pointer;
 }
 
 .milkdown dl[data-type="footnote_definition"] > dt::before {

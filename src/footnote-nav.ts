@@ -18,8 +18,24 @@ function jumpTo(el: Element | null): void {
   setTimeout(() => el.classList.remove(FLASH_CLASS), 1600);
 }
 
+/** Ctrl/Cmd 押下中だけ脚注にポインターカーソルを出すための body クラス。 */
+const CTRL_CLASS = "footnote-ctrl-down";
+
 /** main.ts が起動時に1回呼ぶ。 */
 export function installFootnoteNavigation(): void {
+  // Ctrl（Mac は Cmd）押下中のみ、脚注の参照/定義ラベルをリンク風カーソルにする
+  // （VS Code の Ctrl+クリックと同じ作法）。
+  const setCtrl = (on: boolean): void => {
+    document.body.classList.toggle(CTRL_CLASS, on);
+  };
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Control" || e.key === "Meta") setCtrl(true);
+  });
+  document.addEventListener("keyup", (e) => {
+    if (e.key === "Control" || e.key === "Meta") setCtrl(false);
+  });
+  window.addEventListener("blur", () => setCtrl(false));
+
   document.addEventListener(
     "click",
     (e) => {
