@@ -66,6 +66,7 @@ import "@milkdown/crepe/theme/frame-dark.css";
 
 import { store, type Tab } from "./store";
 import { remarkBlankLines } from "./blank-lines";
+import { remarkFootnoteText } from "./remark-footnote-text";
 import { attachLineNumbers } from "./line-numbers";
 import { attachImageResolver, imageDirForMdPath } from "./image-resolver";
 import { persistEmbeddedImages, type PersistResult } from "./image-persist";
@@ -1340,6 +1341,9 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         { plugin: remarkHighlight, options: {} },
         // <sup>/<sub> の html ノードペアを superscript/subscript ノードへ畳む。
         { plugin: remarkSupSub, options: {} },
+        // 脚注ノードをテキストへ展開（常時テキスト方針）。
+        // remarkBlankLines は position 依存のため必ずその後に置く。
+        { plugin: remarkFootnoteText, options: {} },
       ]);
       ctx.update(remarkStringifyOptionsCtx, (opts) => ({
         ...opts,
