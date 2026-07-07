@@ -1429,30 +1429,24 @@ body.is-resizing-outline {
   background: var(--tab-hover-bg);
 }
 
-/* ===== エディタ内の脚注ノード表示 =====
-   ソース表示から戻る/ファイルを開き直すと、remark が [^1] を脚注ノードに
-   変換し、既定表示はラベルのみの上付き（例: 1）になって括弧が消えたように
-   見える。原文表記（[^1] / [^1]: …）に見えるよう括弧を描画で補う。 */
+/* ===== エディタ内の脚注表示 =====
+   脚注はノード化せず常にテキストとして扱う（remark-footnote-text.ts）。
+   ペア成立した参照/定義マーカーへ footnote-pair.ts がデコレーションを付ける。 */
 
-.milkdown sup[data-type="footnote_reference"] {
-  color: var(--accent);
-}
-
-/* 手入力の脚注ペア（footnote-pair.ts のデコレーション）。
-   ペア成立したテキスト状態の [^1] / [^1]: を青くする。 */
+/* ペア成立したテキストの [^1] / [^1]: を青くする。 */
 .milkdown .fn-pair {
   color: var(--accent);
 }
-/* ノード化済みでもペアが崩れた脚注は通常色に戻す。 */
-.milkdown sup[data-type="footnote_reference"].fn-unpaired,
-.milkdown dl[data-type="footnote_definition"].fn-unpaired > dt {
-  color: inherit;
+
+/* ペア成立した参照は右肩（上付き）表示にする。行高が跳ねないよう line-height を潰す。 */
+.milkdown .fn-pair-ref {
+  font-size: 0.75em;
+  vertical-align: super;
+  line-height: 1;
 }
 
 /* Ctrl/Cmd 押下中のみ、脚注ジャンプ可能箇所をリンク風カーソルにする
    （footnote-nav.ts が body にクラスを付与する） */
-body.footnote-ctrl-down .milkdown sup[data-type="footnote_reference"]:not(.fn-unpaired),
-body.footnote-ctrl-down .milkdown dl[data-type="footnote_definition"]:not(.fn-unpaired) > dt,
 body.footnote-ctrl-down .milkdown .fn-pair {
   cursor: pointer;
 }
@@ -1470,41 +1464,6 @@ body.footnote-ctrl-down .milkdown .fn-pair {
 .milkdown .footnote-jump-flash {
   animation: footnote-jump-flash 1.5s ease-out;
   border-radius: 3px;
-}
-
-.milkdown sup[data-type="footnote_reference"]::before {
-  content: "[^";
-}
-
-.milkdown sup[data-type="footnote_reference"]::after {
-  content: "]";
-}
-
-.milkdown dl[data-type="footnote_definition"] {
-  display: flex;
-  gap: 0.4em;
-  margin: 0.25em 0;
-}
-
-.milkdown dl[data-type="footnote_definition"] > dt {
-  color: var(--accent);
-  flex-shrink: 0;
-}
-
-.milkdown dl[data-type="footnote_definition"] > dt::before {
-  content: "[^";
-}
-
-.milkdown dl[data-type="footnote_definition"] > dt::after {
-  content: "]:";
-}
-
-.milkdown dl[data-type="footnote_definition"] > dd {
-  margin: 0;
-}
-
-.milkdown dl[data-type="footnote_definition"] > dd p {
-  margin: 0;
 }
 
 /* ===== 選択時ポップアップツールバー（selection-toolbar.ts） ===== */

@@ -1,10 +1,10 @@
 /**
  * エディタ内の脚注ジャンプ（Ctrl+クリック / Cmd+クリック）。
  *
- * WYSIWYG エディタ内の脚注参照（sup[data-type="footnote_reference"]）を
- * Ctrl+クリックすると対応する定義（dl[data-type="footnote_definition"]）へ、
- * 定義側を Ctrl+クリックすると最初の参照へスクロールして相互ジャンプする。
- * 到着先は一瞬ハイライトして視線を誘導する。
+ * 脚注はノード化せず常にテキストで扱うため（remark-footnote-text.ts）、
+ * ジャンプ対象は footnote-pair.ts がペア成立箇所に付けるデコレーション
+ * （.fn-pair-ref / .fn-pair-def、data-fn-label 属性）のみ。
+ * 参照⇄定義を相互ジャンプし、到着先は一瞬ハイライトして視線を誘導する。
  */
 
 const FLASH_CLASS = "footnote-jump-flash";
@@ -18,20 +18,13 @@ function jumpTo(el: Element | null): void {
   setTimeout(() => el.classList.remove(FLASH_CLASS), 1600);
 }
 
-/** ラベルに対応する参照要素（ノード化済み or デコレーション）を文書順で探す。 */
-function findRefEl(root: Element, label: string): Element | null {
-  const esc = CSS.escape(label);
-  return root.querySelector(
-    `sup[data-type="footnote_reference"][data-label="${esc}"], .fn-pair-ref[data-fn-label="${esc}"]`,
-  );
-}
-
-/** ラベルに対応する定義要素（ノード化済み or デコレーション）を文書順で探す。 */
-function findDefEl(root: Element, label: string): Element | null {
-  const esc = CSS.escape(label);
-  return root.querySelector(
-    `dl[data-type="footnote_definition"][data-label="${esc}"], .fn-pair-def[data-fn-label="${esc}"]`,
-  );
+/** ラベルに対応するペア装飾要素を文書順で探す。 */
+function findPairEl(
+  root: Element,
+  cls: "fn-pair-ref" | "fn-pair-def",
+  label: string,
+): Element | null {
+  return root.querySelector(`.${cls}[data-fn-label="${CSS.escape(label)}"]`);
 }
 
 /** Ctrl/Cmd 押下中だけ脚注にポインターカーソルを出すための body クラス。 */
@@ -60,37 +53,16 @@ export function installFootnoteNavigation(): void {
       const editorRoot = target?.closest?.(".milkdown");
       if (!editorRoot) return;
 
-      // 手入力ペアのデコレーション（footnote-pair.ts が付与）。
       const pairEl = target?.closest?.(".fn-pair");
-      if (pairEl) {
-        e.preventDefault();
-        e.stopPropagation();
-        const label = pairEl.getAttribute("data-fn-label") ?? "";
-        jumpTo(
-          pairEl.classList.contains("fn-pair-ref")
-            ? findDefEl(editorRoot, label)
-            : findRefEl(editorRoot, label),
-        );
-        return;
-      }
-
-      const ref = target?.closest?.('sup[data-type="footnote_reference"]');
-      if (ref) {
-        // ペアが崩れた脚注はジャンプ先が無いので何もしない。
-        if (ref.classList.contains("fn-unpaired")) return;
-        e.preventDefault();
-        e.stopPropagation();
-        jumpTo(findDefEl(editorRoot, ref.getAttribute("data-label") ?? ""));
-        return;
-      }
-
-      const def = target?.closest?.('dl[data-type="footnote_definition"]');
-      if (def) {
-        if (def.classList.contains("fn-unpaired")) return;
-        e.preventDefault();
-        e.stopPropagation();
-        jumpTo(findRefEl(editorRoot, def.getAttribute("data-label") ?? ""));
-      }
+      if (!pairEl) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const label = pairEl.getAttribute("data-fn-label") ?? "";
+      jumpTo(
+        pairEl.classList.contains("fn-pair-ref")
+          ? findPairEl(editorRoot, "fn-pair-def", label)
+          : findPairEl(editorRoot, "fn-pair-ref", label),
+      );
     },
     true,
   );
