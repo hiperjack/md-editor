@@ -7,6 +7,10 @@
  *  - ペア成立したテキスト状態のトークンへ .fn-pair を付けて青くする
  *  - ペアが崩れたノード化済み脚注へ .fn-unpaired を付けて色を戻す
  * 文書そのものは書き換えない（undo・カーソル・Markdown原文に影響なし）。
+ *
+ * 既知の限界: ソース上の \[^1] は remark がパース時にバックスラッシュを消費する
+ * ため、ファイルを開いた後の doc 上では素の [^1] と区別できず青くなり得る
+ * （エスケープ判定が効くのは WYSIWYG 上で直接入力されたバックスラッシュのみ）。
  */
 
 import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
@@ -116,6 +120,8 @@ function buildDecorations(doc: ProseNode): DecorationSet {
     refLabels.has(label) && defLabels.has(label);
 
   const decos: Decoration[] = [];
+  // ペア成立したノード化済み脚注は既存CSS（sup/dt の accent 色）で青くなる
+  // ため装飾不要。ここで扱うのはテキスト状態の着色と、ノードの色解除のみ。
   for (const { token, base } of textTokens) {
     if (!paired(token.label)) continue;
     decos.push(
