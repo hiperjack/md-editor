@@ -18,6 +18,22 @@ function jumpTo(el: Element | null): void {
   setTimeout(() => el.classList.remove(FLASH_CLASS), 1600);
 }
 
+/** ラベルに対応する参照要素（ノード化済み or デコレーション）を文書順で探す。 */
+function findRefEl(root: Element, label: string): Element | null {
+  const esc = CSS.escape(label);
+  return root.querySelector(
+    `sup[data-type="footnote_reference"][data-label="${esc}"], .fn-pair-ref[data-fn-label="${esc}"]`,
+  );
+}
+
+/** ラベルに対応する定義要素（ノード化済み or デコレーション）を文書順で探す。 */
+function findDefEl(root: Element, label: string): Element | null {
+  const esc = CSS.escape(label);
+  return root.querySelector(
+    `dl[data-type="footnote_definition"][data-label="${esc}"], .fn-pair-def[data-fn-label="${esc}"]`,
+  );
+}
+
 /** Ctrl/Cmd 押下中だけ脚注にポインターカーソルを出すための body クラス。 */
 const CTRL_CLASS = "footnote-ctrl-down";
 
@@ -44,29 +60,36 @@ export function installFootnoteNavigation(): void {
       const editorRoot = target?.closest?.(".milkdown");
       if (!editorRoot) return;
 
-      const ref = target?.closest?.('sup[data-type="footnote_reference"]');
-      if (ref) {
+      // 手入力ペアのデコレーション（footnote-pair.ts が付与）。
+      const pairEl = target?.closest?.(".fn-pair");
+      if (pairEl) {
         e.preventDefault();
         e.stopPropagation();
-        const label = ref.getAttribute("data-label") ?? "";
+        const label = pairEl.getAttribute("data-fn-label") ?? "";
         jumpTo(
-          editorRoot.querySelector(
-            `dl[data-type="footnote_definition"][data-label="${CSS.escape(label)}"]`,
-          ),
+          pairEl.classList.contains("fn-pair-ref")
+            ? findDefEl(editorRoot, label)
+            : findRefEl(editorRoot, label),
         );
+        return;
+      }
+
+      const ref = target?.closest?.('sup[data-type="footnote_reference"]');
+      if (ref) {
+        // ペアが崩れた脚注はジャンプ先が無いので何もしない。
+        if (ref.classList.contains("fn-unpaired")) return;
+        e.preventDefault();
+        e.stopPropagation();
+        jumpTo(findDefEl(editorRoot, ref.getAttribute("data-label") ?? ""));
         return;
       }
 
       const def = target?.closest?.('dl[data-type="footnote_definition"]');
       if (def) {
+        if (def.classList.contains("fn-unpaired")) return;
         e.preventDefault();
         e.stopPropagation();
-        const label = def.getAttribute("data-label") ?? "";
-        jumpTo(
-          editorRoot.querySelector(
-            `sup[data-type="footnote_reference"][data-label="${CSS.escape(label)}"]`,
-          ),
-        );
+        jumpTo(findRefEl(editorRoot, def.getAttribute("data-label") ?? ""));
       }
     },
     true,
