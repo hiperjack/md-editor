@@ -71,6 +71,7 @@ import { attachImageResolver, imageDirForMdPath } from "./image-resolver";
 import { persistEmbeddedImages, type PersistResult } from "./image-persist";
 import { editImageNodeAtPos, isImageNode } from "./image-edit";
 import { searchPlugin } from "./search-plugin";
+import { footnotePairPlugin } from "./footnote-pair";
 import { headingFoldPlugin } from "./heading-fold";
 import { listFoldPlugin } from "./list-fold";
 import { fileTypeOfPath, wrapMermaidSource } from "./mmd";
@@ -1220,6 +1221,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         imageWheelResizePlugin,
         imageBlockSizePlugin,
         imagePastePlugin,
+        footnotePairPlugin,
         keymap({
           /*
             Enter は既定の段落分割 / リスト分割に委ねる (一般的なエディタ挙動)。

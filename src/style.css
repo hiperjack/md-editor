@@ -1438,10 +1438,22 @@ body.is-resizing-outline {
   color: var(--accent);
 }
 
+/* 手入力の脚注ペア（footnote-pair.ts のデコレーション）。
+   ペア成立したテキスト状態の [^1] / [^1]: を青くする。 */
+.milkdown .fn-pair {
+  color: var(--accent);
+}
+/* ノード化済みでもペアが崩れた脚注は通常色に戻す。 */
+.milkdown sup[data-type="footnote_reference"].fn-unpaired,
+.milkdown dl[data-type="footnote_definition"].fn-unpaired > dt {
+  color: inherit;
+}
+
 /* Ctrl/Cmd 押下中のみ、脚注ジャンプ可能箇所をリンク風カーソルにする
    （footnote-nav.ts が body にクラスを付与する） */
-body.footnote-ctrl-down .milkdown sup[data-type="footnote_reference"],
-body.footnote-ctrl-down .milkdown dl[data-type="footnote_definition"] > dt {
+body.footnote-ctrl-down .milkdown sup[data-type="footnote_reference"]:not(.fn-unpaired),
+body.footnote-ctrl-down .milkdown dl[data-type="footnote_definition"]:not(.fn-unpaired) > dt,
+body.footnote-ctrl-down .milkdown .fn-pair {
   cursor: pointer;
 }
 

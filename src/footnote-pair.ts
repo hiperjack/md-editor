@@ -9,6 +9,10 @@
  * 文書そのものは書き換えない（undo・カーソル・Markdown原文に影響なし）。
  */
 
+import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
+import type { Node as ProseNode } from "@milkdown/kit/prose/model";
+import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
+
 export type FnTokenKind = "ref" | "def";
 
 export interface FnToken {
@@ -50,3 +54,104 @@ export function scanFootnoteTokens(text: string): FnToken[] {
   }
   return out;
 }
+
+interface Collected {
+  /** テキスト状態のトークン。base は textblock コンテンツ開始の doc 位置。 */
+  textTokens: { token: FnToken; base: number }[];
+  nodeRefs: { label: string; pos: number; size: number }[];
+  nodeDefs: { label: string; pos: number; size: number }[];
+}
+
+function collect(doc: ProseNode): Collected {
+  const textTokens: Collected["textTokens"] = [];
+  const nodeRefs: Collected["nodeRefs"] = [];
+  const nodeDefs: Collected["nodeDefs"] = [];
+  doc.descendants((node, pos) => {
+    const name = node.type.name;
+    if (name === "footnote_definition") {
+      nodeDefs.push({ label: String(node.attrs.label), pos, size: node.nodeSize });
+      return true; // 定義本文の段落内にも参照を書けるので中は走査する
+    }
+    if (name === "code_block") return false;
+    if (node.isTextblock) {
+      let text = "";
+      node.forEach((child, offset) => {
+        if (child.type.name === "footnote_reference") {
+          nodeRefs.push({
+            label: String(child.attrs.label),
+            pos: pos + 1 + offset,
+            size: child.nodeSize,
+          });
+          text += " ".repeat(child.nodeSize);
+        } else if (child.type.name === "hardbreak") {
+          text += "\n";
+        } else if (child.isText && child.text) {
+          const isCode = child.marks.some((mk) => mk.type.name === "inlineCode");
+          text += isCode ? " ".repeat(child.text.length) : child.text;
+        } else {
+          text += " ".repeat(child.nodeSize);
+        }
+      });
+      const base = pos + 1;
+      for (const token of scanFootnoteTokens(text)) {
+        textTokens.push({ token, base });
+      }
+      return false; // インラインは処理済み
+    }
+    return true;
+  });
+  return { textTokens, nodeRefs, nodeDefs };
+}
+
+function buildDecorations(doc: ProseNode): DecorationSet {
+  const { textTokens, nodeRefs, nodeDefs } = collect(doc);
+  const refLabels = new Set<string>();
+  const defLabels = new Set<string>();
+  for (const { token } of textTokens) {
+    (token.kind === "ref" ? refLabels : defLabels).add(token.label);
+  }
+  for (const r of nodeRefs) refLabels.add(r.label);
+  for (const d of nodeDefs) defLabels.add(d.label);
+  const paired = (label: string): boolean =>
+    refLabels.has(label) && defLabels.has(label);
+
+  const decos: Decoration[] = [];
+  for (const { token, base } of textTokens) {
+    if (!paired(token.label)) continue;
+    decos.push(
+      Decoration.inline(base + token.from, base + token.to, {
+        class:
+          token.kind === "ref" ? "fn-pair fn-pair-ref" : "fn-pair fn-pair-def",
+        "data-fn-label": token.label,
+      }),
+    );
+  }
+  for (const r of nodeRefs) {
+    if (paired(r.label)) continue;
+    decos.push(Decoration.node(r.pos, r.pos + r.size, { class: "fn-unpaired" }));
+  }
+  for (const d of nodeDefs) {
+    if (paired(d.label)) continue;
+    decos.push(Decoration.node(d.pos, d.pos + d.size, { class: "fn-unpaired" }));
+  }
+  return decos.length > 0 ? DecorationSet.create(doc, decos) : DecorationSet.empty;
+}
+
+const footnotePairKey = new PluginKey<DecorationSet>("md-editor-footnote-pair");
+
+export const footnotePairPlugin = new Plugin<DecorationSet>({
+  key: footnotePairKey,
+  state: {
+    init(_config, state) {
+      return buildDecorations(state.doc);
+    },
+    apply(tr, value) {
+      return tr.docChanged ? buildDecorations(tr.doc) : value;
+    },
+  },
+  props: {
+    decorations(state) {
+      return footnotePairKey.getState(state) ?? null;
+    },
+  },
+});
