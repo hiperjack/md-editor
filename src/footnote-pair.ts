@@ -140,26 +140,32 @@ function denodeize(state: EditorState): Transaction | null {
       tr.replaceWith(pos, pos + node.nodeSize, state.schema.text(`[^${label}]`));
       continue;
     }
-    const inline: ProseNode[] = [state.schema.text(`[^${label}]: `)];
-    const hardbreak = state.schema.nodes.hardbreak;
-    let first = true;
-    node.forEach((child) => {
-      if (!child.isTextblock) return;
-      if (!first && hardbreak) inline.push(hardbreak.create());
-      first = false;
-      child.forEach((n) => {
-        if (n.type.name === "footnote_reference") {
-          inline.push(state.schema.text(`[^${String(n.attrs.label ?? "")}]`));
-        } else {
-          inline.push(n);
-        }
+    // 異常な貼り付け内容で createChecked が投げると dispatch ごと失敗して
+    // エディタが固まるため、変換できない定義はスキップする（元ノードのまま残す）。
+    try {
+      const inline: ProseNode[] = [state.schema.text(`[^${label}]: `)];
+      const hardbreak = state.schema.nodes.hardbreak;
+      let first = true;
+      node.forEach((child) => {
+        if (!child.isTextblock) return;
+        if (!first && hardbreak) inline.push(hardbreak.create());
+        first = false;
+        child.forEach((n) => {
+          if (n.type.name === "footnote_reference") {
+            inline.push(state.schema.text(`[^${String(n.attrs.label ?? "")}]`));
+          } else {
+            inline.push(n);
+          }
+        });
       });
-    });
-    tr.replaceWith(
-      pos,
-      pos + node.nodeSize,
-      state.schema.nodes.paragraph.createChecked(null, inline),
-    );
+      tr.replaceWith(
+        pos,
+        pos + node.nodeSize,
+        state.schema.nodes.paragraph.createChecked(null, inline),
+      );
+    } catch (e) {
+      console.warn("footnote denodeize failed:", e);
+    }
   }
   return tr;
 }
