@@ -41,6 +41,22 @@ export interface MenuBarHandle {
   isOpen(): boolean;
 }
 
+/**
+ * keydown からニーモニック判定用の英数1文字を取り出す（小文字化）。
+ * IME全角モード中は key が "Process"（keyCode 229）になり文字が取れないため、
+ * 物理キー（code の KeyA〜KeyZ / Digit0〜9）から復元する。該当しなければ null。
+ */
+export function mnemonicChar(
+  e: Pick<KeyboardEvent, "key" | "code">,
+): string | null {
+  if (/^[a-z0-9]$/i.test(e.key)) return e.key.toLowerCase();
+  if (e.key === "Process" || e.key === "Unidentified") {
+    const m = /^(?:Key([A-Z])|Digit([0-9]))$/.exec(e.code);
+    if (m) return (m[1] ?? m[2]).toLowerCase();
+  }
+  return null;
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -173,6 +189,9 @@ export function createMenuBar(
     dropdown = buildDropdown(idx);
     highlight = -1;
     renderHighlight();
+    // IME全角モード対策: フォーカスを非編集要素へ移す。エディタにフォーカスが
+    // 残っているとIMEが合成を開始し、続くニーモニック入力が本文に化ける。
+    topButtons[idx].focus();
   };
 
   const closeMenu = (restoreFocus = true) => {
@@ -184,6 +203,10 @@ export function createMenuBar(
     highlight = -1;
     currentEntries = [];
     topButtons.forEach((b) => b.classList.remove("active"));
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && parent.contains(focused)) {
+      focused.blur();
+    }
     if (restoreFocus) opts?.onClose?.();
   };
 
@@ -220,9 +243,10 @@ export function createMenuBar(
       }
       // 開いている最中の Alt+文字 はトップメニューの切替とみなす。
       if (e.altKey) {
-        if (/^[a-z]$/i.test(e.key)) {
+        const ch = mnemonicChar(e);
+        if (ch) {
           const idx = menus.findIndex(
-            (m) => m.mnemonic.toLowerCase() === e.key.toLowerCase(),
+            (m) => m.mnemonic.toLowerCase() === ch,
           );
           e.preventDefault();
           e.stopPropagation();
@@ -267,13 +291,13 @@ export function createMenuBar(
         return;
       }
       // 文字キー: 開いているメニュー内のニーモニックを直接実行。
-      if (/^[a-z0-9]$/i.test(e.key)) {
-        const key = e.key.toLowerCase();
+      const ch = mnemonicChar(e);
+      if (ch) {
         const hit = currentEntries.find(
           (en) =>
             en.type === "item" &&
             (!en.enabled || en.enabled()) &&
-            en.mnemonic?.toLowerCase() === key,
+            en.mnemonic?.toLowerCase() === ch,
         );
         e.preventDefault();
         e.stopPropagation();
@@ -290,9 +314,10 @@ export function createMenuBar(
     }
 
     // メニューが閉じている: Alt+文字 でトップメニューを開く。
-    if (e.altKey && !e.ctrlKey && !e.metaKey && /^[a-z]$/i.test(e.key)) {
-      const key = e.key.toLowerCase();
-      const idx = menus.findIndex((m) => m.mnemonic.toLowerCase() === key);
+    if (e.altKey && !e.ctrlKey && !e.metaKey) {
+      const ch = mnemonicChar(e);
+      if (!ch) return;
+      const idx = menus.findIndex((m) => m.mnemonic.toLowerCase() === ch);
       if (idx >= 0) {
         e.preventDefault();
         e.stopPropagation();

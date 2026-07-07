@@ -113,6 +113,9 @@ body {
   font-size: 13px;
   height: 100%;
 }
+.menubar-top:focus {
+  outline: none;
+}
 .menubar-top:hover,
 .menubar-top.active {
   background: var(--bg-3);
