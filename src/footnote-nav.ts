@@ -1,10 +1,10 @@
 /**
  * エディタ内の脚注ジャンプ（Ctrl+クリック / Cmd+クリック）。
  *
- * WYSIWYG エディタ内の脚注参照（sup[data-type="footnote_reference"]）を
- * Ctrl+クリックすると対応する定義（dl[data-type="footnote_definition"]）へ、
- * 定義側を Ctrl+クリックすると最初の参照へスクロールして相互ジャンプする。
- * 到着先は一瞬ハイライトして視線を誘導する。
+ * 脚注はノード化せず常にテキストで扱うため（remark-footnote-text.ts）、
+ * ジャンプ対象は footnote-pair.ts がペア成立箇所に付けるデコレーション
+ * （.fn-pair-ref / .fn-pair-def、data-fn-label 属性）のみ。
+ * 参照⇄定義を相互ジャンプし、到着先は一瞬ハイライトして視線を誘導する。
  */
 
 const FLASH_CLASS = "footnote-jump-flash";
@@ -16,6 +16,15 @@ function jumpTo(el: Element | null): void {
   // 再付与でアニメーションを確実に再生する。
   requestAnimationFrame(() => el.classList.add(FLASH_CLASS));
   setTimeout(() => el.classList.remove(FLASH_CLASS), 1600);
+}
+
+/** ラベルに対応するペア装飾要素を文書順で探す。 */
+function findPairEl(
+  root: Element,
+  cls: "fn-pair-ref" | "fn-pair-def",
+  label: string,
+): Element | null {
+  return root.querySelector(`.${cls}[data-fn-label="${CSS.escape(label)}"]`);
 }
 
 /** Ctrl/Cmd 押下中だけ脚注にポインターカーソルを出すための body クラス。 */
@@ -44,30 +53,16 @@ export function installFootnoteNavigation(): void {
       const editorRoot = target?.closest?.(".milkdown");
       if (!editorRoot) return;
 
-      const ref = target?.closest?.('sup[data-type="footnote_reference"]');
-      if (ref) {
-        e.preventDefault();
-        e.stopPropagation();
-        const label = ref.getAttribute("data-label") ?? "";
-        jumpTo(
-          editorRoot.querySelector(
-            `dl[data-type="footnote_definition"][data-label="${CSS.escape(label)}"]`,
-          ),
-        );
-        return;
-      }
-
-      const def = target?.closest?.('dl[data-type="footnote_definition"]');
-      if (def) {
-        e.preventDefault();
-        e.stopPropagation();
-        const label = def.getAttribute("data-label") ?? "";
-        jumpTo(
-          editorRoot.querySelector(
-            `sup[data-type="footnote_reference"][data-label="${CSS.escape(label)}"]`,
-          ),
-        );
-      }
+      const pairEl = target?.closest?.(".fn-pair");
+      if (!pairEl) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const label = pairEl.getAttribute("data-fn-label") ?? "";
+      jumpTo(
+        pairEl.classList.contains("fn-pair-ref")
+          ? findPairEl(editorRoot, "fn-pair-def", label)
+          : findPairEl(editorRoot, "fn-pair-ref", label),
+      );
     },
     true,
   );
