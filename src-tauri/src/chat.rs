@@ -56,6 +56,8 @@ const SYSTEM_PROMPT_TAIL: &str = "When the user asks you to modify the document,
 COMPLETE revised document verbatim, \
 preceded by a line containing exactly <mdedit-proposal> and followed by a line containing \
 exactly </mdedit-proposal>. \
+The proposal must contain only the document content itself; never include the <document>, \
+</document>, <selection>, or </selection> framing tags in it. \
 At most one proposal per reply; keep unrelated parts of the document unchanged; \
 briefly explain the changes outside the markers. \
 If no document change is needed, answer normally without the markers.";

@@ -20,22 +20,35 @@ import { diffLines, foldContext } from "./diff";
 import { svg } from "./toolbar";
 import { fileNameOf } from "./tabs";
 import { showContextMenu, type MenuItem } from "./context-menu";
+// 同梱スキル: プレゼンモード用mdの作成手順（ビルド時に文字列として焼き込む）
+import presentationSkill from "../skills/presentation-md/SKILL.md?raw";
 
 type ChatStreamPayload = { reqId: number; line: string };
 type ChatDonePayload = { reqId: number; code: number | null; stderrTail: string };
 
-/**
- * 編集提案マーカー。system prompt（chat.rs）とペアで変更すること。
- * 本文は貪欲マッチ（[\s\S]*）: 提案する文書自体が行頭の </mdedit-proposal> を
- * 含む場合でも、最後の閉じマーカーまでを提案本文として扱う（提案は1返信1つで
- * 末尾に置かれる想定のため、非貪欲だと内側のマーカーで切れて文書が破損する）。
- */
-const PROPOSAL_RE =
-  /^<mdedit-proposal>[ \t]*\r?\n([\s\S]*)\r?\n<\/mdedit-proposal>[ \t]*$/m;
-const PROPOSAL_OPEN_RE = /^<mdedit-proposal>/m;
+import {
+  PROPOSAL_RE,
+  PROPOSAL_OPEN_RE,
+  sanitizeProposal,
+} from "./chat-proposal";
 
 const ICON_SEND = "m22 2-7 20-4-9-9-4zM22 2 11 13";
 const ICON_STOP = "M7 7h10v10H7z";
+
+/**
+ * presentation-md スキルの発動条件:
+ * ヘッダーの「プレゼン変換」ボタン、または /presentation（/プレゼン）で始まる
+ * メッセージ（ボタンはコマンド付きメッセージの送信として実装している）。
+ * 発動時はスキルの指示をそのメッセージのプロンプトにだけ同梱する
+ * （セッション継続中はCLI側の文脈に残るため、2通目以降の再同梱は不要）。
+ */
+const PRESENTATION_CMD_RE = /^\/(?:presentation|プレゼン)\s*/;
+
+/** スキルをチャット文脈に合わせるための補足（保存系の手順を提案出力に置き換える）。 */
+const SKILL_ADAPTER =
+  "Apply the skill above when composing your answer. In this chat you cannot save files: " +
+  "output the resulting presentation markdown as a document proposal using the " +
+  "<mdedit-proposal> markers, replacing the current document.";
 
 /**
  * このウィンドウのチャットが会話対象にしているタブかの判定。
@@ -47,6 +60,17 @@ let inUseCheck: ((tabId: string) => boolean) | null = null;
 
 export function isChatTabInUse(tabId: string): boolean {
   return inUseCheck?.(tabId) ?? false;
+}
+
+/**
+ * テキストを引用句としてチャット入力欄へ追加し、パネルを開く。
+ * エディタの右クリックメニュー「選択をチャットで引用」から呼ばれる。
+ * createChatPanel が実体を登録する。チャット機能オフ時は何もしない。
+ */
+let quoteHandler: ((text: string) => void) | null = null;
+
+export function quoteToChat(text: string): void {
+  quoteHandler?.(text);
 }
 
 /** チャット表示用の軽量markdownレンダラ（本文レンダリングの重い設定は使わない）。 */
@@ -69,11 +93,13 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
   header.className = "chat-header";
   const title = document.createElement("span");
   title.className = "chat-header-title";
+  const presBtn = document.createElement("button");
+  presBtn.className = "chat-header-btn";
   const historyBtn = document.createElement("button");
   historyBtn.className = "chat-header-btn";
   const newBtn = document.createElement("button");
   newBtn.className = "chat-header-btn";
-  header.append(title, historyBtn, newBtn);
+  header.append(title, presBtn, historyBtn, newBtn);
 
   const bannerHost = document.createElement("div");
 
@@ -195,6 +221,7 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
 
   const applyLabels = () => {
     title.textContent = t("chat.title");
+    presBtn.textContent = t("chat.presentation");
     historyBtn.textContent = t("chat.history");
     newBtn.textContent = t("chat.new");
     input.placeholder = t("chat.placeholder");
@@ -345,10 +372,13 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
     const applyBtn = document.createElement("button");
     applyBtn.className = "chat-header-btn is-primary";
     applyBtn.textContent = t("chat.apply");
+    const newTabBtn = document.createElement("button");
+    newTabBtn.className = "chat-header-btn";
+    newTabBtn.textContent = t("chat.newTab");
     const discardBtn = document.createElement("button");
     discardBtn.className = "chat-header-btn";
     discardBtn.textContent = t("chat.discard");
-    actions.append(applyBtn, discardBtn);
+    actions.append(applyBtn, newTabBtn, discardBtn);
     card.appendChild(actions);
 
     const notice = document.createElement("div");
@@ -382,6 +412,14 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
     });
     discardBtn.addEventListener("click", () => finish(t("chat.discarded")));
 
+    // 元の文書は触らず、提案を未保存の新規タブとして開く
+    newTabBtn.addEventListener("click", () => {
+      const id = store.addTab({ initialContent: proposal, initialBaseline: "" });
+      const tab = store.getState().tabs.find((tb) => tb.id === id);
+      if (tab) void editor.show(tab);
+      finish(t("chat.openedInNewTab"));
+    });
+
     messages.appendChild(card);
     // 提案カードは応答の主目的なので、読み位置に関わらず必ず全体を見せる
     // （nearest: 既に見えていれば動かさず、下に隠れていれば必要な分だけ出す）。
@@ -413,7 +451,7 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
     } else {
       streamEl.remove();
     }
-    if (m && targetTabId) addProposalCard(m[1], targetTabId);
+    if (m && targetTabId) addProposalCard(sanitizeProposal(m[1]), targetTabId);
     streamEl = null;
     if (follow) scrollToBottom();
     // 履歴へ確定テキストを記録（編集提案カードは適用先タブが再起動で
@@ -550,13 +588,23 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
     }
     targetTabId = tabId;
     inflightText = text;
+    // presentation-md スキル: 「プレゼン変換」ボタン／/presentation コマンドで同梱
+    let skillPart = "";
+    let body = text;
+    const cmd = PRESENTATION_CMD_RE.exec(text);
+    if (cmd) {
+      skillPart = `<skill name="presentation-md">\n${presentationSkill}\n</skill>\n\n${SKILL_ADAPTER}\n\n`;
+      body =
+        text.slice(cmd[0].length).trim() ||
+        "この文書をプレゼンモード用のMarkdownに整形してください。";
+    }
     // 選択中のテキストがあれば <selection> として同梱する
     // （「ここを書き直して」等が選択範囲を指すことをモデルに伝える）
     const selection = (editor.getSelectionText(tabId) ?? "").trim();
     const selPart = selection
       ? `\n\n<selection>\n${selection}\n</selection>`
       : "";
-    const prompt = `<document title="${fileNameOf(active)}">\n${docMd}\n</document>${selPart}\n\n${text}`;
+    const prompt = `${skillPart}<document title="${fileNameOf(active)}">\n${docMd}\n</document>${selPart}\n\n${body}`;
 
     currentReqId++;
     cancelled = false;
@@ -673,6 +721,15 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
   sendBtn.addEventListener("click", () => {
     if (busy) stop();
     else void send();
+  });
+
+  // プレゼン変換: /presentation コマンド付きで送信する。入力欄に要望が
+  // 書かれていればそれも一緒に渡す（ユーザーの吹き出しにはコマンドが見える）。
+  presBtn.addEventListener("click", () => {
+    if (busy) return;
+    const extra = input.value.trim();
+    input.value = "/presentation" + (extra ? ` ${extra}` : "");
+    void send();
   });
 
   newBtn.addEventListener("click", () => {
@@ -833,6 +890,24 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
       applyVisibility();
     }
   });
+
+  // 選択テキストの引用: markdown引用句にして入力欄へ追記し、パネルを開く
+  quoteHandler = (text) => {
+    if (!settings.get().chatEnabled) return;
+    const quote = text
+      .replace(/\r\n/g, "\n")
+      .split("\n")
+      .map((l) => `> ${l}`)
+      .join("\n");
+    const cur = input.value;
+    input.value = (cur ? cur.replace(/\n*$/, "\n\n") : "") + quote + "\n\n";
+    panelVisible = true;
+    applyVisibility();
+    autosize();
+    input.focus();
+    // キャレットを末尾（引用の下の空行）に置いて、続けて依頼を書けるようにする
+    input.selectionStart = input.selectionEnd = input.value.length;
+  };
 
   return {
     toggle: () => {
