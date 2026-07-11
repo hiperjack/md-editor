@@ -20,6 +20,8 @@ import { diffLines, foldContext } from "./diff";
 import { svg } from "./toolbar";
 import { fileNameOf } from "./tabs";
 import { showContextMenu, type MenuItem } from "./context-menu";
+// 同梱スキル: プレゼンモード用mdの作成手順（ビルド時に文字列として焼き込む）
+import presentationSkill from "../skills/presentation-md/SKILL.md?raw";
 
 type ChatStreamPayload = { reqId: number; line: string };
 type ChatDonePayload = { reqId: number; code: number | null; stderrTail: string };
@@ -36,6 +38,19 @@ const PROPOSAL_OPEN_RE = /^<mdedit-proposal>/m;
 
 const ICON_SEND = "m22 2-7 20-4-9-9-4zM22 2 11 13";
 const ICON_STOP = "M7 7h10v10H7z";
+
+/**
+ * スラッシュコマンド: /presentation（/プレゼン）で始まるメッセージは、
+ * presentation-md スキルの指示をそのメッセージのプロンプトにだけ同梱する。
+ * セッション継続中はCLI側の文脈に残るため、2通目以降の再同梱は不要。
+ */
+const PRESENTATION_CMD_RE = /^\/(?:presentation|プレゼン)\s*/;
+
+/** スキルをチャット文脈に合わせるための補足（保存系の手順を提案出力に置き換える）。 */
+const SKILL_ADAPTER =
+  "Apply the skill above when composing your answer. In this chat you cannot save files: " +
+  "output the resulting presentation markdown as a document proposal using the " +
+  "<mdedit-proposal> markers, replacing the current document.";
 
 /**
  * このウィンドウのチャットが会話対象にしているタブかの判定。
@@ -561,13 +576,23 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
     }
     targetTabId = tabId;
     inflightText = text;
+    // /presentation コマンド: スキルの指示を同梱し、コマンド部分は依頼文から外す
+    let skillPart = "";
+    let body = text;
+    const cmd = PRESENTATION_CMD_RE.exec(text);
+    if (cmd) {
+      skillPart = `<skill name="presentation-md">\n${presentationSkill}\n</skill>\n\n${SKILL_ADAPTER}\n\n`;
+      body =
+        text.slice(cmd[0].length).trim() ||
+        "この文書をプレゼンモード用のMarkdownに整形してください。";
+    }
     // 選択中のテキストがあれば <selection> として同梱する
     // （「ここを書き直して」等が選択範囲を指すことをモデルに伝える）
     const selection = (editor.getSelectionText(tabId) ?? "").trim();
     const selPart = selection
       ? `\n\n<selection>\n${selection}\n</selection>`
       : "";
-    const prompt = `<document title="${fileNameOf(active)}">\n${docMd}\n</document>${selPart}\n\n${text}`;
+    const prompt = `${skillPart}<document title="${fileNameOf(active)}">\n${docMd}\n</document>${selPart}\n\n${body}`;
 
     currentReqId++;
     cancelled = false;
