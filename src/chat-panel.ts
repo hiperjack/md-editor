@@ -163,8 +163,10 @@ export function createChatPanel(editor: EditorHost): void {
       proposalMarkerAt >= 0
         ? streamBuf.slice(0, proposalMarkerAt) + `\n*${t("chat.proposalTitle")}…*`
         : streamBuf;
+    // 追従判定は内容を変更する「前」に行う（変更後だと伸びた分で常に不成立になる）
+    const follow = nearBottom();
     streamEl.innerHTML = md.render(visible);
-    if (nearBottom()) scrollToBottom();
+    if (follow) scrollToBottom();
   };
 
   const scheduleRender = () => {
@@ -263,13 +265,17 @@ export function createChatPanel(editor: EditorHost): void {
     });
     discardBtn.addEventListener("click", () => finish(t("chat.discarded")));
 
+    // スクロール追従は呼び出し元（finalizeAssistantMsg）が変更前の判定で行う。
+    // カードは背が高く、追加後に nearBottom を測ると必ず不成立になるため。
     messages.appendChild(card);
-    if (nearBottom()) scrollToBottom();
   };
 
   /** ストリーム完了時: 本文の確定表示と提案カードの切り出し。 */
   const finalizeAssistantMsg = () => {
     if (!streamEl) return;
+    // 追従判定は内容を変更する「前」に行う。本文確定＋カード追加で
+    // 大きく伸びるため、変更後に測ると追従が必ず切れてカードが画面外に残る。
+    const follow = nearBottom();
     streamEl.classList.remove("is-streaming");
     const m = PROPOSAL_RE.exec(streamBuf);
     let text = streamBuf;
@@ -288,7 +294,7 @@ export function createChatPanel(editor: EditorHost): void {
     }
     if (m && targetTabId) addProposalCard(m[1], targetTabId);
     streamEl = null;
-    if (nearBottom()) scrollToBottom();
+    if (follow) scrollToBottom();
   };
 
   // ── ストリームイベントのパース ─────────────────────
