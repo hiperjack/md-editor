@@ -588,6 +588,12 @@ body.is-resizing-chat {
   font-size: 12px;
 }
 
+/* リンクはブラウザ既定の青（ダークテーマで読めない）ではなくテーマ色で表示 */
+.chat-msg.is-assistant a {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+
 .chat-msg.is-assistant.is-streaming::after {
   content: "▍";
   color: var(--accent);

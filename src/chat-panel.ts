@@ -375,9 +375,10 @@ export function createChatPanel(editor: EditorHost): void {
     });
     discardBtn.addEventListener("click", () => finish(t("chat.discarded")));
 
-    // スクロール追従は呼び出し元（finalizeAssistantMsg）が変更前の判定で行う。
-    // カードは背が高く、追加後に nearBottom を測ると必ず不成立になるため。
     messages.appendChild(card);
+    // 提案カードは応答の主目的なので、読み位置に関わらず必ず全体を見せる
+    // （nearest: 既に見えていれば動かさず、下に隠れていれば必要な分だけ出す）。
+    card.scrollIntoView({ block: "nearest" });
   };
 
   /** ストリーム完了時: 本文の確定表示と提案カードの切り出し。 */

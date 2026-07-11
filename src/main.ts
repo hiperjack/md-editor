@@ -115,6 +115,8 @@ async function bootstrap(): Promise<void> {
   // 外部URL (http/https) のアンカークリックを既定ブラウザで開く。
   // 対象:
   //   - Milkdown link preview ポップアップ内の URL (target="_blank" のアンカー)
+  //   - Claudeチャットパネル内のリンク（素クリックで開く。放置すると
+  //     WebView 自体がそのURLへ遷移してアプリが壊れるため必ず捕捉する）
   //   - エディタ本文のリンクマーク <a> は Ctrl/Meta+クリック時のみ開く
   //     (素クリックはカーソル移動の標準挙動を温存)
   // Tauri の WebView2 は target="_blank" を OS 既定ブラウザに転送しないので、
@@ -138,7 +140,8 @@ async function bootstrap(): Promise<void> {
       const href = anchor.getAttribute("href") ?? "";
       if (!/^https?:\/\//i.test(href)) return;
       const inPreview =
-        anchor.closest(".milkdown-link-preview, .link-preview") !== null;
+        anchor.closest(".milkdown-link-preview, .link-preview, #chat-panel") !==
+        null;
       const modified = e.ctrlKey || e.metaKey;
       if (!inPreview && !modified) return;
       e.preventDefault();
