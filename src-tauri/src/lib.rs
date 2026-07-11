@@ -3,6 +3,7 @@ use std::sync::Mutex;
 use tauri::Manager;
 
 mod assoc;
+mod chat;
 mod commands;
 mod i18n;
 mod recent;
@@ -36,6 +37,7 @@ pub fn run() {
         .manage(tabwin::DragHover(Mutex::new(None)))
         .manage(tabwin::LastFocused(Mutex::new(Some("main".to_string()))))
         .manage(tabwin::OpenFiles(Mutex::new(HashMap::new())))
+        .manage(chat::ChatState::default())
         .invoke_handler(tauri::generate_handler![
             commands::read_file,
             commands::write_file,
@@ -50,6 +52,9 @@ pub fn run() {
             commands::list_recent_files,
             commands::open_external_url,
             commands::init_window_menu,
+            chat::chat_send,
+            chat::chat_cancel,
+            chat::chat_check,
             #[cfg(target_os = "windows")]
             assoc::query_file_associations,
             #[cfg(target_os = "windows")]

@@ -59,10 +59,14 @@ export type Settings = {
   showRecent: boolean;
   /** 左の見出しアウトラインパネルを表示するか。 */
   showOutline: boolean;
+  /** 右のClaudeチャットパネルを表示するか。 */
+  showChatPanel: boolean;
   lang: LangSetting;
   theme: Theme;
   /** 左アウトラインパネルの横幅(px)。150〜600 にクランプ。 */
   outlineWidth: number;
+  /** 右チャットパネルの横幅(px)。240〜700 にクランプ。 */
+  chatPanelWidth: number;
   /** エディタ内Mermaidプレビューの表示幅モード。fit=エディタ幅に縮小, native=原寸+横スクロール。 */
   mermaidWidthMode: "fit" | "native";
   /** 文字色ボタンが直近に適用した色（"#rrggbb"）。ボタン本体クリックで再適用する。 */
@@ -78,9 +82,11 @@ const DEFAULT_SETTINGS: Settings = {
   fontSize: 15,
   showRecent: true,
   showOutline: false,
+  showChatPanel: false,
   lang: "system",
   theme: "system",
   outlineWidth: 250,
+  chatPanelWidth: 320,
   mermaidWidthMode: "fit",
   lastTextColor: "#ff0000",
   lastHighlightColor: "",
@@ -93,6 +99,14 @@ const MAX_OUTLINE_WIDTH = 600;
 
 function clampOutlineWidth(n: number): number {
   return Math.max(MIN_OUTLINE_WIDTH, Math.min(MAX_OUTLINE_WIDTH, Math.round(n)));
+}
+
+const MIN_CHAT_WIDTH = 240;
+const MAX_CHAT_WIDTH = 700;
+
+/** チャットパネル幅のクランプ。リサイザのライブ反映（chat-panel.ts）とも共用する。 */
+export function clampChatWidth(n: number): number {
+  return Math.max(MIN_CHAT_WIDTH, Math.min(MAX_CHAT_WIDTH, Math.round(n)));
 }
 
 const STORAGE_KEY = "mdedit.settings.v1";
@@ -127,6 +141,10 @@ function loadFromStorage(): Settings {
         typeof parsed.showOutline === "boolean"
           ? parsed.showOutline
           : DEFAULT_SETTINGS.showOutline,
+      showChatPanel:
+        typeof parsed.showChatPanel === "boolean"
+          ? parsed.showChatPanel
+          : DEFAULT_SETTINGS.showChatPanel,
       lang:
         parsed.lang === "ja" ||
         parsed.lang === "en" ||
@@ -144,6 +162,11 @@ function loadFromStorage(): Settings {
         Number.isFinite(parsed.outlineWidth)
           ? clampOutlineWidth(parsed.outlineWidth)
           : DEFAULT_SETTINGS.outlineWidth,
+      chatPanelWidth:
+        typeof parsed.chatPanelWidth === "number" &&
+        Number.isFinite(parsed.chatPanelWidth)
+          ? clampChatWidth(parsed.chatPanelWidth)
+          : DEFAULT_SETTINGS.chatPanelWidth,
       mermaidWidthMode:
         parsed.mermaidWidthMode === "fit" || parsed.mermaidWidthMode === "native"
           ? parsed.mermaidWidthMode
@@ -221,6 +244,7 @@ function applyToDom(): void {
   root.style.setProperty("--editor-font-size", `${current.fontSize}px`);
   root.setAttribute("data-theme", effectiveTheme());
   root.style.setProperty("--outline-w", `${current.outlineWidth}px`);
+  root.style.setProperty("--chat-w", `${current.chatPanelWidth}px`);
   root.setAttribute("data-mermaid-width", current.mermaidWidthMode);
   // ツールバーの文字色/ハイライトボタンのカラーバーが参照する。
   root.style.setProperty("--last-text-color", current.lastTextColor);
@@ -296,6 +320,26 @@ export const settings = {
 
   toggleOutline(): void {
     settings.setShowOutline(!current.showOutline);
+  },
+
+  setShowChatPanel(v: boolean): void {
+    if (v === current.showChatPanel) return;
+    current = { ...current, showChatPanel: v };
+    saveToStorage(current);
+    notify();
+  },
+
+  toggleChatPanel(): void {
+    settings.setShowChatPanel(!current.showChatPanel);
+  },
+
+  setChatPanelWidth(v: number): void {
+    const next = clampChatWidth(v);
+    if (next === current.chatPanelWidth) return;
+    current = { ...current, chatPanelWidth: next };
+    saveToStorage(current);
+    applyToDom();
+    notify();
   },
 
   setLang(v: LangSetting): void {

@@ -19,6 +19,8 @@ export type SourcePane = {
   dom: HTMLElement;
   /** 現在のテキストを返す（保存・baseline 比較用）。 */
   getText: () => string;
+  /** 全文を置換する（チャットの編集提案適用用）。onChange が発火する。 */
+  setText: (text: string) => void;
   /** エディタにフォーカスする。 */
   focus: () => void;
   /** 指定行（1始まり）へカーソルを移動しスクロールする。範囲外は丸める。 */
@@ -93,6 +95,11 @@ export function createSourcePane(
   return {
     dom,
     getText: () => view.state.doc.toString(),
+    setText: (text: string) => {
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: text },
+      });
+    },
     focus: () => view.focus(),
     scrollToLine: (oneBasedLine: number) => {
       const total = view.state.doc.lines;

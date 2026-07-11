@@ -16,6 +16,7 @@ import { expandAllListFolds } from "./list-fold";
 import { setupShortcuts } from "./shortcuts";
 import { createFindReplace } from "./find-replace";
 import { createOutlinePanel } from "./outline";
+import { createChatPanel } from "./chat-panel";
 import { createEditorContextMenu } from "./editor-context-menu";
 import {
   closeTab,
@@ -268,6 +269,7 @@ async function bootstrap(): Promise<void> {
   const editor = createEditorHost(editorHostEl);
   const find = createFindReplace(editor);
   const outline = createOutlinePanel(editor);
+  createChatPanel(editor);
   mark("editor-host created");
 
   // Mermaid配色の変更を購読する。配色が変わったら、図を含むタブを作り直して
@@ -465,6 +467,7 @@ async function bootstrap(): Promise<void> {
     view_font: () =>
       void import("./settings-modal").then((m) => m.openFontSettings()),
     view_outline: () => settings.toggleOutline(),
+    view_chat: () => settings.toggleChatPanel(),
     view_source: () => {
       const a = store.getActive();
       if (a) editor.toggleSourceMode(a.id);
@@ -664,6 +667,14 @@ async function bootstrap(): Promise<void> {
         },
         {
           type: "item",
+          label: t("chat.menu"),
+          mnemonic: "C",
+          // プレゼンタブではチャットパネルは出さない（アウトラインと同方針）。
+          enabled: () => !isSlideshowActive(),
+          run: viewActions.view_chat,
+        },
+        {
+          type: "item",
           label: t("menu.source"),
           mnemonic: "U",
           accel: "Ctrl+Shift+I",
@@ -836,13 +847,16 @@ async function bootstrap(): Promise<void> {
     { capture: true },
   );
 
-  // アウトライン表示トグルボタンの active 状態を設定に同期（ツールバー生成後）。
-  const syncOutlineButton = () => {
-    const btn = toolbarEl.querySelector('[data-action="view_outline"]');
-    btn?.classList.toggle("is-active", settings.get().showOutline);
+  // パネル表示トグルボタン（アウトライン/チャット）の active 状態を設定に同期
+  // （ツールバー生成後）。
+  const syncPanelButtons = () => {
+    const outlineBtn = toolbarEl.querySelector('[data-action="view_outline"]');
+    outlineBtn?.classList.toggle("is-active", settings.get().showOutline);
+    const chatBtn = toolbarEl.querySelector('[data-action="view_chat"]');
+    chatBtn?.classList.toggle("is-active", settings.get().showChatPanel);
   };
-  syncOutlineButton();
-  settings.subscribe(syncOutlineButton);
+  syncPanelButtons();
+  settings.subscribe(syncPanelButtons);
 
   setupTitle();
   setupShortcuts(editor, fileActions, find);

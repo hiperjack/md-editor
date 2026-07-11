@@ -41,6 +41,7 @@ export function openFontSettings(): Promise<void> {
       codeFontColor: before.codeFontColor,
       fontSize: before.fontSize,
       showRecent: before.showRecent,
+      showChatPanel: before.showChatPanel,
       lang: before.lang as LangSetting,
       theme: before.theme as Theme,
       mermaidWidthMode: before.mermaidWidthMode,
@@ -315,6 +316,22 @@ export function openFontSettings(): Promise<void> {
       row.appendChild(check);
       row.appendChild(text);
       c.appendChild(row);
+
+      // Claudeチャットパネル
+      const chatRow = document.createElement("label");
+      chatRow.className = "settings-row settings-row-checkbox";
+      const chatCheck = document.createElement("input");
+      chatCheck.type = "checkbox";
+      chatCheck.checked = draft.showChatPanel;
+      chatCheck.className = "settings-input";
+      chatCheck.addEventListener("change", () => {
+        draft.showChatPanel = chatCheck.checked;
+      });
+      const chatText = document.createElement("span");
+      chatText.textContent = t("settings.display.showChatPanel");
+      chatRow.appendChild(chatCheck);
+      chatRow.appendChild(chatText);
+      c.appendChild(chatRow);
 
       // ── Mermaid 設定 ────────────────────────────────────
       const mermaidHeading = document.createElement("div");
@@ -843,6 +860,7 @@ export function openFontSettings(): Promise<void> {
       draft.codeFontColor = "";
       draft.fontSize = 15;
       draft.showRecent = true;
+      draft.showChatPanel = false;
       draft.lang = "system";
       draft.theme = "system";
       draft.mermaidWidthMode = "fit";
@@ -902,6 +920,7 @@ export function openFontSettings(): Promise<void> {
       settings.setCodeFontColor(s.codeFontColor);
       settings.setFontSize(s.fontSize);
       settings.setShowRecent(s.showRecent);
+      settings.setShowChatPanel(s.showChatPanel);
       settings.setLang(s.lang);
       settings.setTheme(s.theme);
       settings.setMermaidWidthMode(s.mermaidWidthMode);
@@ -922,6 +941,7 @@ export function openFontSettings(): Promise<void> {
           codeFontColor: before.codeFontColor,
           fontSize: before.fontSize,
           showRecent: before.showRecent,
+          showChatPanel: before.showChatPanel,
           lang: before.lang,
           theme: before.theme,
           mermaidWidthMode: before.mermaidWidthMode,

@@ -429,6 +429,302 @@ body.is-resizing-outline {
   user-select: none;
 }
 
+/* ── Chat panel (right sidebar) ───────────────── */
+#chat-panel {
+  flex: 0 0 var(--chat-w, 320px);
+  min-height: 0;
+  min-width: 0;
+  background: var(--bg-1);
+  border-left: 1px solid var(--border);
+  display: none; /* 既定は非表示。is-visible で表示。 */
+}
+
+#chat-panel.is-visible {
+  display: flex;
+  flex-direction: column;
+}
+
+/* エディタと右パネルの間のドラッグ可能な仕切り。チャット表示中のみ出す。 */
+#chat-resizer {
+  flex: 0 0 6px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 2;
+  display: none;
+  touch-action: none;
+}
+
+#chat-resizer.is-visible {
+  display: block;
+}
+
+#chat-resizer:hover,
+#chat-resizer.is-dragging {
+  background: var(--accent);
+}
+
+body.is-resizing-chat {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* パネル上部: タイトル + 新しい会話ボタン */
+.chat-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.chat-header-title {
+  flex: 1 1 auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-header-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--fg-1);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.chat-header-btn:hover {
+  background: var(--bg-2);
+}
+
+/* CLI 未検出などのバナー */
+.chat-banner {
+  margin: 8px 10px 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--fg-1);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
+.chat-banner.is-error {
+  border-color: #b3564d;
+}
+
+.chat-banner pre {
+  margin: 6px 0 0;
+  max-height: 120px;
+  overflow: auto;
+  font-family: var(--editor-code-font-family, monospace);
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
+/* メッセージリスト */
+.chat-messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chat-msg {
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.chat-msg.is-user {
+  align-self: flex-end;
+  max-width: 90%;
+  padding: 6px 10px;
+  background: var(--bg-2);
+  border-radius: 10px 10px 2px 10px;
+  white-space: pre-wrap;
+}
+
+.chat-msg.is-assistant {
+  align-self: stretch;
+  color: var(--fg-0);
+}
+
+/* アシスタント応答内の markdown 表示の余白を詰める */
+.chat-msg.is-assistant > *:first-child {
+  margin-top: 0;
+}
+
+.chat-msg.is-assistant > *:last-child {
+  margin-bottom: 0;
+}
+
+.chat-msg.is-assistant pre {
+  overflow-x: auto;
+  padding: 8px;
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--editor-code-font-family, monospace);
+  font-size: 12px;
+}
+
+.chat-msg.is-assistant code {
+  font-family: var(--editor-code-font-family, monospace);
+  font-size: 12px;
+}
+
+.chat-msg.is-assistant.is-streaming::after {
+  content: "▍";
+  color: var(--accent);
+  animation: chat-caret-blink 1s steps(1) infinite;
+}
+
+@keyframes chat-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* 編集提案カード */
+.chat-proposal-card {
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.chat-proposal-title {
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-1);
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.chat-diff {
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  padding: 6px 0;
+  font-family: var(--editor-code-font-family, monospace);
+  font-size: 11.5px;
+  line-height: 1.5;
+  background: var(--bg-0);
+}
+
+.chat-diff .diff-line {
+  padding: 0 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-diff .diff-add {
+  background: rgba(60, 160, 90, 0.18);
+  color: var(--fg-0);
+}
+
+.chat-diff .diff-del {
+  background: rgba(200, 70, 60, 0.16);
+  color: var(--fg-2);
+  text-decoration: line-through;
+}
+
+.chat-diff .diff-skip {
+  color: var(--fg-2);
+  text-align: center;
+  user-select: none;
+}
+
+.chat-proposal-actions {
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-1);
+}
+
+.chat-proposal-actions .chat-header-btn.is-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.chat-proposal-status {
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--fg-2);
+  border-top: 1px solid var(--border);
+}
+
+/* 入力欄 */
+.chat-input-row {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+}
+
+.chat-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-height: 140px;
+  resize: none;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg-0);
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.chat-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.chat-send-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.chat-send-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.chat-send-btn.is-stop {
+  background: #b3564d;
+}
+
 .outline-list {
   margin: 0;
   padding: 6px 0;
