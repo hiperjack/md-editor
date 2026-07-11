@@ -52,7 +52,14 @@ export function isChatTabInUse(tabId: string): boolean {
 /** チャット表示用の軽量markdownレンダラ（本文レンダリングの重い設定は使わない）。 */
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
 
-export function createChatPanel(editor: EditorHost): void {
+export type ChatPanel = {
+  /** パネルの開閉をトグルする（開閉状態は永続化しない）。 */
+  toggle: () => void;
+  /** パネルを開いているか（ツールバーボタンの active 同期用）。 */
+  isVisible: () => boolean;
+};
+
+export function createChatPanel(editor: EditorHost): ChatPanel {
   const panel = document.getElementById("chat-panel");
   const resizer = document.getElementById("chat-resizer");
   if (!panel || !resizer) throw new Error("#chat-panel not found");
@@ -747,15 +754,19 @@ export function createChatPanel(editor: EditorHost): void {
     });
   }
 
-  // ── 表示制御（settings.showChatPanel を購読） ───────
-  // プレゼン（スライドショー）中は実効非表示にする（outline と同方針）。
+  // ── 表示制御 ─────────────────────────────────────
+  // 開閉はセッション内の状態のみ（起動時は常に非表示）。設定 chatEnabled が
+  // オフなら開けない。プレゼン中は実効非表示にする（outline と同方針）。
+  let panelVisible = false;
+
   const isPresentationActive = (): boolean => {
     const a = store.getActive();
     return a?.kind === "preview" && a.previewMode === "slideshow";
   };
 
   const applyVisibility = () => {
-    const visible = settings.get().showChatPanel && !isPresentationActive();
+    const visible =
+      panelVisible && settings.get().chatEnabled && !isPresentationActive();
     panel.classList.toggle("is-visible", visible);
     resizer.classList.toggle("is-visible", visible);
     // 初回表示時に CLI の存在確認をして、無ければ案内を出す
@@ -772,10 +783,9 @@ export function createChatPanel(editor: EditorHost): void {
   inUseCheck = (tabId) =>
     targetTabId === tabId && (busy || messages.childElementCount > 0);
 
-  // 前回の会話を復元（main ウィンドウのみ）。sessionId も復元するため、
-  // CLI 側のセッションファイルが残っていれば再起動後も続きから会話できる。
+  // 起動時は常に新しい会話で開始する（過去の会話は「履歴」ボタンから再開）。
+  // ここでは旧形式（v1: 単一会話）の保存データの移行だけ行う。
   if (persistable) {
-    // 旧形式（v1: 単一会話）からの移行
     try {
       const legacy = localStorage.getItem(LEGACY_KEY);
       if (legacy && !localStorage.getItem(STORE_KEY)) {
@@ -811,10 +821,6 @@ export function createChatPanel(editor: EditorHost): void {
     } catch {
       /* 移行失敗は無視 */
     }
-
-    const s = loadStore();
-    const active = s.conversations.find((c) => c.id === s.activeId);
-    if (active) openConversation(active);
   }
 
   applyVisibility();
@@ -827,4 +833,14 @@ export function createChatPanel(editor: EditorHost): void {
       applyVisibility();
     }
   });
+
+  return {
+    toggle: () => {
+      if (!settings.get().chatEnabled) return; // 機能オフ時は開かない
+      panelVisible = !panelVisible;
+      applyVisibility();
+      if (panelVisible) input.focus();
+    },
+    isVisible: () => panelVisible,
+  };
 }

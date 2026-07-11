@@ -41,7 +41,7 @@ export function openFontSettings(): Promise<void> {
       codeFontColor: before.codeFontColor,
       fontSize: before.fontSize,
       showRecent: before.showRecent,
-      showChatPanel: before.showChatPanel,
+      chatEnabled: before.chatEnabled,
       chatWebSearch: before.chatWebSearch,
       lang: before.lang as LangSetting,
       theme: before.theme as Theme,
@@ -318,18 +318,18 @@ export function openFontSettings(): Promise<void> {
       row.appendChild(text);
       c.appendChild(row);
 
-      // Claudeチャットパネル
+      // Claudeチャット機能（オフでツールバーアイコンごと非表示）
       const chatRow = document.createElement("label");
       chatRow.className = "settings-row settings-row-checkbox";
       const chatCheck = document.createElement("input");
       chatCheck.type = "checkbox";
-      chatCheck.checked = draft.showChatPanel;
+      chatCheck.checked = draft.chatEnabled;
       chatCheck.className = "settings-input";
       chatCheck.addEventListener("change", () => {
-        draft.showChatPanel = chatCheck.checked;
+        draft.chatEnabled = chatCheck.checked;
       });
       const chatText = document.createElement("span");
-      chatText.textContent = t("settings.display.showChatPanel");
+      chatText.textContent = t("settings.display.chatEnabled");
       chatRow.appendChild(chatCheck);
       chatRow.appendChild(chatText);
       c.appendChild(chatRow);
@@ -877,7 +877,7 @@ export function openFontSettings(): Promise<void> {
       draft.codeFontColor = "";
       draft.fontSize = 15;
       draft.showRecent = true;
-      draft.showChatPanel = false;
+      draft.chatEnabled = false;
       draft.chatWebSearch = true;
       draft.lang = "system";
       draft.theme = "system";
@@ -938,7 +938,7 @@ export function openFontSettings(): Promise<void> {
       settings.setCodeFontColor(s.codeFontColor);
       settings.setFontSize(s.fontSize);
       settings.setShowRecent(s.showRecent);
-      settings.setShowChatPanel(s.showChatPanel);
+      settings.setChatEnabled(s.chatEnabled);
       settings.setChatWebSearch(s.chatWebSearch);
       settings.setLang(s.lang);
       settings.setTheme(s.theme);
@@ -960,7 +960,7 @@ export function openFontSettings(): Promise<void> {
           codeFontColor: before.codeFontColor,
           fontSize: before.fontSize,
           showRecent: before.showRecent,
-          showChatPanel: before.showChatPanel,
+          chatEnabled: before.chatEnabled,
           chatWebSearch: before.chatWebSearch,
           lang: before.lang,
           theme: before.theme,

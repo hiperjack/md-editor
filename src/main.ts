@@ -272,7 +272,7 @@ async function bootstrap(): Promise<void> {
   const editor = createEditorHost(editorHostEl);
   const find = createFindReplace(editor);
   const outline = createOutlinePanel(editor);
-  createChatPanel(editor);
+  const chat = createChatPanel(editor);
   mark("editor-host created");
 
   // Mermaid配色の変更を購読する。配色が変わったら、図を含むタブを作り直して
@@ -470,7 +470,10 @@ async function bootstrap(): Promise<void> {
     view_font: () =>
       void import("./settings-modal").then((m) => m.openFontSettings()),
     view_outline: () => settings.toggleOutline(),
-    view_chat: () => settings.toggleChatPanel(),
+    view_chat: () => {
+      chat.toggle();
+      syncPanelButtons();
+    },
     view_source: () => {
       const a = store.getActive();
       if (a) editor.toggleSourceMode(a.id);
@@ -672,8 +675,8 @@ async function bootstrap(): Promise<void> {
           type: "item",
           label: t("chat.menu"),
           mnemonic: "C",
-          // プレゼンタブではチャットパネルは出さない（アウトラインと同方針）。
-          enabled: () => !isSlideshowActive(),
+          // チャット機能オフの設定では出さない。プレゼンタブでも出さない。
+          enabled: () => settings.get().chatEnabled && !isSlideshowActive(),
           run: viewActions.view_chat,
         },
         {
@@ -850,13 +853,18 @@ async function bootstrap(): Promise<void> {
     { capture: true },
   );
 
-  // パネル表示トグルボタン（アウトライン/チャット）の active 状態を設定に同期
-  // （ツールバー生成後）。
+  // パネル表示トグルボタン（アウトライン/チャット）の状態を同期（ツールバー生成後）。
+  // チャットは機能オフ設定ならボタンごと非表示にする（使わない人にはUIを見せない）。
   const syncPanelButtons = () => {
     const outlineBtn = toolbarEl.querySelector('[data-action="view_outline"]');
     outlineBtn?.classList.toggle("is-active", settings.get().showOutline);
-    const chatBtn = toolbarEl.querySelector('[data-action="view_chat"]');
-    chatBtn?.classList.toggle("is-active", settings.get().showChatPanel);
+    const chatBtn = toolbarEl.querySelector<HTMLElement>(
+      '[data-action="view_chat"]',
+    );
+    if (chatBtn) {
+      chatBtn.style.display = settings.get().chatEnabled ? "" : "none";
+      chatBtn.classList.toggle("is-active", chat.isVisible());
+    }
   };
   syncPanelButtons();
   settings.subscribe(syncPanelButtons);

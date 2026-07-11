@@ -59,8 +59,12 @@ export type Settings = {
   showRecent: boolean;
   /** 左の見出しアウトラインパネルを表示するか。 */
   showOutline: boolean;
-  /** 右のClaudeチャットパネルを表示するか。 */
-  showChatPanel: boolean;
+  /**
+   * Claudeチャット機能を使うか。オフでツールバーアイコン・メニュー項目ごと
+   * 非表示になる（Claudeアカウントを持たない利用者向け）。
+   * パネルの開閉状態は永続化しない（起動時は常に非表示）。
+   */
+  chatEnabled: boolean;
   /** ClaudeチャットでWeb検索（WebSearch/WebFetch）を許可するか。 */
   chatWebSearch: boolean;
   lang: LangSetting;
@@ -84,7 +88,7 @@ const DEFAULT_SETTINGS: Settings = {
   fontSize: 15,
   showRecent: true,
   showOutline: false,
-  showChatPanel: false,
+  chatEnabled: false,
   chatWebSearch: true,
   lang: "system",
   theme: "system",
@@ -144,10 +148,10 @@ function loadFromStorage(): Settings {
         typeof parsed.showOutline === "boolean"
           ? parsed.showOutline
           : DEFAULT_SETTINGS.showOutline,
-      showChatPanel:
-        typeof parsed.showChatPanel === "boolean"
-          ? parsed.showChatPanel
-          : DEFAULT_SETTINGS.showChatPanel,
+      chatEnabled:
+        typeof parsed.chatEnabled === "boolean"
+          ? parsed.chatEnabled
+          : DEFAULT_SETTINGS.chatEnabled,
       chatWebSearch:
         typeof parsed.chatWebSearch === "boolean"
           ? parsed.chatWebSearch
@@ -329,15 +333,11 @@ export const settings = {
     settings.setShowOutline(!current.showOutline);
   },
 
-  setShowChatPanel(v: boolean): void {
-    if (v === current.showChatPanel) return;
-    current = { ...current, showChatPanel: v };
+  setChatEnabled(v: boolean): void {
+    if (v === current.chatEnabled) return;
+    current = { ...current, chatEnabled: v };
     saveToStorage(current);
     notify();
-  },
-
-  toggleChatPanel(): void {
-    settings.setShowChatPanel(!current.showChatPanel);
   },
 
   setChatWebSearch(v: boolean): void {
