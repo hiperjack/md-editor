@@ -41,7 +41,9 @@ struct ChatDonePayload {
 /// Rust が拒否する（BatBadBut 対策）ため、このプロンプトは1行で書くこと。
 const SYSTEM_PROMPT: &str = "You are an assistant embedded in a Markdown editor (mdedit). \
 Each user message contains the current document between <document> tags; it includes \
-unsaved edits and the latest one is the single source of truth. Rules: \
+unsaved edits and the latest one is the single source of truth. \
+A <selection> element, when present, contains the text the user currently has selected \
+in the editor; requests like 'rewrite this' or 'summarize this part' refer to it. Rules: \
 Reply in the same language as the user's message. \
 You have no file, shell, or web tools; never claim to have edited any file. \
 When the user asks you to modify the document, output the COMPLETE revised document verbatim, \

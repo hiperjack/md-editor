@@ -105,6 +105,38 @@ export function createChatPanel(editor: EditorHost): void {
   /** ストリーム中に検出した提案マーカーの位置。-1=未検出。 */
   let proposalMarkerAt = -1;
 
+  // ── 会話履歴の永続化 ──────────────────────────────
+  // main ウィンドウのみ永続化する（tab-* はラベルが起動ごとに変わるため
+  // 復元先がなく、localStorage にキーのゴミが溜まるだけになる）。
+  type ChatHistoryMsg = { role: "user" | "assistant"; text: string };
+  const history: ChatHistoryMsg[] = [];
+  const winLabel = getCurrentWindow().label;
+  const HISTORY_KEY = `mdedit.chat.v1.${winLabel}`;
+  const persistable = winLabel === "main";
+  const HISTORY_MAX = 50;
+
+  const saveHistory = () => {
+    if (!persistable) return;
+    try {
+      localStorage.setItem(
+        HISTORY_KEY,
+        JSON.stringify({ sessionId, messages: history.slice(-HISTORY_MAX) }),
+      );
+    } catch {
+      // 容量超過等は黙って諦める（履歴はベストエフォート）
+    }
+  };
+
+  const clearHistory = () => {
+    history.length = 0;
+    if (!persistable) return;
+    try {
+      localStorage.removeItem(HISTORY_KEY);
+    } catch {
+      /* noop */
+    }
+  };
+
   const applyLabels = () => {
     title.textContent = t("chat.title");
     newBtn.textContent = t("chat.new");
@@ -146,12 +178,27 @@ export function createChatPanel(editor: EditorHost): void {
   const clearBanner = () => bannerHost.replaceChildren();
 
   // ── メッセージ描画 ────────────────────────────────
-  const addUserMsg = (text: string) => {
+  /** DOMへの描画のみ（履歴復元でも使う）。 */
+  const renderUserMsg = (text: string) => {
     const el = document.createElement("div");
     el.className = "chat-msg is-user";
     el.textContent = text;
     messages.appendChild(el);
+  };
+
+  /** DOMへの描画のみ（履歴復元でも使う）。 */
+  const renderAssistantMsg = (text: string) => {
+    const el = document.createElement("div");
+    el.className = "chat-msg is-assistant";
+    el.innerHTML = md.render(text);
+    messages.appendChild(el);
+  };
+
+  const addUserMsg = (text: string) => {
+    renderUserMsg(text);
     scrollToBottom();
+    history.push({ role: "user", text });
+    saveHistory();
   };
 
   const startAssistantMsg = (): HTMLElement => {
@@ -307,6 +354,10 @@ export function createChatPanel(editor: EditorHost): void {
     if (m && targetTabId) addProposalCard(m[1], targetTabId);
     streamEl = null;
     if (follow) scrollToBottom();
+    // 履歴へ確定テキストを記録（編集提案カードは適用先タブが再起動で
+    // 失われるため永続化しない）。sessionId の更新も一緒に保存される。
+    if (text) history.push({ role: "assistant", text });
+    saveHistory();
   };
 
   // ── ストリームイベントのパース ─────────────────────
@@ -430,7 +481,13 @@ export function createChatPanel(editor: EditorHost): void {
     }
     targetTabId = tabId;
     inflightText = text;
-    const prompt = `<document title="${fileNameOf(active)}">\n${docMd}\n</document>\n\n${text}`;
+    // 選択中のテキストがあれば <selection> として同梱する
+    // （「ここを書き直して」等が選択範囲を指すことをモデルに伝える）
+    const selection = (editor.getSelectionText(tabId) ?? "").trim();
+    const selPart = selection
+      ? `\n\n<selection>\n${selection}\n</selection>`
+      : "";
+    const prompt = `<document title="${fileNameOf(active)}">\n${docMd}\n</document>${selPart}\n\n${text}`;
 
     currentReqId++;
     cancelled = false;
@@ -508,6 +565,7 @@ export function createChatPanel(editor: EditorHost): void {
     streamEl = null;
     setBusy(false);
     messages.replaceChildren();
+    clearHistory();
     clearBanner();
     input.focus();
   });
@@ -597,6 +655,39 @@ export function createChatPanel(editor: EditorHost): void {
   // 「新しい会話」で履歴を消せば解除される。
   inUseCheck = (tabId) =>
     targetTabId === tabId && (busy || messages.childElementCount > 0);
+
+  // 前回の会話を復元（main ウィンドウのみ）。sessionId も復元するため、
+  // CLI 側のセッションファイルが残っていれば再起動後も続きから会話できる。
+  if (persistable) {
+    try {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          sessionId?: unknown;
+          messages?: unknown;
+        };
+        if (typeof parsed.sessionId === "string" && parsed.sessionId) {
+          sessionId = parsed.sessionId;
+        }
+        if (Array.isArray(parsed.messages)) {
+          for (const m of parsed.messages) {
+            const msg = m as ChatHistoryMsg;
+            if (typeof msg?.text !== "string" || !msg.text) continue;
+            if (msg.role === "user") {
+              renderUserMsg(msg.text);
+              history.push({ role: "user", text: msg.text });
+            } else if (msg.role === "assistant") {
+              renderAssistantMsg(msg.text);
+              history.push({ role: "assistant", text: msg.text });
+            }
+          }
+          if (history.length > 0) scrollToBottom();
+        }
+      }
+    } catch {
+      // 壊れた履歴は無視して空で開始する
+    }
+  }
 
   applyVisibility();
   settings.subscribe(applyVisibility);

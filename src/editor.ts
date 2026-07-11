@@ -405,6 +405,11 @@ export type EditorHost = {
    * 成功で true、タブが無い・preview タブ等で false。
    */
   setMarkdown: (tabId: string, text: string) => boolean;
+  /**
+   * タブで選択中のプレーンテキストを返す（チャットの選択範囲同梱用）。
+   * 選択なしは ""、タブが無い・preview タブ等は null。
+   */
+  getSelectionText: (tabId: string) => string | null;
   /** baseline（正規化済みディスク内容）を取得（移送時の dirty 引き継ぎ用）。 */
   getBaseline: (tabId: string) => string | null;
   /** baselineを現在のmarkdownにリセット（保存後）。 */
@@ -1567,6 +1572,29 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         console.error("setMarkdown replaceAll failed:", e);
         return false;
       }
+    },
+
+    getSelectionText(tabId: string) {
+      const entry = editors.get(tabId);
+      if (!entry) return null;
+      if (entry.sourceMode && entry.sourcePane) {
+        return entry.sourcePane.getSelectionText();
+      }
+      if (!entry.crepe) return null;
+      let view: EditorView | null = null;
+      try {
+        entry.crepe.editor.action((ctx) => {
+          view = ctx.get(editorViewCtx) as EditorView;
+        });
+      } catch (e) {
+        console.warn("getSelectionText failed:", e);
+        return null;
+      }
+      if (!view) return null;
+      const sel = (view as EditorView).state.selection;
+      if (sel.empty) return "";
+      // ブロック間は改行区切りのプレーンテキストとして取り出す
+      return (view as EditorView).state.doc.textBetween(sel.from, sel.to, "\n");
     },
 
     getBaseline(tabId: string) {

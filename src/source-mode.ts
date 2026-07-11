@@ -21,6 +21,8 @@ export type SourcePane = {
   getText: () => string;
   /** 全文を置換する（チャットの編集提案適用用）。onChange が発火する。 */
   setText: (text: string) => void;
+  /** 選択中のテキストを返す（選択なしは ""）。チャットの選択範囲同梱用。 */
+  getSelectionText: () => string;
   /** エディタにフォーカスする。 */
   focus: () => void;
   /** 指定行（1始まり）へカーソルを移動しスクロールする。範囲外は丸める。 */
@@ -99,6 +101,10 @@ export function createSourcePane(
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: text },
       });
+    },
+    getSelectionText: () => {
+      const sel = view.state.selection.main;
+      return view.state.sliceDoc(sel.from, sel.to);
     },
     focus: () => view.focus(),
     scrollToLine: (oneBasedLine: number) => {
