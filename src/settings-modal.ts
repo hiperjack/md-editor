@@ -325,16 +325,13 @@ export function openFontSettings(): Promise<void> {
       chatCheck.type = "checkbox";
       chatCheck.checked = draft.chatEnabled;
       chatCheck.className = "settings-input";
-      chatCheck.addEventListener("change", () => {
-        draft.chatEnabled = chatCheck.checked;
-      });
       const chatText = document.createElement("span");
       chatText.textContent = t("settings.display.chatEnabled");
       chatRow.appendChild(chatCheck);
       chatRow.appendChild(chatText);
       c.appendChild(chatRow);
 
-      // ClaudeチャットのWeb検索許可
+      // ClaudeチャットのWeb検索許可（チャット機能オフ時はグレーアウト）
       const webRow = document.createElement("label");
       webRow.className = "settings-row settings-row-checkbox";
       const webCheck = document.createElement("input");
@@ -349,6 +346,17 @@ export function openFontSettings(): Promise<void> {
       webRow.appendChild(webCheck);
       webRow.appendChild(webText);
       c.appendChild(webRow);
+
+      const syncWebRow = () => {
+        webCheck.disabled = !draft.chatEnabled;
+        webRow.style.opacity = draft.chatEnabled ? "" : "0.5";
+        webRow.style.pointerEvents = draft.chatEnabled ? "" : "none";
+      };
+      chatCheck.addEventListener("change", () => {
+        draft.chatEnabled = chatCheck.checked;
+        syncWebRow();
+      });
+      syncWebRow();
 
       // ── Mermaid 設定 ────────────────────────────────────
       const mermaidHeading = document.createElement("div");
