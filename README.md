@@ -14,23 +14,28 @@ Edit with formatting applied as you type, preview Mermaid diagrams inline, and e
 
 ## What is mdedit?
 
-A desktop app that lets you **edit Markdown in its finished, rendered form** instead of staring at raw syntax. There's no separate preview pane to jump back and forth to — what you write is the document. It also supports Mermaid diagrams, export to HTML and PDF, presenting your notes as slides, and working across multiple windows and tabs.
+A desktop app that lets you **edit Markdown in its finished, rendered form** instead of staring at raw syntax. There's no separate preview pane to jump back and forth to — what you write is the document. It also supports Mermaid diagrams, export to HTML and PDF, presenting your notes as slides, and working across multiple windows and tabs. An optional **Claude chat panel** answers questions about your document and proposes edits as reviewable diffs — using your Claude subscription, no API key.
 
 ## Why mdedit?
 
 - **See it as you write it** — Edit directly with bold, headings, and lists already rendered (WYSIWYG). No round trips to a preview pane.
 - **See the raw Markdown when you want** — Toggle between the rendered view and the raw Markdown source (with line numbers) with a single key (`Ctrl+Shift+I`).
 - **Diagrams just work** — Mermaid you write in a code block becomes a live diagram in real time, and you can click to zoom. Diagram-only files (`.mmd` / `.mermaid`) open too.
-- **Present without leaving the editor** — Turn the same document into 16:9 slides and present full-screen, with a thumbnail deck, a grid overview, and a laser pointer (`Ctrl+Shift+P`). Slides split at `---` or headings. A bundled [Claude Code skill](./skills/presentation-md) can turn your notes into presentation-ready Markdown.
+- **Ask Claude about your document** — An optional chat panel talks to the [Claude Code CLI](https://claude.com/claude-code) with your existing subscription (no API key). Ask questions, get edits proposed as diffs you review and apply with one click, quote a selection from the right-click menu, and resume past conversations from the History menu.
+- **Present without leaving the editor** — Turn the same document into 16:9 slides and present full-screen, with a thumbnail deck, a grid overview, and a laser pointer (`Ctrl+Shift+P`). Slides split at `---` or headings. The chat panel's **To slides** button (or the bundled [Claude Code skill](./skills/presentation-md)) turns your notes into presentation-ready Markdown.
 - **Export what you see** — Export to HTML with the exact same look as the editor, and print to PDF.
 - **Light and fast** — Built with Tauri, so the installer is small and startup is quick.
 - **Bilingual** — Japanese and English UI, with switchable dark / light themes.
 
 ## Screenshots
 
-| WYSIWYG editing | Mermaid preview | HTML export | Presentation |
-|---|---|---|---|
-| ![Editing](./docs/assets/edit.png) | ![Mermaid preview](./docs/assets/mermaid.png) | ![HTML export](./docs/assets/export.png) | ![Presentation](./docs/assets/presentation.png) |
+| WYSIWYG editing | Claude chat | Presentation |
+|---|---|---|
+| ![Editing](./docs/assets/edit.png) | ![Claude chat](./docs/assets/chat.png) | ![Presentation](./docs/assets/presentation.png) |
+
+| Mermaid preview | HTML export |
+|---|---|
+| ![Mermaid preview](./docs/assets/mermaid.png) | ![HTML export](./docs/assets/export.png) |
 
 ## Download
 
@@ -52,6 +57,23 @@ Get the latest version from [Releases](https://github.com/hiperjack/md-editor/re
 - `.mmd` / `.mermaid` files open as a diagram and are saved back to their original source format.
 - `.html` files open in a read-only preview tab.
 - Tabs can be reordered by dragging, and dragging one out of the window creates a new window.
+
+## Claude chat (optional)
+
+mdedit can embed Claude as an editing assistant. It talks to the Claude Code CLI on your machine, so it runs on your existing Claude subscription — no API key to manage.
+
+1. Install the [Claude Code CLI](https://claude.com/claude-code) and log in once (run `claude` in a terminal).
+2. Turn on **Settings → "Use Claude chat"** — a chat button appears on the toolbar.
+3. Open the panel and ask away. The open document (including unsaved edits) is the context.
+
+What it can do:
+
+- **Answer questions** about the document, streaming replies into the panel
+- **Propose edits as a diff preview** — nothing changes until you click **Apply** (or open the result in a **new tab**); files on disk are never touched directly, and every apply is undoable
+- **Work with selections** — select text and right-click → "Quote selection in chat", or just select and ask "rewrite this"
+- **To slides** — one click converts the document into presentation-ready Markdown
+- **History** — past conversations are archived and can be resumed later, context included
+- **Web search** — on by default; turn it off in Settings when working with confidential documents
 
 ## Common shortcuts
 
@@ -93,6 +115,7 @@ npm run tauri:build
 | Frontend | Vite + TypeScript (no UI framework) |
 | Editor | Milkdown Crepe (ProseMirror-based WYSIWYG) |
 | Diagrams | Mermaid |
+| AI assistant (optional) | Claude Code CLI (subscription auth) |
 
 Design details, internals, directory layout, and the full shortcut list are documented in [docs/architecture.md](./docs/architecture.md).
 

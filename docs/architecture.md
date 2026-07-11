@@ -28,6 +28,13 @@ The menu bar is drawn in HTML rather than natively, so it supports mnemonic keyb
 - **Heading folding**: Hovering a heading shows a triangle icon on its left; clicking folds/unfolds the blocks beneath it (display only while editing — it does not affect the saved content). It is two-way linked with the left outline panel, so folding in either place stays consistent.
 - **HTML export / printing**: `Ctrl+Shift+E` exports HTML with the document theme applied. `Ctrl+P` prints the body only (the dialog can save to PDF). An `.mmd` tab becomes a standalone HTML file with the single diagram centered.
 - **Presentation view (slideshow)**: `Ctrl+Shift+P` (or right-click a tab → "Open presentation view", or the toolbar button) opens a read-only presentation tab built from the *same* render pipeline as HTML export, so slides look identical to the document. The document is split into 16:9 slides at `<hr>` (`---`) boundaries, or — when there are no horizontal rules — at H1/H2 headings. Each slide is laid out in three fixed zones: title (the leading heading), message (the first paragraph after it), and body (everything else, auto-zoomed to fit with in-zone scrolling below a minimum scale). Three views share one canvas renderer: a **deck** (thumbnail sidebar + main slide), a **grid** overview, and a **full-screen** present mode. A laser pointer (`L`) and "present from this slide" are available. The HTML-preview zoom level is inherited when the view opens. A bundled Claude Code skill (`skills/presentation-md`) documents the slide conventions (split at `---`, heading → key-message paragraph → body) and can author/format Markdown optimized for this view.
+- **Claude chat panel (optional, v2.0+)**: A right-side chat panel backed by the *local* Claude Code CLI (`claude -p --output-format stream-json --include-partial-messages`, subscription auth — `ANTHROPIC_API_KEY` is explicitly removed from the child environment). Master switch: Settings → "Use Claude chat" (off by default; when off, the toolbar button and menu item are hidden entirely). Details:
+  - Each message sends the active tab's **full buffer** (unsaved edits included) inside `<document>` tags, plus the current editor selection inside `<selection>` tags, via stdin (avoids Windows command-line length limits).
+  - Edit proposals come back between `<mdedit-proposal>` line markers (greedy extraction, `src/chat-proposal.ts`), are rendered as a line diff (dependency-free Myers implementation, `src/diff.ts`), and are applied to the **editor buffer** via `EditorHost.setMarkdown` — never to disk. Apply / New tab / Discard; a stale-buffer check re-renders the diff instead of silently overwriting user edits made after the proposal arrived.
+  - File/shell tools are always disabled (`--tools ""`); when "Allow web search" is on, only WebSearch/WebFetch are enabled and auto-allowed. `--strict-mcp-config --setting-sources ""` isolates the CLI from user-level hooks/plugins.
+  - Conversations (max 20, plus session IDs for `--resume`) are archived to `localStorage` per window label (`main` only) and can be resumed from the History menu; the panel always starts hidden with a fresh conversation.
+  - "To slides" (or a `/presentation` command) inlines the bundled `skills/presentation-md/SKILL.md` (baked in at build time via Vite `?raw`) into that message's prompt.
+  - Rust side (`src-tauri/src/chat.rs`): one process per message, three relay threads (stdin writer / stdout NDJSON line relay via `chat-stream` events / stderr rolling 8 KB tail), completion via `chat-done`, cancel via `taskkill /T` on Windows. **The system prompt must remain single-line** — Rust rejects newline-containing arguments for `.cmd` shims (BatBadBut mitigation), which would break npm-installed CLIs.
 - **Document theme**: Font, line height, heading styles, colors, etc. can be adjusted in settings and are reflected in preview / export / print. The settings dialog is organized into tabs (General / Mermaid / HTML preview, etc.).
 - **Multi-window**: Drag a tab out of the window to create a new window (detach); drag it onto another window's tab bar to merge. If the source had only one tab, the source window closes. Opening the same file in multiple windows is detected and shown via a popup.
 - **Find & replace**: `Ctrl+F` opens the search bar, `Ctrl+H` expands the replace field. Supports case sensitivity, regular expressions (capture-reference replacement like `$1`), whole-word matching, and replace-all. It operates on the ProseMirror document, so undo works.
@@ -231,6 +238,9 @@ md-editor/
 │   ├── search-core.ts           # Pure search logic (regex building / matching / replacement resolution)
 │   ├── search-plugin.ts         # Highlighting of search matches (ProseMirror Decoration)
 │   ├── outline.ts               # Heading outline panel (left sidebar)
+│   ├── chat-panel.ts            # Claude chat panel (right sidebar): streaming, proposal cards, history
+│   ├── chat-proposal.ts         # Proposal marker extraction / sanitization (pure functions)
+│   ├── diff.ts                  # Dependency-free line diff (Myers) for proposal previews
 │   ├── render-pipeline.ts       # markdown → document HTML rendering for output
 │   ├── exporter.ts              # HTML export / HTML preview-tab creation
 │   ├── print.ts                 # Body-only printing (@media print)
@@ -259,6 +269,7 @@ md-editor/
 │   │   ├── main.rs
 │   │   ├── lib.rs
 │   │   ├── commands.rs          # Commands called from the frontend (get recent files, launch external URLs, etc.)
+│   │   ├── chat.rs              # Claude Code CLI integration (spawn, NDJSON relay, cancel)
 │   │   ├── recent.rs            # Recent files
 │   │   ├── i18n.rs              # Holds language state (the menu is drawn on the frontend HTML side)
 │   │   ├── tabwin.rs            # Cross-window tab transfer / merge / duplicate-open detection
