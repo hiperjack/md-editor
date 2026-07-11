@@ -19,6 +19,7 @@ import { t, onLangChange } from "./i18n";
 import { diffLines, foldContext } from "./diff";
 import { svg } from "./toolbar";
 import { fileNameOf } from "./tabs";
+import { showContextMenu, type MenuItem } from "./context-menu";
 
 type ChatStreamPayload = { reqId: number; line: string };
 type ChatDonePayload = { reqId: number; code: number | null; stderrTail: string };
@@ -61,9 +62,11 @@ export function createChatPanel(editor: EditorHost): void {
   header.className = "chat-header";
   const title = document.createElement("span");
   title.className = "chat-header-title";
+  const historyBtn = document.createElement("button");
+  historyBtn.className = "chat-header-btn";
   const newBtn = document.createElement("button");
   newBtn.className = "chat-header-btn";
-  header.append(title, newBtn);
+  header.append(title, historyBtn, newBtn);
 
   const bannerHost = document.createElement("div");
 
@@ -105,40 +108,79 @@ export function createChatPanel(editor: EditorHost): void {
   /** ストリーム中に検出した提案マーカーの位置。-1=未検出。 */
   let proposalMarkerAt = -1;
 
-  // ── 会話履歴の永続化 ──────────────────────────────
+  // ── 会話履歴の永続化（複数会話・切替可能） ─────────────
   // main ウィンドウのみ永続化する（tab-* はラベルが起動ごとに変わるため
   // 復元先がなく、localStorage にキーのゴミが溜まるだけになる）。
+  // 「新しい会話」は削除ではなくアーカイブで、履歴ボタンから再開できる。
   type ChatHistoryMsg = { role: "user" | "assistant"; text: string };
+  type ChatConversation = {
+    id: string;
+    /** 一覧表示用。最初のユーザーメッセージの先頭。 */
+    title: string;
+    sessionId: string | null;
+    messages: ChatHistoryMsg[];
+    updatedAt: number;
+  };
+  type ChatStore = {
+    /** 起動時に復元する会話。null なら空の状態で開始。 */
+    activeId: string | null;
+    conversations: ChatConversation[];
+  };
+
   const history: ChatHistoryMsg[] = [];
   const winLabel = getCurrentWindow().label;
-  const HISTORY_KEY = `mdedit.chat.v1.${winLabel}`;
+  const STORE_KEY = `mdedit.chat.v2.${winLabel}`;
+  const LEGACY_KEY = `mdedit.chat.v1.${winLabel}`;
   const persistable = winLabel === "main";
-  const HISTORY_MAX = 50;
+  const HISTORY_MAX = 50; // 1会話あたりの保存メッセージ数
+  const CONV_MAX = 20; // 保存する会話数（古いものから捨てる）
 
-  const saveHistory = () => {
+  let convId: string = crypto.randomUUID();
+
+  const loadStore = (): ChatStore => {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as ChatStore;
+        if (Array.isArray(parsed.conversations)) return parsed;
+      }
+    } catch {
+      // 壊れたストアは無視して空で開始
+    }
+    return { activeId: null, conversations: [] };
+  };
+
+  const saveStore = (s: ChatStore) => {
     if (!persistable) return;
     try {
-      localStorage.setItem(
-        HISTORY_KEY,
-        JSON.stringify({ sessionId, messages: history.slice(-HISTORY_MAX) }),
-      );
+      localStorage.setItem(STORE_KEY, JSON.stringify(s));
     } catch {
       // 容量超過等は黙って諦める（履歴はベストエフォート）
     }
   };
 
-  const clearHistory = () => {
-    history.length = 0;
-    if (!persistable) return;
-    try {
-      localStorage.removeItem(HISTORY_KEY);
-    } catch {
-      /* noop */
-    }
+  /** 現在の会話をストアへ upsert する（メッセージが無ければ何もしない）。 */
+  const saveHistory = () => {
+    if (!persistable || history.length === 0) return;
+    const s = loadStore();
+    const conv: ChatConversation = {
+      id: convId,
+      title:
+        (history.find((m) => m.role === "user")?.text ?? "").slice(0, 40) ||
+        "…",
+      sessionId,
+      messages: history.slice(-HISTORY_MAX),
+      updatedAt: Date.now(),
+    };
+    const rest = s.conversations.filter((c) => c.id !== convId);
+    rest.unshift(conv);
+    rest.sort((a, b) => b.updatedAt - a.updatedAt);
+    saveStore({ activeId: convId, conversations: rest.slice(0, CONV_MAX) });
   };
 
   const applyLabels = () => {
     title.textContent = t("chat.title");
+    historyBtn.textContent = t("chat.history");
     newBtn.textContent = t("chat.new");
     input.placeholder = t("chat.placeholder");
     sendBtn.title = busy ? t("chat.stop") : t("chat.send");
@@ -551,6 +593,53 @@ export function createChatPanel(editor: EditorHost): void {
     });
   };
 
+  /** 保存済みの会話を開く（sessionId も復元するので --resume で続きから話せる）。 */
+  const openConversation = (c: ChatConversation) => {
+    if (busy) stop();
+    currentReqId++; // 旧プロセスの残イベントを捨てる
+    streamEl = null;
+    setBusy(false);
+    convId = c.id;
+    sessionId = c.sessionId;
+    inflightText = "";
+    targetTabId = null; // 提案の適用先は引き継がない（タブが変わっている可能性がある）
+    history.splice(0, history.length, ...c.messages);
+    messages.replaceChildren();
+    for (const m of c.messages) {
+      if (m.role === "user") renderUserMsg(m.text);
+      else renderAssistantMsg(m.text);
+    }
+    clearBanner();
+    scrollToBottom();
+    const s = loadStore();
+    saveStore({ ...s, activeId: c.id });
+  };
+
+  historyBtn.addEventListener("click", () => {
+    const s = loadStore();
+    const items: MenuItem[] = s.conversations.map((c) => ({
+      type: "item" as const,
+      label: `${c.title} — ${new Date(c.updatedAt).toLocaleString()}`,
+      action: () => openConversation(c),
+    }));
+    if (items.length === 0) {
+      items.push({
+        type: "item",
+        label: t("chat.historyEmpty"),
+        action: () => {},
+      });
+    } else {
+      items.push({ type: "separator" });
+      items.push({
+        type: "item",
+        label: t("chat.historyClear"),
+        action: () => saveStore({ activeId: null, conversations: [] }),
+      });
+    }
+    const r = historyBtn.getBoundingClientRect();
+    showContextMenu(r.left, r.bottom + 2, items);
+  });
+
   sendBtn.addEventListener("click", () => {
     if (busy) stop();
     else void send();
@@ -560,13 +649,17 @@ export function createChatPanel(editor: EditorHost): void {
     if (busy) stop();
     sessionId = null;
     inflightText = "";
-    targetTabId = null; // 会話を破棄したのでタブの使用中扱いも解く
+    targetTabId = null; // 会話を離れたのでタブの使用中扱いも解く
     currentReqId++; // 以降、旧プロセスの残イベントを捨てる
     streamEl = null;
     setBusy(false);
     messages.replaceChildren();
-    clearHistory();
     clearBanner();
+    // 現在の会話はストアに残し（履歴ボタンから再開できる）、空の新しい会話へ切り替える
+    convId = crypto.randomUUID();
+    history.length = 0;
+    const s = loadStore();
+    saveStore({ ...s, activeId: null });
     input.focus();
   });
 
@@ -659,34 +752,46 @@ export function createChatPanel(editor: EditorHost): void {
   // 前回の会話を復元（main ウィンドウのみ）。sessionId も復元するため、
   // CLI 側のセッションファイルが残っていれば再起動後も続きから会話できる。
   if (persistable) {
+    // 旧形式（v1: 単一会話）からの移行
     try {
-      const raw = localStorage.getItem(HISTORY_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as {
+      const legacy = localStorage.getItem(LEGACY_KEY);
+      if (legacy && !localStorage.getItem(STORE_KEY)) {
+        const parsed = JSON.parse(legacy) as {
           sessionId?: unknown;
           messages?: unknown;
         };
-        if (typeof parsed.sessionId === "string" && parsed.sessionId) {
-          sessionId = parsed.sessionId;
+        const msgs = (Array.isArray(parsed.messages) ? parsed.messages : [])
+          .filter(
+            (m): m is ChatHistoryMsg =>
+              !!m &&
+              typeof (m as ChatHistoryMsg).text === "string" &&
+              ((m as ChatHistoryMsg).role === "user" ||
+                (m as ChatHistoryMsg).role === "assistant"),
+          );
+        if (msgs.length > 0) {
+          const conv: ChatConversation = {
+            id: crypto.randomUUID(),
+            title:
+              (msgs.find((m) => m.role === "user")?.text ?? "").slice(0, 40) ||
+              "…",
+            sessionId:
+              typeof parsed.sessionId === "string" && parsed.sessionId
+                ? parsed.sessionId
+                : null,
+            messages: msgs,
+            updatedAt: Date.now(),
+          };
+          saveStore({ activeId: conv.id, conversations: [conv] });
         }
-        if (Array.isArray(parsed.messages)) {
-          for (const m of parsed.messages) {
-            const msg = m as ChatHistoryMsg;
-            if (typeof msg?.text !== "string" || !msg.text) continue;
-            if (msg.role === "user") {
-              renderUserMsg(msg.text);
-              history.push({ role: "user", text: msg.text });
-            } else if (msg.role === "assistant") {
-              renderAssistantMsg(msg.text);
-              history.push({ role: "assistant", text: msg.text });
-            }
-          }
-          if (history.length > 0) scrollToBottom();
-        }
+        localStorage.removeItem(LEGACY_KEY);
       }
     } catch {
-      // 壊れた履歴は無視して空で開始する
+      /* 移行失敗は無視 */
     }
+
+    const s = loadStore();
+    const active = s.conversations.find((c) => c.id === s.activeId);
+    if (active) openConversation(active);
   }
 
   applyVisibility();
