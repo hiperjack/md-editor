@@ -36,6 +36,18 @@ const PROPOSAL_OPEN_RE = /^<mdedit-proposal>/m;
 const ICON_SEND = "m22 2-7 20-4-9-9-4zM22 2 11 13";
 const ICON_STOP = "M7 7h10v10H7z";
 
+/**
+ * このウィンドウのチャットが会話対象にしているタブかの判定。
+ * createChatPanel が実体を登録する（1ウィンドウ1パネル前提）。
+ * actions.ts の「起動直後の空タブを転用する」処理が、チャットで使用中の
+ * Untitled タブを黙って開いたファイルに置き換えないために参照する。
+ */
+let inUseCheck: ((tabId: string) => boolean) | null = null;
+
+export function isChatTabInUse(tabId: string): boolean {
+  return inUseCheck?.(tabId) ?? false;
+}
+
 /** チャット表示用の軽量markdownレンダラ（本文レンダリングの重い設定は使わない）。 */
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
 
@@ -491,6 +503,7 @@ export function createChatPanel(editor: EditorHost): void {
     if (busy) stop();
     sessionId = null;
     inflightText = "";
+    targetTabId = null; // 会話を破棄したのでタブの使用中扱いも解く
     currentReqId++; // 以降、旧プロセスの残イベントを捨てる
     streamEl = null;
     setBusy(false);
@@ -579,6 +592,12 @@ export function createChatPanel(editor: EditorHost): void {
       });
     }
   };
+  // 空タブ転用の抑止判定を登録: このタブ宛ての会話（実行中または履歴）が
+  // パネルに残っている間は「起動直後の空タブ」として転用させない。
+  // 「新しい会話」で履歴を消せば解除される。
+  inUseCheck = (tabId) =>
+    targetTabId === tabId && (busy || messages.childElementCount > 0);
+
   applyVisibility();
   settings.subscribe(applyVisibility);
   let presActive = isPresentationActive();
