@@ -141,8 +141,10 @@ const DICT: Record<Lang, Record<string, string>> = {
     "chat.send": "送信",
     "chat.stop": "停止",
     "chat.apply": "適用",
+    "chat.newTab": "新規タブへ",
     "chat.discard": "破棄",
     "chat.applied": "適用しました",
+    "chat.openedInNewTab": "新規タブに出力しました",
     "chat.discarded": "破棄しました",
     "chat.applyFailed": "適用できませんでした（タブが閉じられた可能性があります）",
     "chat.diffRefreshed":
@@ -474,8 +476,10 @@ const DICT: Record<Lang, Record<string, string>> = {
     "chat.send": "Send",
     "chat.stop": "Stop",
     "chat.apply": "Apply",
+    "chat.newTab": "New tab",
     "chat.discard": "Discard",
     "chat.applied": "Applied",
+    "chat.openedInNewTab": "Opened in a new tab",
     "chat.discarded": "Discarded",
     "chat.applyFailed": "Could not apply (the tab may have been closed)",
     "chat.diffRefreshed":

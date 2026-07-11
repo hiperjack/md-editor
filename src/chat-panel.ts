@@ -370,10 +370,13 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
     const applyBtn = document.createElement("button");
     applyBtn.className = "chat-header-btn is-primary";
     applyBtn.textContent = t("chat.apply");
+    const newTabBtn = document.createElement("button");
+    newTabBtn.className = "chat-header-btn";
+    newTabBtn.textContent = t("chat.newTab");
     const discardBtn = document.createElement("button");
     discardBtn.className = "chat-header-btn";
     discardBtn.textContent = t("chat.discard");
-    actions.append(applyBtn, discardBtn);
+    actions.append(applyBtn, newTabBtn, discardBtn);
     card.appendChild(actions);
 
     const notice = document.createElement("div");
@@ -406,6 +409,14 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
       finish(ok ? t("chat.applied") : t("chat.applyFailed"));
     });
     discardBtn.addEventListener("click", () => finish(t("chat.discarded")));
+
+    // 元の文書は触らず、提案を未保存の新規タブとして開く
+    newTabBtn.addEventListener("click", () => {
+      const id = store.addTab({ initialContent: proposal, initialBaseline: "" });
+      const tab = store.getState().tabs.find((tb) => tb.id === id);
+      if (tab) void editor.show(tab);
+      finish(t("chat.openedInNewTab"));
+    });
 
     messages.appendChild(card);
     // 提案カードは応答の主目的なので、読み位置に関わらず必ず全体を見せる
