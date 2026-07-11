@@ -544,6 +544,13 @@ body.is-resizing-chat {
   gap: 10px;
 }
 
+/* flexアイテムは overflow が visible 以外だと最小高さ0まで潰される
+   （提案カードは overflow:hidden のため、小さいウィンドウで高さ35px等に
+   圧縮されてスクロールも出なくなる）。子は自然高さを維持してあふれさせる。 */
+.chat-messages > * {
+  flex-shrink: 0;
+}
+
 .chat-msg {
   font-size: 13px;
   line-height: 1.7;
@@ -624,7 +631,8 @@ body.is-resizing-chat {
 }
 
 .chat-diff {
-  max-height: 260px;
+  /* 小さいウィンドウでは diff を低く抑え、適用ボタンまで届きやすくする */
+  max-height: min(260px, 35vh);
   overflow: auto;
   margin: 0;
   padding: 6px 0;
