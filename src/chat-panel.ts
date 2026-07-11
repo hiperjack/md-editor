@@ -37,13 +37,12 @@ const ICON_STOP = "M7 7h10v10H7z";
 
 /**
  * presentation-md スキルの発動条件:
- *  - 明示: /presentation（/プレゼン）で始まるメッセージ（コマンド部分は依頼文から除く）
- *  - 自動: プレゼン/スライド系のキーワードを含むメッセージ
+ * ヘッダーの「プレゼン変換」ボタン、または /presentation（/プレゼン）で始まる
+ * メッセージ（ボタンはコマンド付きメッセージの送信として実装している）。
  * 発動時はスキルの指示をそのメッセージのプロンプトにだけ同梱する
  * （セッション継続中はCLI側の文脈に残るため、2通目以降の再同梱は不要）。
  */
 const PRESENTATION_CMD_RE = /^\/(?:presentation|プレゼン)\s*/;
-const PRESENTATION_HINT_RE = /プレゼン|スライド|presentation|slides?\b/i;
 
 /** スキルをチャット文脈に合わせるための補足（保存系の手順を提案出力に置き換える）。 */
 const SKILL_ADAPTER =
@@ -94,11 +93,13 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
   header.className = "chat-header";
   const title = document.createElement("span");
   title.className = "chat-header-title";
+  const presBtn = document.createElement("button");
+  presBtn.className = "chat-header-btn";
   const historyBtn = document.createElement("button");
   historyBtn.className = "chat-header-btn";
   const newBtn = document.createElement("button");
   newBtn.className = "chat-header-btn";
-  header.append(title, historyBtn, newBtn);
+  header.append(title, presBtn, historyBtn, newBtn);
 
   const bannerHost = document.createElement("div");
 
@@ -220,6 +221,7 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
 
   const applyLabels = () => {
     title.textContent = t("chat.title");
+    presBtn.textContent = t("chat.presentation");
     historyBtn.textContent = t("chat.history");
     newBtn.textContent = t("chat.new");
     input.placeholder = t("chat.placeholder");
@@ -586,18 +588,15 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
     }
     targetTabId = tabId;
     inflightText = text;
-    // presentation-md スキル: /presentation 明示、またはキーワードで自動同梱
+    // presentation-md スキル: 「プレゼン変換」ボタン／/presentation コマンドで同梱
     let skillPart = "";
     let body = text;
     const cmd = PRESENTATION_CMD_RE.exec(text);
-    const skillActive = !!cmd || PRESENTATION_HINT_RE.test(text);
-    if (skillActive) {
+    if (cmd) {
       skillPart = `<skill name="presentation-md">\n${presentationSkill}\n</skill>\n\n${SKILL_ADAPTER}\n\n`;
-      if (cmd) {
-        body =
-          text.slice(cmd[0].length).trim() ||
-          "この文書をプレゼンモード用のMarkdownに整形してください。";
-      }
+      body =
+        text.slice(cmd[0].length).trim() ||
+        "この文書をプレゼンモード用のMarkdownに整形してください。";
     }
     // 選択中のテキストがあれば <selection> として同梱する
     // （「ここを書き直して」等が選択範囲を指すことをモデルに伝える）
@@ -615,14 +614,6 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
     gotResult = false;
     resultError = null;
     proposalMarkerAt = -1;
-
-    // スキルが同梱されたことを可視化する（効いていないと誤解しないように）
-    if (skillActive) {
-      const note = document.createElement("div");
-      note.className = "chat-skill-note";
-      note.textContent = t("chat.skillApplied");
-      messages.appendChild(note);
-    }
 
     streamEl = startAssistantMsg();
     setBusy(true);
@@ -730,6 +721,15 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
   sendBtn.addEventListener("click", () => {
     if (busy) stop();
     else void send();
+  });
+
+  // プレゼン変換: /presentation コマンド付きで送信する。入力欄に要望が
+  // 書かれていればそれも一緒に渡す（ユーザーの吹き出しにはコマンドが見える）。
+  presBtn.addEventListener("click", () => {
+    if (busy) return;
+    const extra = input.value.trim();
+    input.value = "/presentation" + (extra ? ` ${extra}` : "");
+    void send();
   });
 
   newBtn.addEventListener("click", () => {

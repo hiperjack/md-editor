@@ -613,13 +613,6 @@ body.is-resizing-chat {
   }
 }
 
-/* スキル同梱の表示（presentation-md 等が効いていることの可視化） */
-.chat-skill-note {
-  align-self: flex-end;
-  font-size: 11px;
-  color: var(--fg-2);
-}
-
 /* 編集提案カード */
 .chat-proposal-card {
   border: 1px solid var(--accent);
