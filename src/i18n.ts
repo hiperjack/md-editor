@@ -159,6 +159,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "chat.menu": "Claudeチャット",
     "chat.searching": "Web検索中…",
     "cm.quoteToChat": "選択をチャットで引用",
+    "chat.skillApplied": "presentation-md スキルを適用",
     "settings.display.chatEnabled": "Claudeチャットを使う",
     "settings.display.chatWebSearch": "ClaudeチャットでWeb検索を許可",
     // 検索・置換バー
@@ -491,6 +492,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "chat.menu": "Claude chat",
     "chat.searching": "Searching the web…",
     "cm.quoteToChat": "Quote selection in chat",
+    "chat.skillApplied": "Using the presentation-md skill",
     "settings.display.chatEnabled": "Use Claude chat",
     "settings.display.chatWebSearch": "Allow web search in Claude chat",
     "find.placeholder": "Find",

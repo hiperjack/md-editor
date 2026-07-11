@@ -36,11 +36,14 @@ const ICON_SEND = "m22 2-7 20-4-9-9-4zM22 2 11 13";
 const ICON_STOP = "M7 7h10v10H7z";
 
 /**
- * スラッシュコマンド: /presentation（/プレゼン）で始まるメッセージは、
- * presentation-md スキルの指示をそのメッセージのプロンプトにだけ同梱する。
- * セッション継続中はCLI側の文脈に残るため、2通目以降の再同梱は不要。
+ * presentation-md スキルの発動条件:
+ *  - 明示: /presentation（/プレゼン）で始まるメッセージ（コマンド部分は依頼文から除く）
+ *  - 自動: プレゼン/スライド系のキーワードを含むメッセージ
+ * 発動時はスキルの指示をそのメッセージのプロンプトにだけ同梱する
+ * （セッション継続中はCLI側の文脈に残るため、2通目以降の再同梱は不要）。
  */
 const PRESENTATION_CMD_RE = /^\/(?:presentation|プレゼン)\s*/;
+const PRESENTATION_HINT_RE = /プレゼン|スライド|presentation|slides?\b/i;
 
 /** スキルをチャット文脈に合わせるための補足（保存系の手順を提案出力に置き換える）。 */
 const SKILL_ADAPTER =
@@ -572,15 +575,18 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
     }
     targetTabId = tabId;
     inflightText = text;
-    // /presentation コマンド: スキルの指示を同梱し、コマンド部分は依頼文から外す
+    // presentation-md スキル: /presentation 明示、またはキーワードで自動同梱
     let skillPart = "";
     let body = text;
     const cmd = PRESENTATION_CMD_RE.exec(text);
-    if (cmd) {
+    const skillActive = !!cmd || PRESENTATION_HINT_RE.test(text);
+    if (skillActive) {
       skillPart = `<skill name="presentation-md">\n${presentationSkill}\n</skill>\n\n${SKILL_ADAPTER}\n\n`;
-      body =
-        text.slice(cmd[0].length).trim() ||
-        "この文書をプレゼンモード用のMarkdownに整形してください。";
+      if (cmd) {
+        body =
+          text.slice(cmd[0].length).trim() ||
+          "この文書をプレゼンモード用のMarkdownに整形してください。";
+      }
     }
     // 選択中のテキストがあれば <selection> として同梱する
     // （「ここを書き直して」等が選択範囲を指すことをモデルに伝える）
@@ -598,6 +604,14 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
     gotResult = false;
     resultError = null;
     proposalMarkerAt = -1;
+
+    // スキルが同梱されたことを可視化する（効いていないと誤解しないように）
+    if (skillActive) {
+      const note = document.createElement("div");
+      note.className = "chat-skill-note";
+      note.textContent = t("chat.skillApplied");
+      messages.appendChild(note);
+    }
 
     streamEl = startAssistantMsg();
     setBusy(true);
