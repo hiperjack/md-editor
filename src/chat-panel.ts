@@ -26,15 +26,11 @@ import presentationSkill from "../skills/presentation-md/SKILL.md?raw";
 type ChatStreamPayload = { reqId: number; line: string };
 type ChatDonePayload = { reqId: number; code: number | null; stderrTail: string };
 
-/**
- * 編集提案マーカー。system prompt（chat.rs）とペアで変更すること。
- * 本文は貪欲マッチ（[\s\S]*）: 提案する文書自体が行頭の </mdedit-proposal> を
- * 含む場合でも、最後の閉じマーカーまでを提案本文として扱う（提案は1返信1つで
- * 末尾に置かれる想定のため、非貪欲だと内側のマーカーで切れて文書が破損する）。
- */
-const PROPOSAL_RE =
-  /^<mdedit-proposal>[ \t]*\r?\n([\s\S]*)\r?\n<\/mdedit-proposal>[ \t]*$/m;
-const PROPOSAL_OPEN_RE = /^<mdedit-proposal>/m;
+import {
+  PROPOSAL_RE,
+  PROPOSAL_OPEN_RE,
+  sanitizeProposal,
+} from "./chat-proposal";
 
 const ICON_SEND = "m22 2-7 20-4-9-9-4zM22 2 11 13";
 const ICON_STOP = "M7 7h10v10H7z";
@@ -439,7 +435,7 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
     } else {
       streamEl.remove();
     }
-    if (m && targetTabId) addProposalCard(m[1], targetTabId);
+    if (m && targetTabId) addProposalCard(sanitizeProposal(m[1]), targetTabId);
     streamEl = null;
     if (follow) scrollToBottom();
     // 履歴へ確定テキストを記録（編集提案カードは適用先タブが再起動で
