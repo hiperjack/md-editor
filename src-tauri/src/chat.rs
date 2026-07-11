@@ -68,7 +68,7 @@ const STDERR_TAIL_MAX: usize = 8 * 1024;
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// コンソールを出さない Command を作る（GUI アプリから子プロセスを起動するため）。
-fn quiet_command(program: &std::ffi::OsStr) -> Command {
+pub(crate) fn quiet_command(program: &std::ffi::OsStr) -> Command {
     let cmd = Command::new(program);
     #[cfg(target_os = "windows")]
     let cmd = {
