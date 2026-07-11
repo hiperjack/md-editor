@@ -107,6 +107,14 @@ export function createChatPanel(editor: EditorHost): void {
   let sessionRetried = false;
   /** ストリーム中に検出した提案マーカーの位置。-1=未検出。 */
   let proposalMarkerAt = -1;
+  /**
+   * assistant イベントで確定した各メッセージのテキスト。
+   * Web検索などのツール使用時は1応答が複数のassistantメッセージに分かれるため、
+   * 最終表示はこれを結合して正とする（delta蓄積は区切りが失われる）。
+   */
+  let confirmedTexts: string[] = [];
+  /** ツール実行中（Web検索中）の表示フラグ。 */
+  let searching = false;
 
   // ── 会話履歴の永続化（複数会話・切替可能） ─────────────
   // main ウィンドウのみ永続化する（tab-* はラベルが起動ごとに変わるため
@@ -260,10 +268,11 @@ export function createChatPanel(editor: EditorHost): void {
     if (!streamEl) return;
     if (proposalMarkerAt >= 0) return;
     proposalMarkerAt = streamBuf.search(PROPOSAL_OPEN_RE);
-    const visible =
+    let visible =
       proposalMarkerAt >= 0
         ? streamBuf.slice(0, proposalMarkerAt) + `\n*${t("chat.proposalTitle")}…*`
         : streamBuf;
+    if (searching) visible += `\n\n*${t("chat.searching")}*`;
     // 追従判定は内容を変更する「前」に行う（変更後だと伸びた分で常に不成立になる）
     const follow = nearBottom();
     streamEl.innerHTML = md.render(visible);
@@ -374,6 +383,9 @@ export function createChatPanel(editor: EditorHost): void {
   /** ストリーム完了時: 本文の確定表示と提案カードの切り出し。 */
   const finalizeAssistantMsg = () => {
     if (!streamEl) return;
+    // ツール使用時は複数のassistantメッセージに分かれるため、確定テキストの
+    // 結合を正とする（delta蓄積はメッセージ間の区切りが失われている）。
+    if (confirmedTexts.length > 0) streamBuf = confirmedTexts.join("\n\n");
     // 追従判定は内容を変更する「前」に行う。本文確定＋カード追加で
     // 大きく伸びるため、変更後に測ると追従が必ず切れてカードが画面外に残る。
     const follow = nearBottom();
@@ -423,14 +435,24 @@ export function createChatPanel(editor: EditorHost): void {
         if (ev?.type === "content_block_delta") {
           const delta = ev.delta as Record<string, unknown> | undefined;
           if (delta?.type === "text_delta" && typeof delta.text === "string") {
+            searching = false;
             streamBuf += delta.text;
+            scheduleRender();
+          }
+        } else if (ev?.type === "content_block_start") {
+          // ツールブロックの開始（Web検索など）。次のテキストが来るまで
+          // 「検索中…」を表示する。
+          const block = ev.content_block as Record<string, unknown> | undefined;
+          if (typeof block?.type === "string" && block.type.includes("tool_use")) {
+            searching = true;
             scheduleRender();
           }
         }
         break;
       }
       case "assistant": {
-        // ターン確定テキスト。delta の蓄積をこれで置き換えて正とする。
+        // メッセージ単位の確定テキスト。ツール使用時は複数回届くため
+        // 蓄積し、最終表示は finalize で結合する。
         const msg = o.message as Record<string, unknown> | undefined;
         const content = msg?.content;
         if (Array.isArray(content)) {
@@ -441,10 +463,7 @@ export function createChatPanel(editor: EditorHost): void {
             )
             .map((c) => c.text)
             .join("");
-          if (text) {
-            streamBuf = text;
-            scheduleRender();
-          }
+          if (text) confirmedTexts.push(text);
         }
         break;
       }
@@ -534,6 +553,8 @@ export function createChatPanel(editor: EditorHost): void {
     currentReqId++;
     cancelled = false;
     streamBuf = "";
+    confirmedTexts = [];
+    searching = false;
     gotResult = false;
     resultError = null;
     proposalMarkerAt = -1;
@@ -548,6 +569,7 @@ export function createChatPanel(editor: EditorHost): void {
           reqId: currentReqId,
           prompt,
           sessionId,
+          webSearch: settings.get().chatWebSearch,
         });
         return;
       } catch (err) {

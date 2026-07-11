@@ -42,6 +42,7 @@ export function openFontSettings(): Promise<void> {
       fontSize: before.fontSize,
       showRecent: before.showRecent,
       showChatPanel: before.showChatPanel,
+      chatWebSearch: before.chatWebSearch,
       lang: before.lang as LangSetting,
       theme: before.theme as Theme,
       mermaidWidthMode: before.mermaidWidthMode,
@@ -332,6 +333,22 @@ export function openFontSettings(): Promise<void> {
       chatRow.appendChild(chatCheck);
       chatRow.appendChild(chatText);
       c.appendChild(chatRow);
+
+      // ClaudeチャットのWeb検索許可
+      const webRow = document.createElement("label");
+      webRow.className = "settings-row settings-row-checkbox";
+      const webCheck = document.createElement("input");
+      webCheck.type = "checkbox";
+      webCheck.checked = draft.chatWebSearch;
+      webCheck.className = "settings-input";
+      webCheck.addEventListener("change", () => {
+        draft.chatWebSearch = webCheck.checked;
+      });
+      const webText = document.createElement("span");
+      webText.textContent = t("settings.display.chatWebSearch");
+      webRow.appendChild(webCheck);
+      webRow.appendChild(webText);
+      c.appendChild(webRow);
 
       // ── Mermaid 設定 ────────────────────────────────────
       const mermaidHeading = document.createElement("div");
@@ -861,6 +878,7 @@ export function openFontSettings(): Promise<void> {
       draft.fontSize = 15;
       draft.showRecent = true;
       draft.showChatPanel = false;
+      draft.chatWebSearch = true;
       draft.lang = "system";
       draft.theme = "system";
       draft.mermaidWidthMode = "fit";
@@ -921,6 +939,7 @@ export function openFontSettings(): Promise<void> {
       settings.setFontSize(s.fontSize);
       settings.setShowRecent(s.showRecent);
       settings.setShowChatPanel(s.showChatPanel);
+      settings.setChatWebSearch(s.chatWebSearch);
       settings.setLang(s.lang);
       settings.setTheme(s.theme);
       settings.setMermaidWidthMode(s.mermaidWidthMode);
@@ -942,6 +961,7 @@ export function openFontSettings(): Promise<void> {
           fontSize: before.fontSize,
           showRecent: before.showRecent,
           showChatPanel: before.showChatPanel,
+          chatWebSearch: before.chatWebSearch,
           lang: before.lang,
           theme: before.theme,
           mermaidWidthMode: before.mermaidWidthMode,

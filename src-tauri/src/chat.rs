@@ -38,15 +38,22 @@ struct ChatDonePayload {
 /// 文書の編集はディスクではなく <mdedit-proposal> マーカーの全文出力で提案させる。
 /// マーカーに ``` フェンスを使わないのは、md 本文のコードフェンスと入れ子が壊れるため。
 /// 注意: claude が npm の .cmd シムに解決される環境では、改行を含む引数を
-/// Rust が拒否する（BatBadBut 対策）ため、このプロンプトは1行で書くこと。
-const SYSTEM_PROMPT: &str = "You are an assistant embedded in a Markdown editor (mdedit). \
+/// Rust が拒否する（BatBadBut 対策）ため、プロンプトは各部とも1行で書くこと。
+const SYSTEM_PROMPT_HEAD: &str = "You are an assistant embedded in a Markdown editor (mdedit). \
 Each user message contains the current document between <document> tags; it includes \
 unsaved edits and the latest one is the single source of truth. \
 A <selection> element, when present, contains the text the user currently has selected \
 in the editor; requests like 'rewrite this' or 'summarize this part' refer to it. Rules: \
-Reply in the same language as the user's message. \
-You have no file, shell, or web tools; never claim to have edited any file. \
-When the user asks you to modify the document, output the COMPLETE revised document verbatim, \
+Reply in the same language as the user's message. ";
+
+/// ツール節（Web検索の許可設定で差し替える）
+const TOOLS_NONE_CLAUSE: &str = "You have no file, shell, or web tools; \
+never claim to have edited any file. ";
+const TOOLS_WEB_CLAUSE: &str = "You may use the web search and fetch tools when up-to-date \
+information helps. You have no file or shell tools; never claim to have edited any file. ";
+
+const SYSTEM_PROMPT_TAIL: &str = "When the user asks you to modify the document, output the \
+COMPLETE revised document verbatim, \
 preceded by a line containing exactly <mdedit-proposal> and followed by a line containing \
 exactly </mdedit-proposal>. \
 At most one proposal per reply; keep unrelated parts of the document unchanged; \
@@ -144,9 +151,21 @@ pub async fn chat_send(
     req_id: u64,
     prompt: String,
     session_id: Option<String>,
+    web_search: bool,
 ) -> Result<(), String> {
     let claude = resolve_claude()?;
     let label = window.label().to_string();
+
+    let system_prompt = format!(
+        "{}{}{}",
+        SYSTEM_PROMPT_HEAD,
+        if web_search {
+            TOOLS_WEB_CLAUSE
+        } else {
+            TOOLS_NONE_CLAUSE
+        },
+        SYSTEM_PROMPT_TAIL,
+    );
 
     let mut cmd = quiet_command(claude.as_os_str());
     cmd.args([
@@ -155,14 +174,28 @@ pub async fn chat_send(
         "--output-format",
         "stream-json",
         "--include-partial-messages",
-        // ディスク編集をさせない: 全ビルトインツール無効 + MCP/ユーザー設定を読まない
-        "--tools",
-        "",
+    ]);
+    // ディスク編集は常にさせない。Web検索の許可時のみ WebSearch/WebFetch を
+    // 有効化＋自動許可する（-p では許可プロンプトに答えられないため）。
+    if web_search {
+        cmd.args([
+            "--tools",
+            "WebSearch",
+            "WebFetch",
+            "--allowed-tools",
+            "WebSearch",
+            "WebFetch",
+        ]);
+    } else {
+        cmd.args(["--tools", ""]);
+    }
+    // MCP/ユーザー設定を読まない（hooks・プラグインの干渉と起動遅延を排除）
+    cmd.args([
         "--strict-mcp-config",
         "--setting-sources",
         "",
         "--append-system-prompt",
-        SYSTEM_PROMPT,
+        &system_prompt,
     ]);
     if let Some(sid) = session_id.as_deref() {
         if !sid.is_empty() {

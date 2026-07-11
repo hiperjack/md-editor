@@ -61,6 +61,8 @@ export type Settings = {
   showOutline: boolean;
   /** 右のClaudeチャットパネルを表示するか。 */
   showChatPanel: boolean;
+  /** ClaudeチャットでWeb検索（WebSearch/WebFetch）を許可するか。 */
+  chatWebSearch: boolean;
   lang: LangSetting;
   theme: Theme;
   /** 左アウトラインパネルの横幅(px)。150〜600 にクランプ。 */
@@ -83,6 +85,7 @@ const DEFAULT_SETTINGS: Settings = {
   showRecent: true,
   showOutline: false,
   showChatPanel: false,
+  chatWebSearch: true,
   lang: "system",
   theme: "system",
   outlineWidth: 250,
@@ -145,6 +148,10 @@ function loadFromStorage(): Settings {
         typeof parsed.showChatPanel === "boolean"
           ? parsed.showChatPanel
           : DEFAULT_SETTINGS.showChatPanel,
+      chatWebSearch:
+        typeof parsed.chatWebSearch === "boolean"
+          ? parsed.chatWebSearch
+          : DEFAULT_SETTINGS.chatWebSearch,
       lang:
         parsed.lang === "ja" ||
         parsed.lang === "en" ||
@@ -331,6 +338,13 @@ export const settings = {
 
   toggleChatPanel(): void {
     settings.setShowChatPanel(!current.showChatPanel);
+  },
+
+  setChatWebSearch(v: boolean): void {
+    if (v === current.chatWebSearch) return;
+    current = { ...current, chatWebSearch: v };
+    saveToStorage(current);
+    notify();
   },
 
   setChatPanelWidth(v: number): void {
