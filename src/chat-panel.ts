@@ -49,6 +49,17 @@ export function isChatTabInUse(tabId: string): boolean {
   return inUseCheck?.(tabId) ?? false;
 }
 
+/**
+ * テキストを引用句としてチャット入力欄へ追加し、パネルを開く。
+ * エディタの右クリックメニュー「選択をチャットで引用」から呼ばれる。
+ * createChatPanel が実体を登録する。チャット機能オフ時は何もしない。
+ */
+let quoteHandler: ((text: string) => void) | null = null;
+
+export function quoteToChat(text: string): void {
+  quoteHandler?.(text);
+}
+
 /** チャット表示用の軽量markdownレンダラ（本文レンダリングの重い設定は使わない）。 */
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
 
@@ -833,6 +844,24 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
       applyVisibility();
     }
   });
+
+  // 選択テキストの引用: markdown引用句にして入力欄へ追記し、パネルを開く
+  quoteHandler = (text) => {
+    if (!settings.get().chatEnabled) return;
+    const quote = text
+      .replace(/\r\n/g, "\n")
+      .split("\n")
+      .map((l) => `> ${l}`)
+      .join("\n");
+    const cur = input.value;
+    input.value = (cur ? cur.replace(/\n*$/, "\n\n") : "") + quote + "\n\n";
+    panelVisible = true;
+    applyVisibility();
+    autosize();
+    input.focus();
+    // キャレットを末尾（引用の下の空行）に置いて、続けて依頼を書けるようにする
+    input.selectionStart = input.selectionEnd = input.value.length;
+  };
 
   return {
     toggle: () => {

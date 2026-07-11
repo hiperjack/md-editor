@@ -19,6 +19,8 @@ import { isImageNode } from "./image-edit";
 import { showContextMenu, type MenuItem } from "./context-menu";
 import type { SelectionToolbarController } from "./selection-toolbar";
 import { t } from "./i18n";
+import { quoteToChat } from "./chat-panel";
+import { settings } from "./settings";
 
 type Actions = Record<string, () => void>;
 
@@ -145,6 +147,19 @@ export function createEditorContextMenu(
           type: "item",
           label: t("cm.editImage"),
           action: () => actions.fmt_image?.(),
+        },
+      );
+    }
+
+    // テキスト選択中: 選択をチャットの引用句として渡す（チャット機能オン時のみ）
+    if (hasTextSelection && settings.get().chatEnabled) {
+      items.push(
+        { type: "separator" },
+        {
+          type: "item",
+          label: t("cm.quoteToChat"),
+          action: () =>
+            quoteToChat(view.state.doc.textBetween(sel.from, sel.to, "\n")),
         },
       );
     }

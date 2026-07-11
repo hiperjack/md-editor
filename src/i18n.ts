@@ -158,6 +158,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "chat.errSessionLost": "前の会話を再開できませんでした。新しい会話として送信します。",
     "chat.menu": "Claudeチャット",
     "chat.searching": "Web検索中…",
+    "cm.quoteToChat": "選択をチャットで引用",
     "settings.display.chatEnabled": "Claudeチャットを使う",
     "settings.display.chatWebSearch": "ClaudeチャットでWeb検索を許可",
     // 検索・置換バー
@@ -489,6 +490,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "chat.errSessionLost": "Could not resume the previous chat. Sending as a new chat.",
     "chat.menu": "Claude chat",
     "chat.searching": "Searching the web…",
+    "cm.quoteToChat": "Quote selection in chat",
     "settings.display.chatEnabled": "Use Claude chat",
     "settings.display.chatWebSearch": "Allow web search in Claude chat",
     "find.placeholder": "Find",
