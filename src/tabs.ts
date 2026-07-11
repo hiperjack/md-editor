@@ -40,7 +40,7 @@ export type TabBar = {
 /** ドラッグ開始とみなす移動量（px）。これ未満はクリック（選択）扱い。 */
 const DRAG_THRESHOLD = 4;
 
-function fileNameOf(tab: Tab): string {
+export function fileNameOf(tab: Tab): string {
   if (tab.kind === "preview") return tab.previewTitle ?? "Preview";
   if (!tab.filePath) return "Untitled";
   const m = tab.filePath.split(/[\\/]/);

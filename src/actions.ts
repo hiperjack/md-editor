@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { isChatTabInUse } from "./chat-panel";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { save as saveDialog, open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -231,14 +232,16 @@ export async function openOrSwitch(
     }
   }
 
-  // 起動直後の空タブを置き換え（プレビュータブは空タブ扱いにしない）
+  // 起動直後の空タブを置き換え（プレビュータブは空タブ扱いにしない。
+  // Claudeチャットの会話対象になっているタブも、会話の文脈が失われるため転用しない）
   const { tabs } = store.getState();
   if (
     tabs.length === 1 &&
     tabs[0].kind !== "preview" &&
     tabs[0].filePath === null &&
     tabs[0].diskContent === "" &&
-    !store.isDirty(tabs[0].id)
+    !store.isDirty(tabs[0].id) &&
+    !isChatTabInUse(tabs[0].id)
   ) {
     const id = tabs[0].id;
     // 既存の空エディタは破棄して新内容で作り直す
@@ -588,12 +591,14 @@ export async function openMovedTab(
   editor: EditorHost,
 ): Promise<void> {
   const { tabs } = store.getState();
+  // 空タブの破棄条件は openOrSwitch の転用条件と同じ（チャット使用中は残す）
   const blankId =
     tabs.length === 1 &&
     tabs[0].kind !== "preview" &&
     tabs[0].filePath === null &&
     tabs[0].diskContent === "" &&
-    !store.isDirty(tabs[0].id)
+    !store.isDirty(tabs[0].id) &&
+    !isChatTabInUse(tabs[0].id)
       ? tabs[0].id
       : null;
 

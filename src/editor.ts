@@ -399,6 +399,17 @@ export type EditorHost = {
   destroy: (tabId: string) => Promise<void>;
   /** 現在のmarkdownを取得（保存用）。 */
   getMarkdown: (tabId: string) => string | null;
+  /**
+   * タブの内容を指定のmarkdownで全置換する（チャットの編集提案適用用）。
+   * dirty 判定は markdownUpdated / sourcePane onChange 経由で自動更新される。
+   * 成功で true、タブが無い・preview タブ等で false。
+   */
+  setMarkdown: (tabId: string, text: string) => boolean;
+  /**
+   * タブで選択中のプレーンテキストを返す（チャットの選択範囲同梱用）。
+   * 選択なしは ""、タブが無い・preview タブ等は null。
+   */
+  getSelectionText: (tabId: string) => string | null;
   /** baseline（正規化済みディスク内容）を取得（移送時の dirty 引き継ぎ用）。 */
   getBaseline: (tabId: string) => string | null;
   /** baselineを現在のmarkdownにリセット（保存後）。 */
@@ -1542,6 +1553,48 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       }
       if (!entry.crepe) return null;
       return entry.crepe.getMarkdown();
+    },
+
+    setMarkdown(tabId: string, text: string) {
+      const entry = editors.get(tabId);
+      if (!entry) return false;
+      if (entry.sourceMode && entry.sourcePane) {
+        entry.sourcePane.setText(text);
+        return true;
+      }
+      if (!entry.crepe) return false;
+      try {
+        entry.crepe.editor.action(
+          replaceAll(ensureBlankLineBeforeTables(text)),
+        );
+        return true;
+      } catch (e) {
+        console.error("setMarkdown replaceAll failed:", e);
+        return false;
+      }
+    },
+
+    getSelectionText(tabId: string) {
+      const entry = editors.get(tabId);
+      if (!entry) return null;
+      if (entry.sourceMode && entry.sourcePane) {
+        return entry.sourcePane.getSelectionText();
+      }
+      if (!entry.crepe) return null;
+      let view: EditorView | null = null;
+      try {
+        entry.crepe.editor.action((ctx) => {
+          view = ctx.get(editorViewCtx) as EditorView;
+        });
+      } catch (e) {
+        console.warn("getSelectionText failed:", e);
+        return null;
+      }
+      if (!view) return null;
+      const sel = (view as EditorView).state.selection;
+      if (sel.empty) return "";
+      // ブロック間は改行区切りのプレーンテキストとして取り出す
+      return (view as EditorView).state.doc.textBetween(sel.from, sel.to, "\n");
     },
 
     getBaseline(tabId: string) {

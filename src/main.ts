@@ -16,6 +16,7 @@ import { expandAllListFolds } from "./list-fold";
 import { setupShortcuts } from "./shortcuts";
 import { createFindReplace } from "./find-replace";
 import { createOutlinePanel } from "./outline";
+import { createChatPanel } from "./chat-panel";
 import { createEditorContextMenu } from "./editor-context-menu";
 import {
   closeTab,
@@ -114,6 +115,8 @@ async function bootstrap(): Promise<void> {
   // 外部URL (http/https) のアンカークリックを既定ブラウザで開く。
   // 対象:
   //   - Milkdown link preview ポップアップ内の URL (target="_blank" のアンカー)
+  //   - Claudeチャットパネル内のリンク（素クリックで開く。放置すると
+  //     WebView 自体がそのURLへ遷移してアプリが壊れるため必ず捕捉する）
   //   - エディタ本文のリンクマーク <a> は Ctrl/Meta+クリック時のみ開く
   //     (素クリックはカーソル移動の標準挙動を温存)
   // Tauri の WebView2 は target="_blank" を OS 既定ブラウザに転送しないので、
@@ -137,7 +140,8 @@ async function bootstrap(): Promise<void> {
       const href = anchor.getAttribute("href") ?? "";
       if (!/^https?:\/\//i.test(href)) return;
       const inPreview =
-        anchor.closest(".milkdown-link-preview, .link-preview") !== null;
+        anchor.closest(".milkdown-link-preview, .link-preview, #chat-panel") !==
+        null;
       const modified = e.ctrlKey || e.metaKey;
       if (!inPreview && !modified) return;
       e.preventDefault();
@@ -268,6 +272,7 @@ async function bootstrap(): Promise<void> {
   const editor = createEditorHost(editorHostEl);
   const find = createFindReplace(editor);
   const outline = createOutlinePanel(editor);
+  const chat = createChatPanel(editor);
   mark("editor-host created");
 
   // Mermaid配色の変更を購読する。配色が変わったら、図を含むタブを作り直して
@@ -465,6 +470,10 @@ async function bootstrap(): Promise<void> {
     view_font: () =>
       void import("./settings-modal").then((m) => m.openFontSettings()),
     view_outline: () => settings.toggleOutline(),
+    view_chat: () => {
+      chat.toggle();
+      syncPanelButtons();
+    },
     view_source: () => {
       const a = store.getActive();
       if (a) editor.toggleSourceMode(a.id);
@@ -664,6 +673,14 @@ async function bootstrap(): Promise<void> {
         },
         {
           type: "item",
+          label: t("chat.menu"),
+          mnemonic: "C",
+          // チャット機能オフの設定では出さない。プレゼンタブでも出さない。
+          enabled: () => settings.get().chatEnabled && !isSlideshowActive(),
+          run: viewActions.view_chat,
+        },
+        {
+          type: "item",
           label: t("menu.source"),
           mnemonic: "U",
           accel: "Ctrl+Shift+I",
@@ -836,13 +853,21 @@ async function bootstrap(): Promise<void> {
     { capture: true },
   );
 
-  // アウトライン表示トグルボタンの active 状態を設定に同期（ツールバー生成後）。
-  const syncOutlineButton = () => {
-    const btn = toolbarEl.querySelector('[data-action="view_outline"]');
-    btn?.classList.toggle("is-active", settings.get().showOutline);
+  // パネル表示トグルボタン（アウトライン/チャット）の状態を同期（ツールバー生成後）。
+  // チャットは機能オフ設定ならボタンごと非表示にする（使わない人にはUIを見せない）。
+  const syncPanelButtons = () => {
+    const outlineBtn = toolbarEl.querySelector('[data-action="view_outline"]');
+    outlineBtn?.classList.toggle("is-active", settings.get().showOutline);
+    const chatBtn = toolbarEl.querySelector<HTMLElement>(
+      '[data-action="view_chat"]',
+    );
+    if (chatBtn) {
+      chatBtn.style.display = settings.get().chatEnabled ? "" : "none";
+      chatBtn.classList.toggle("is-active", chat.isVisible());
+    }
   };
-  syncOutlineButton();
-  settings.subscribe(syncOutlineButton);
+  syncPanelButtons();
+  settings.subscribe(syncPanelButtons);
 
   setupTitle();
   setupShortcuts(editor, fileActions, find);
