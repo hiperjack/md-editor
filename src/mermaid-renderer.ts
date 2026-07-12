@@ -7,7 +7,11 @@
  *   （タブ切替やHTML出力時にもキャッシュが効く）。
  * - エディタ内プレビュー（Crepeコードブロックの renderPreview）は800msの
  *   デバウンスで再描画し、構文エラー中は前回の正常なSVG表示を維持する。
+ *   一度も正常描画できていないブロックだけはエラーを表示する（「準備中」の
+ *   まま固まると壊れていることに気づけないため）。
  */
+
+import { t } from "./i18n";
 
 type MermaidModule = typeof import("mermaid").default;
 
@@ -136,11 +140,44 @@ function buildPreviewFigure(svg: string): HTMLElement {
   return el;
 }
 
+/** 描画失敗時のエディタ内エラー表示（初回描画に失敗したブロック専用）。 */
+function buildPreviewError(e: unknown): HTMLElement {
+  const el = document.createElement("div");
+  el.className = "mermaid-preview-error";
+  const msg = e instanceof Error ? e.message : String(e);
+  el.textContent = `${t("cb.previewError")}: ${msg}`;
+  return el;
+}
+
+/**
+ * src を現在表示中のコードブロックの状態。
+ * applyPreview にはブロックの識別子が無いため、DOMから該当ブロックを探して
+ * 判定する。CodeMirror の textContent は改行を含まないため空白を除いて比べる。
+ * - "no-block": src を表示中のブロックが無い。入力が先へ進んだ中間状態の
+ *   結果か、ブロックが破棄された後。どちらも表示へ反映してはいけない
+ *   （中間状態のエラーで維持中の正常な図を上書きしない）。
+ * - "has-figure": 前回の正常な図（SVG）が表示中 → 維持する。
+ * - "no-figure": 一度も描画できていない（準備中/エラー表示中） → エラーを出す。
+ */
+function blockStateOf(src: string): "no-block" | "has-figure" | "no-figure" {
+  const norm = src.replace(/\s+/g, "");
+  for (const block of document.querySelectorAll(".milkdown-code-block")) {
+    const code = (
+      block.querySelector(".cm-content")?.textContent ?? ""
+    ).replace(/\s+/g, "");
+    if (code !== norm) continue;
+    return block.querySelector(".preview svg") ? "has-figure" : "no-figure";
+  }
+  return "no-block";
+}
+
 /**
  * Crepeコードブロックの renderPreview から呼ぶ。
  * - キャッシュ済み → 同期的に図を返す（タブ切替・再マウントは即時表示）
  * - 未キャッシュ → デバウンス後に描画して applyPreview で差し替える。
- *   描画エラー時は何もしない＝パネルの前回表示が維持される。
+ *   描画エラー時、前回の正常表示があるブロックは何もしない＝表示維持
+ *   （編集途中のバタつき防止）。一度も描画できていないブロックは
+ *   「準備中」のまま固まってしまうため、エラーを表示して気づけるようにする。
  */
 export function mermaidCodePreview(
   content: string,
@@ -168,8 +205,12 @@ export function mermaidCodePreview(
           applyPreview(buildPreviewFigure(svg));
         }
       })
-      .catch(() => {
-        // 入力途中の構文エラー: 前回の正常表示を維持する
+      .catch((e) => {
+        // 入力途中の構文エラー: 前回の正常表示があれば維持する
+        if (seq > lastAppliedSeq && blockStateOf(src) === "no-figure") {
+          lastAppliedSeq = seq;
+          applyPreview(buildPreviewError(e));
+        }
       });
   }, PREVIEW_DEBOUNCE_MS);
   pendingTimers.set(src, timer);

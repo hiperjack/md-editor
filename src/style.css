@@ -1740,6 +1740,17 @@ body.is-resizing-chat {
   color: var(--fg-0);
 }
 
+/* エディタ内Mermaidプレビューの構文エラー表示（初回描画に失敗したブロックのみ） */
+.milkdown .mermaid-preview-error {
+  padding: 8px 10px;
+  font-family: var(--editor-code-font-family, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  color: #b3564d;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* ===== 文字色パレット（color-palette.ts） ===== */
 
 .color-palette {
