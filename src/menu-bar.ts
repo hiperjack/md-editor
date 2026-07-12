@@ -22,6 +22,13 @@ export type MenuEntry =
       run: () => void;
       /** false を返すと淡色・実行不可。 */
       enabled?: () => boolean;
+      /**
+       * 指定すると右端にホバーで「×」を出す（最近ファイルの個別削除等）。
+       * 実行後にメニューを開き直して項目を更新する。
+       */
+      onDelete?: () => void | Promise<void>;
+      /** 「×」のツールチップ。 */
+      deleteTitle?: string;
     }
   | { type: "sep" };
 
@@ -153,6 +160,26 @@ export function createMenuBar(
         accel.className = "menubar-item-accel";
         accel.textContent = entry.accel;
         row.appendChild(accel);
+      }
+      if (entry.onDelete && enabled) {
+        const del = document.createElement("span");
+        del.className = "menubar-item-delete";
+        del.textContent = "×";
+        if (entry.deleteTitle) del.title = entry.deleteTitle;
+        del.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        });
+        del.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          void (async () => {
+            await entry.onDelete?.();
+            // 削除を反映するため同じメニューを開き直す（onOpen → items 再構築）。
+            if (openIndex === idx) void openMenu(idx);
+          })();
+        });
+        row.appendChild(del);
       }
       if (enabled) {
         row.addEventListener("mouseenter", () => {

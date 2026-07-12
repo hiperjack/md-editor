@@ -15,6 +15,13 @@ export type MenuItem =
       shortcut?: string;
       /** ラベル左に表示するアイコン（信頼できるSVGマークアップのみ渡すこと）。 */
       icon?: string;
+      /**
+       * 指定すると右端にホバーで「×」を出す（履歴の個別削除等）。
+       * メニューは閉じないため、呼び出し側で再表示して項目を更新する。
+       */
+      onDelete?: () => void;
+      /** 「×」のツールチップ。 */
+      deleteTitle?: string;
     }
   | { type: "separator" };
 
@@ -86,6 +93,22 @@ export function showContextMenu(x: number, y: number, items: MenuItem[]): void {
       accel.className = "context-menu__accel";
       accel.textContent = item.shortcut;
       btn.appendChild(accel);
+    }
+    if (item.onDelete && !item.disabled) {
+      // button の入れ子は不正HTMLになるため span で描く。
+      const del = document.createElement("span");
+      del.className = "context-menu__delete";
+      del.textContent = "×";
+      if (item.deleteTitle) del.title = item.deleteTitle;
+      del.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      del.addEventListener("click", (e) => {
+        e.stopPropagation();
+        item.onDelete?.();
+      });
+      btn.appendChild(del);
     }
     if (item.disabled) {
       btn.disabled = true;

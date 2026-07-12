@@ -168,6 +168,12 @@ pub fn add_recent_file(app: AppHandle, path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn remove_recent_file(app: AppHandle, path: String) -> Result<(), String> {
+    crate::recent::remove(&app, &path);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn set_recent_visible(app: AppHandle, show: bool) -> Result<(), String> {
     crate::recent::set_visible(&app, show);
     Ok(())

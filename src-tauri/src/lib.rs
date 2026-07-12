@@ -48,6 +48,7 @@ pub fn run() {
             commands::save_settings,
             commands::frontend_ready,
             commands::add_recent_file,
+            commands::remove_recent_file,
             commands::set_recent_visible,
             commands::set_lang,
             commands::list_recent_files,

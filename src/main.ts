@@ -596,7 +596,19 @@ async function bootstrap(): Promise<void> {
         if (settings.get().showRecent && recentFiles.length > 0) {
           items.push({ type: "sep" });
           for (const path of recentFiles.slice(0, 10)) {
-            items.push({ type: "item", label: basename(path), run: () => void openRecent(path) });
+            items.push({
+              type: "item",
+              label: basename(path),
+              run: () => void openRecent(path),
+              deleteTitle: t("menu.removeRecent"),
+              onDelete: async () => {
+                try {
+                  await invoke("remove_recent_file", { path });
+                } catch (e) {
+                  console.warn("remove_recent_file failed:", e);
+                }
+              },
+            });
           }
         }
         items.push(

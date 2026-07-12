@@ -77,6 +77,20 @@ pub fn set_visible(app: &AppHandle, show: bool) {
     }
 }
 
+/// path をリストから削除して永続化（メニューの個別削除用）。
+pub fn remove(app: &AppHandle, path: &str) {
+    let snapshot = {
+        let state: State<RecentFiles> = app.state();
+        let mut list = match state.0.lock() {
+            Ok(g) => g,
+            Err(_) => return,
+        };
+        list.retain(|x| x != path);
+        list.clone()
+    };
+    persist(app, &snapshot);
+}
+
 /// path をリスト先頭に追加（既存があれば移動）。最大30件。
 /// 永続化＋更新後リストを返す。
 pub fn add(app: &AppHandle, path: String) -> Vec<String> {
