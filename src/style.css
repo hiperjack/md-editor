@@ -170,6 +170,34 @@ body {
   color: var(--fg-2);
   font-size: 12px;
 }
+/* 項目右端の個別削除「×」（最近ファイル用）。ハイライト中の項目だけに出す。 */
+.menubar-item-delete {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: -12px; /* gap:24px の見た目を詰める */
+  border-radius: 4px;
+  color: var(--fg-2);
+  visibility: hidden;
+}
+.menubar-item:hover .menubar-item-delete,
+.menubar-item.highlight .menubar-item-delete {
+  visibility: visible;
+}
+.menubar-item.highlight .menubar-item-delete {
+  color: rgba(255, 255, 255, 0.85);
+}
+.menubar-item-delete:hover {
+  background: rgba(127, 127, 127, 0.35);
+  color: var(--fg-0);
+}
+.menubar-item.highlight .menubar-item-delete:hover {
+  background: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
 .menubar-sep {
   height: 1px;
   background: var(--border);
@@ -507,6 +535,15 @@ body.is-resizing-chat {
   background: var(--bg-2);
 }
 
+/* display指定がUA既定の [hidden]{display:none} に勝ってしまうため明示する */
+.chat-header-btn[hidden] {
+  display: none;
+}
+
+.chat-header-btn svg {
+  display: block;
+}
+
 /* CLI 未検出などのバナー */
 .chat-banner {
   margin: 8px 10px 0;
@@ -667,6 +704,7 @@ body.is-resizing-chat {
 
 .chat-proposal-actions {
   display: flex;
+  flex-wrap: wrap; /* 狭いパネルでもボタンが右へあふれて押せなくならないように */
   gap: 6px;
   padding: 6px 10px;
   border-top: 1px solid var(--border);
@@ -1678,6 +1716,28 @@ body.is-resizing-chat {
   height: 1px;
   margin: 4px 6px;
   background: var(--border);
+}
+
+/* 項目右端の個別削除「×」。ホバー中の項目だけに出す。 */
+.context-menu__delete {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  color: var(--fg-2);
+  visibility: hidden;
+}
+
+.context-menu__item:hover .context-menu__delete {
+  visibility: visible;
+}
+
+.context-menu__delete:hover {
+  background: var(--bg-2);
+  color: var(--fg-0);
 }
 
 /* ===== 文字色パレット（color-palette.ts） ===== */
