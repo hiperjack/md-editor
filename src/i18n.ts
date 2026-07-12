@@ -175,6 +175,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "usage.errFetch": "使用量を取得できませんでした。",
     "settings.display.chatEnabled": "Claudeチャットを使う",
     "settings.display.chatWebSearch": "ClaudeチャットでWeb検索を許可",
+    "settings.display.chatUsageInHeader": "チャットに使用量を表示",
     // 検索・置換バー
     "find.placeholder": "検索",
     "find.replacePlaceholder": "置換後の文字列",
@@ -522,6 +523,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "usage.errFetch": "Failed to fetch usage.",
     "settings.display.chatEnabled": "Use Claude chat",
     "settings.display.chatWebSearch": "Allow web search in Claude chat",
+    "settings.display.chatUsageInHeader": "Show Claude usage in chat header",
     "find.placeholder": "Find",
     "find.replacePlaceholder": "Replace with",
     "find.next": "Next (Enter)",

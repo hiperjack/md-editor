@@ -22,6 +22,13 @@ import { fileNameOf } from "./tabs";
 import { showContextMenu, type MenuItem } from "./context-menu";
 // 同梱スキル: プレゼンモード用mdの作成手順（ビルド時に文字列として焼き込む）
 import presentationSkill from "../skills/presentation-md/SKILL.md?raw";
+import {
+  fetchUsage,
+  ringChar,
+  ringColor,
+  fmtReset,
+  type UsageData,
+} from "./usage";
 
 type ChatStreamPayload = { reqId: number; line: string };
 type ChatDonePayload = { reqId: number; code: number | null; stderrTail: string };
@@ -93,13 +100,20 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
   header.className = "chat-header";
   const title = document.createElement("span");
   title.className = "chat-header-title";
+  // 使用量の常駐表示（クリックで詳細モーダル）。取得できるまでは非表示。
+  const usageBtn = document.createElement("button");
+  usageBtn.className = "chat-usage";
+  usageBtn.hidden = true;
+  usageBtn.addEventListener("click", () => {
+    void import("./usage-modal").then((m) => m.openUsageModal());
+  });
   const presBtn = document.createElement("button");
   presBtn.className = "chat-header-btn";
   const historyBtn = document.createElement("button");
   historyBtn.className = "chat-header-btn";
   const newBtn = document.createElement("button");
   newBtn.className = "chat-header-btn";
-  header.append(title, presBtn, historyBtn, newBtn);
+  header.append(title, usageBtn, presBtn, historyBtn, newBtn);
 
   const bannerHost = document.createElement("div");
 
@@ -539,6 +553,7 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
   const handleDone = (payload: ChatDonePayload) => {
     setBusy(false);
     finalizeAssistantMsg();
+    refreshUsage(true); // 応答完了で使用量が進むため最新化（キャンセル時も消費はある）
     if (cancelled) return; // ユーザー停止はエラー扱いしない
 
     if (resultError !== null) {
@@ -834,6 +849,58 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
       });
     }
   };
+
+  // ── 使用量の常駐表示 ─────────────────────────────
+  const renderUsage = (d: UsageData) => {
+    usageBtn.replaceChildren();
+    const seg = (label: string, p: number) => {
+      const wrap = document.createElement("span");
+      wrap.className = "chat-usage-seg";
+      const lab = document.createElement("span");
+      lab.textContent = label;
+      const ring = document.createElement("span");
+      ring.textContent = ringChar(p);
+      ring.style.color = ringColor(p);
+      const pct = document.createElement("span");
+      pct.textContent = `${Math.round(p)}%`;
+      wrap.append(lab, ring, pct);
+      return wrap;
+    };
+    const tips: string[] = [];
+    if (d.fiveHour) {
+      usageBtn.appendChild(seg("5h", d.fiveHour.utilization));
+      const r = fmtReset(d.fiveHour.resetsAt);
+      if (r) tips.push(`5h → ${r}`);
+    }
+    if (d.sevenDay) {
+      usageBtn.appendChild(seg("7d", d.sevenDay.utilization));
+      const r = fmtReset(d.sevenDay.resetsAt);
+      if (r) tips.push(`7d → ${r}`);
+    }
+    usageBtn.title = tips.join("  ");
+    usageBtn.hidden = usageBtn.childElementCount === 0;
+  };
+
+  /**
+   * 使用量表示の更新。パネル非表示・設定オフのときは取得しない。
+   * 取得失敗時は前回表示を維持し、一度も取れていなければ非表示のまま。
+   */
+  const refreshUsage = (force = false) => {
+    if (!settings.get().chatUsageInHeader) {
+      usageBtn.hidden = true;
+      return;
+    }
+    if (!panelVisible) return;
+    fetchUsage(force)
+      .then(renderUsage)
+      .catch(() => {
+        if (!usageBtn.childElementCount) usageBtn.hidden = true;
+      });
+  };
+
+  // 設定変更（表示On/Off）に追従する。フェッチはキャッシュ60秒で抑制される。
+  settings.subscribe(() => refreshUsage());
+
   // 空タブ転用の抑止判定を登録: このタブ宛ての会話（実行中または履歴）が
   // パネルに残っている間は「起動直後の空タブ」として転用させない。
   // 「新しい会話」で履歴を消せば解除される。
@@ -914,7 +981,10 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
       if (!settings.get().chatEnabled) return; // 機能オフ時は開かない
       panelVisible = !panelVisible;
       applyVisibility();
-      if (panelVisible) input.focus();
+      if (panelVisible) {
+        input.focus();
+        refreshUsage();
+      }
     },
     isVisible: () => panelVisible,
   };

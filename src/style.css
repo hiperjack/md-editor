@@ -2129,3 +2129,29 @@ body.pres-window-boot #app {
   color: var(--fg-2);
   font-size: 12px;
 }
+
+/* チャットヘッダーの使用量常駐表示（クリックで詳細モーダル） */
+.chat-usage {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  font-size: 11px;
+  color: var(--fg-2);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chat-usage:hover {
+  background: var(--bg-2);
+}
+
+.chat-usage-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}

@@ -67,6 +67,8 @@ export type Settings = {
   chatEnabled: boolean;
   /** ClaudeチャットでWeb検索（WebSearch/WebFetch）を許可するか。 */
   chatWebSearch: boolean;
+  /** チャットパネルのヘッダーに使用量（5h/7d）を常駐表示するか。 */
+  chatUsageInHeader: boolean;
   lang: LangSetting;
   theme: Theme;
   /** 左アウトラインパネルの横幅(px)。150〜600 にクランプ。 */
@@ -90,6 +92,7 @@ const DEFAULT_SETTINGS: Settings = {
   showOutline: false,
   chatEnabled: false,
   chatWebSearch: true,
+  chatUsageInHeader: true,
   lang: "system",
   theme: "system",
   outlineWidth: 250,
@@ -156,6 +159,10 @@ function loadFromStorage(): Settings {
         typeof parsed.chatWebSearch === "boolean"
           ? parsed.chatWebSearch
           : DEFAULT_SETTINGS.chatWebSearch,
+      chatUsageInHeader:
+        typeof parsed.chatUsageInHeader === "boolean"
+          ? parsed.chatUsageInHeader
+          : DEFAULT_SETTINGS.chatUsageInHeader,
       lang:
         parsed.lang === "ja" ||
         parsed.lang === "en" ||
@@ -343,6 +350,13 @@ export const settings = {
   setChatWebSearch(v: boolean): void {
     if (v === current.chatWebSearch) return;
     current = { ...current, chatWebSearch: v };
+    saveToStorage(current);
+    notify();
+  },
+
+  setChatUsageInHeader(v: boolean): void {
+    if (v === current.chatUsageInHeader) return;
+    current = { ...current, chatUsageInHeader: v };
     saveToStorage(current);
     notify();
   },
