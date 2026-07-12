@@ -972,6 +972,7 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
     applyVisibility();
     autosize();
     input.focus();
+    refreshUsage();
     // キャレットを末尾（引用の下の空行）に置いて、続けて依頼を書けるようにする
     input.selectionStart = input.selectionEnd = input.value.length;
   };
