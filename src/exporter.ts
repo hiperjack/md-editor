@@ -232,8 +232,26 @@ export async function renderExportPreview(
 }
 
 /**
+ * 同じ元タブ×同じモードの既存プレビュータブ。あればタブを増やさず再利用する。
+ */
+function findExistingPreview(
+  sourceTabId: string,
+  mode: "export" | "slideshow",
+): Tab | undefined {
+  return store
+    .getState()
+    .tabs.find(
+      (tb) =>
+        tb.kind === "preview" &&
+        tb.previewMode === mode &&
+        tb.sourceTabId === sourceTabId,
+    );
+}
+
+/**
  * アクティブタブの内容を、HTML出力と同じ見た目で読み取り専用の新規タブに表示する。
  * 保存はしない（出力前の見た目確認用）。元タブを記録し、更新で再レンダリングできる。
+ * 同じ元タブのプレビューが既にあれば、新規タブを増やさずそれを更新して切り替える。
  */
 export async function openHtmlPreviewTab(editor: EditorHost): Promise<void> {
   const tab = store.getActive();
@@ -243,6 +261,15 @@ export async function openHtmlPreviewTab(editor: EditorHost): Promise<void> {
 
   try {
     const { html, title } = await renderExportPreview(tab.filePath, markdown);
+    const existing = findExistingPreview(tab.id, "export");
+    if (existing) {
+      store.updatePreview(existing.id, { title, html });
+      store.setActive(existing.id);
+      await editor.show(existing);
+      // show は既存ペインの再表示のみ。更新ボタンと同じ経路で内容を反映する。
+      await editor.refreshPreviewPane(existing.id);
+      return;
+    }
     store.addPreviewTab({
       title,
       html,
@@ -276,8 +303,18 @@ export async function openPresentationPreviewTab(
 
   try {
     const { html, title } = await renderExportPreview(tab.filePath, markdown);
+    const slideTitle = `${t("preview.slideTabPrefix")}${title.replace(t("preview.tabPrefix"), "")}`;
+    const existing = findExistingPreview(tab.id, "slideshow");
+    if (existing) {
+      store.updatePreview(existing.id, { title: slideTitle, html });
+      store.setActive(existing.id);
+      await editor.show(existing);
+      // show は既存ペインの再表示のみ。更新ボタンと同じ経路で内容を反映する。
+      await editor.refreshPreviewPane(existing.id);
+      return;
+    }
     store.addPreviewTab({
-      title: `${t("preview.slideTabPrefix")}${title.replace(t("preview.tabPrefix"), "")}`,
+      title: slideTitle,
       html,
       mode: "slideshow",
       sourceTabId: tab.id,

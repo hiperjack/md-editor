@@ -37,6 +37,7 @@ import {
   PROPOSAL_RE,
   PROPOSAL_OPEN_RE,
   sanitizeProposal,
+  extractProposal,
 } from "./chat-proposal";
 
 const ICON_SEND = "m22 2-7 20-4-9-9-4zM22 2 11 13";
@@ -419,10 +420,19 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
       notice.hidden = false;
       notice.textContent = label;
     };
+    const showNotice = (label: string) => {
+      notice.hidden = false;
+      notice.textContent = label;
+    };
     applyBtn.addEventListener("click", () => {
       const now = editor.getMarkdown(tabId);
       if (now === null) {
         finish(t("chat.applyFailed"));
+        return;
+      }
+      if (now === proposal) {
+        // 既に提案と同一（適用済みで未編集）。何もしない。
+        showNotice(t("chat.appliedAlready"));
         return;
       }
       if (now !== diffBase) {
@@ -431,12 +441,14 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
         const fresh = buildDiffBox(diffBase, proposal);
         diffBox.replaceWith(fresh);
         diffBox = fresh;
-        notice.hidden = false;
-        notice.textContent = t("chat.diffRefreshed");
+        showNotice(t("chat.diffRefreshed"));
         return;
       }
       const ok = editor.setMarkdown(tabId, proposal);
-      finish(ok ? t("chat.applied") : t("chat.applyFailed"));
+      // 適用後もボタンを残す: Ctrl+Z で戻したときに再度「適用」できるようにする
+      // （文書が提案と同一の間は上の分岐で何も起きない）。
+      if (ok) showNotice(t("chat.applied"));
+      else finish(t("chat.applyFailed"));
     });
     discardBtn.addEventListener("click", () => finish(t("chat.discarded")));
 
@@ -464,9 +476,12 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
     // 大きく伸びるため、変更後に測ると追従が必ず切れてカードが画面外に残る。
     const follow = nearBottom();
     streamEl.classList.remove("is-streaming");
-    const m = PROPOSAL_RE.exec(streamBuf);
+    // 適用内容は extractProposal（複数ブロック時は最後＝モデルの最終版）。
+    // 表示の除去は PROPOSAL_RE（最初の開き〜最後の閉じ）で、出し直しの
+    // 複数ブロックもまとめて畳む。
+    const proposal = extractProposal(streamBuf);
     let text = streamBuf;
-    if (m) {
+    if (proposal !== null) {
       text = text.replace(PROPOSAL_RE, "").trim();
     } else {
       // 停止などで閉じマーカーが無いまま終わった提案は、断片を
@@ -479,7 +494,8 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
     } else {
       streamEl.remove();
     }
-    if (m && targetTabId) addProposalCard(sanitizeProposal(m[1]), targetTabId);
+    if (proposal !== null && targetTabId)
+      addProposalCard(sanitizeProposal(proposal), targetTabId);
     streamEl = null;
     if (follow) scrollToBottom();
     // 履歴へ確定テキストを記録（編集提案カードは適用先タブが再起動で
