@@ -1,5 +1,45 @@
 import { describe, it, expect } from "vitest";
-import { PROPOSAL_RE, sanitizeProposal } from "./chat-proposal";
+import { PROPOSAL_RE, sanitizeProposal, extractProposal } from "./chat-proposal";
+
+describe("extractProposal", () => {
+  it("単一の提案ブロックを抽出する", () => {
+    const reply =
+      "書き込みますね。\n\n<mdedit-proposal>\n# タイトル\n\n本文\n</mdedit-proposal>\n\n以上です。";
+    expect(extractProposal(reply)).toBe("# タイトル\n\n本文");
+  });
+
+  it("提案が2つある場合は最後のブロックだけを採る（モデルの出し直し実例）", () => {
+    const reply = [
+      "<mdedit-proposal>",
+      "# 壊れた1つ目",
+      "</document>",
+      "</mdedit-proposal>",
+      "",
+      "ごめんなさい、出し直します。",
+      "",
+      "<mdedit-proposal>",
+      "# 正しい2つ目",
+      "",
+      "本文",
+      "</mdedit-proposal>",
+    ].join("\n");
+    expect(extractProposal(reply)).toBe("# 正しい2つ目\n\n本文");
+  });
+
+  it("本文内に閉じマーカー行があっても最後の閉じマーカーまで取る（貪欲）", () => {
+    const inner = "説明\n</mdedit-proposal>\nの例";
+    const reply = `<mdedit-proposal>\n${inner}\n</mdedit-proposal>`;
+    expect(extractProposal(reply)).toBe(inner);
+  });
+
+  it("閉じマーカーが無ければ null（停止などの中断）", () => {
+    expect(extractProposal("<mdedit-proposal>\n# 途中まで")).toBeNull();
+  });
+
+  it("開きマーカーが無ければ null", () => {
+    expect(extractProposal("ただの返信です")).toBeNull();
+  });
+});
 
 describe("PROPOSAL_RE", () => {
   it("前後の説明文があっても提案本文を抽出する", () => {
