@@ -2146,6 +2146,11 @@ body.pres-window-boot #app {
   white-space: nowrap;
 }
 
+/* display指定がUA既定の [hidden]{display:none} に勝ってしまうため明示する */
+.chat-usage[hidden] {
+  display: none;
+}
+
 .chat-usage:hover {
   background: var(--bg-2);
 }
