@@ -46,6 +46,26 @@ function initMermaid(mermaid: MermaidModule, scheme: "light" | "dark"): void {
     // themeVariables.fontSize は flowchart/class/state/er 等で有効で、
     // Mermaidがこのサイズを前提にノード寸法・配置を計算するためレイアウトは崩れない。
     themeVariables: { fontSize: `${MERMAID_FONT_SIZE}px` },
+    // ガントは themeVariables.fontSize が効かず既定11pxのままで他の図種より
+    // 極端に小さい。タスク名・セクション名を揃え、バー高さも文字に合わせる。
+    gantt: {
+      fontSize: MERMAID_FONT_SIZE,
+      sectionFontSize: MERMAID_FONT_SIZE,
+      barHeight: 30,
+      barGap: 6,
+      // セクション名は固定 x=10 から描かれ、グラフ領域は leftPadding から始まる。
+      // 既定75pxでは20pxフォントの日本語セクション名（5文字≈100px）が
+      // グリッド線に重なるため、6文字+余白が収まる幅にする。
+      leftPadding: 150,
+    },
+    // 設定では変えられないハードコード分の上書き。themeCSS は #id スコープで
+    // 各SVG内に閉じる。&[aria-roledescription] で図種を限定する。
+    // - ガント軸目盛: attr("font-size", 10) 固定 → CSSが表示属性に勝つ
+    // - ガントタイトル: .titleText { font-size: 18px } 固定
+    themeCSS: `
+      &[aria-roledescription="gantt"] g.grid .tick text { font-size: 16px; }
+      &[aria-roledescription="gantt"] .titleText { font-size: 22px; }
+    `,
   });
   initializedScheme = scheme;
 }
@@ -63,6 +83,61 @@ export function setMermaidColorScheme(scheme: "light" | "dark"): boolean {
 const MAX_CACHE_ENTRIES = 200;
 const svgCache = new Map<string, string>();
 let renderSeq = 0;
+
+/**
+ * mermaid.render 出力の後処理。キャッシュ前に1回だけ行い、全経路
+ * （エディタプレビュー・HTML出力・印刷・図ビューア）に効かせる。
+ *
+ * 1. dominant-baseline 属性を inline style にも複製する。
+ *    エディタのプレビューパネルはDOMPurifyを通り、この属性は既定の許可リストに
+ *    無く落とされる（象限図のタイトル・軸ラベルが位置決めに使っており、失われると
+ *    上や左に見切れる）。style 属性は通るため、そちらにも書いておく。
+ * 2. mindmapのcircleノード（root((x)) 等）のラベル中央寄せ。SVGラベルでは
+ *    ラベルgがX方向 translate(0) のまま text-anchor が付かず、文字が右へ
+ *    半分はみ出す（mermaid本体のバグ。既定の htmlLabels:true では露出しない）。
+ *    矩形系ノードは translate(-w/2) で自前補正されるため対象外。
+ */
+function postProcessSvg(svg: string): string {
+  const host = document.createElement("div");
+  host.innerHTML = svg;
+  const root = host.querySelector("svg");
+  if (!root) return svg;
+  for (const el of root.querySelectorAll<SVGElement>("[dominant-baseline]")) {
+    el.style.dominantBaseline = el.getAttribute("dominant-baseline") ?? "";
+  }
+  // gantt: todayマーカーは日付範囲のチェックなしで描かれるため、todayが
+  // チャート範囲外だと左余白（セクション名の領域）を貫く縦線になる。
+  // プロット開始（g.grid の translate X）より左、または右端超は取り除く。
+  if (root.getAttribute("aria-roledescription") === "gantt") {
+    const grid = root.querySelector<SVGGElement>("g.grid");
+    const line = root.querySelector<SVGLineElement>("g.today > line");
+    if (grid && line) {
+      const tm = /translate\(\s*([-\d.e]+)/.exec(
+        grid.getAttribute("transform") ?? "",
+      );
+      const gridX = tm ? parseFloat(tm[1]) : 0;
+      const x1 = parseFloat(line.getAttribute("x1") ?? "0");
+      const width =
+        parseFloat((root.getAttribute("viewBox") ?? "").split(/\s+/)[2]) || 0;
+      if (x1 < gridX || x1 > width) line.remove();
+    }
+  }
+  if (root.getAttribute("aria-roledescription") === "mindmap") {
+    for (const label of root.querySelectorAll<SVGGElement>(
+      ".mindmap-node > g.label",
+    )) {
+      const m = /translate\(\s*([-\d.e]+)/.exec(
+        label.getAttribute("transform") ?? "",
+      );
+      if (!m || parseFloat(m[1]) !== 0) continue;
+      const text = label.querySelector("text");
+      if (text && !text.hasAttribute("text-anchor")) {
+        text.setAttribute("text-anchor", "middle");
+      }
+    }
+  }
+  return host.innerHTML;
+}
 
 /** 配色で見た目が変わるため、キャッシュキーに配色を含める。 */
 function cacheKey(source: string, scheme: "light" | "dark"): string {
@@ -95,8 +170,9 @@ export async function renderMermaidSvg(
   const id = `mmd-render-${++renderSeq}`;
   try {
     const { svg } = await mermaid.render(id, source.trim());
-    cachePut(key, svg);
-    return svg;
+    const fixed = postProcessSvg(svg);
+    cachePut(key, fixed);
+    return fixed;
   } catch (e) {
     // mermaidは失敗時に一時要素をbodyへ残すことがあるため掃除する
     document.getElementById(id)?.remove();
