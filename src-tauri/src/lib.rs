@@ -9,6 +9,7 @@ mod i18n;
 mod recent;
 mod startup;
 mod tabwin;
+mod usage;
 
 pub struct PendingPath(pub Mutex<Option<String>>);
 pub struct FrontendReady(pub Mutex<bool>);
@@ -55,6 +56,7 @@ pub fn run() {
             chat::chat_send,
             chat::chat_cancel,
             chat::chat_check,
+            usage::chat_usage,
             #[cfg(target_os = "windows")]
             assoc::query_file_associations,
             #[cfg(target_os = "windows")]

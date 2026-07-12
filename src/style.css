@@ -2090,3 +2090,73 @@ body.pres-window-boot #app {
 #editor-host .milkdown .ProseMirror p img {
   vertical-align: top;
 }
+
+/* ── Claude使用量モーダル ─────────────────────────── */
+.usage-dialog {
+  min-width: 340px;
+}
+
+.usage-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.usage-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--fg-1);
+}
+
+.usage-label {
+  flex: 0 0 4.5em;
+}
+
+.usage-ring {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.usage-pct {
+  font-weight: 600;
+  min-width: 3em;
+}
+
+.usage-reset,
+.usage-error {
+  color: var(--fg-2);
+  font-size: 12px;
+}
+
+/* チャットヘッダーの使用量常駐表示（クリックで詳細モーダル） */
+.chat-usage {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  font-size: 11px;
+  color: var(--fg-2);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* display指定がUA既定の [hidden]{display:none} に勝ってしまうため明示する */
+.chat-usage[hidden] {
+  display: none;
+}
+
+.chat-usage:hover {
+  background: var(--bg-2);
+}
+
+.chat-usage-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}

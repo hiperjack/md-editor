@@ -43,6 +43,7 @@ export function openFontSettings(): Promise<void> {
       showRecent: before.showRecent,
       chatEnabled: before.chatEnabled,
       chatWebSearch: before.chatWebSearch,
+      chatUsageInHeader: before.chatUsageInHeader,
       lang: before.lang as LangSetting,
       theme: before.theme as Theme,
       mermaidWidthMode: before.mermaidWidthMode,
@@ -347,10 +348,31 @@ export function openFontSettings(): Promise<void> {
       webRow.appendChild(webText);
       c.appendChild(webRow);
 
+      // チャットヘッダーの使用量表示（チャット機能オフ時はグレーアウト）
+      const usageRow = document.createElement("label");
+      usageRow.className = "settings-row settings-row-checkbox";
+      const usageCheck = document.createElement("input");
+      usageCheck.type = "checkbox";
+      usageCheck.checked = draft.chatUsageInHeader;
+      usageCheck.className = "settings-input";
+      usageCheck.addEventListener("change", () => {
+        draft.chatUsageInHeader = usageCheck.checked;
+      });
+      const usageText = document.createElement("span");
+      usageText.textContent = t("settings.display.chatUsageInHeader");
+      usageRow.appendChild(usageCheck);
+      usageRow.appendChild(usageText);
+      c.appendChild(usageRow);
+
       const syncWebRow = () => {
-        webCheck.disabled = !draft.chatEnabled;
-        webRow.style.opacity = draft.chatEnabled ? "" : "0.5";
-        webRow.style.pointerEvents = draft.chatEnabled ? "" : "none";
+        for (const [chk, rowEl] of [
+          [webCheck, webRow],
+          [usageCheck, usageRow],
+        ] as const) {
+          chk.disabled = !draft.chatEnabled;
+          rowEl.style.opacity = draft.chatEnabled ? "" : "0.5";
+          rowEl.style.pointerEvents = draft.chatEnabled ? "" : "none";
+        }
       };
       chatCheck.addEventListener("change", () => {
         draft.chatEnabled = chatCheck.checked;
@@ -887,6 +909,7 @@ export function openFontSettings(): Promise<void> {
       draft.showRecent = true;
       draft.chatEnabled = false;
       draft.chatWebSearch = true;
+      draft.chatUsageInHeader = true;
       draft.lang = "system";
       draft.theme = "system";
       draft.mermaidWidthMode = "fit";
@@ -948,6 +971,7 @@ export function openFontSettings(): Promise<void> {
       settings.setShowRecent(s.showRecent);
       settings.setChatEnabled(s.chatEnabled);
       settings.setChatWebSearch(s.chatWebSearch);
+      settings.setChatUsageInHeader(s.chatUsageInHeader);
       settings.setLang(s.lang);
       settings.setTheme(s.theme);
       settings.setMermaidWidthMode(s.mermaidWidthMode);
@@ -970,6 +994,7 @@ export function openFontSettings(): Promise<void> {
           showRecent: before.showRecent,
           chatEnabled: before.chatEnabled,
           chatWebSearch: before.chatWebSearch,
+          chatUsageInHeader: before.chatUsageInHeader,
           lang: before.lang,
           theme: before.theme,
           mermaidWidthMode: before.mermaidWidthMode,

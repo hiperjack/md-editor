@@ -502,6 +502,7 @@ async function bootstrap(): Promise<void> {
   // ヘルプメニューアクション
   const helpActions: Record<string, () => void> = {
     help_about: () => void openAboutModal(),
+    help_usage: () => void import("./usage-modal").then((m) => m.openUsageModal()),
   };
 
   // ツールバー（ファイル系・表示系もボタンに含めるためmergeしてから渡す）
@@ -712,6 +713,8 @@ async function bootstrap(): Promise<void> {
       label: t("menu.help"),
       mnemonic: "H",
       items: () => [
+        // 使用量はチャットのバックエンド（Claude サブスク）の消費枠なので、チャット機能オフ時は淡色にする
+        { type: "item", label: t("menu.claudeUsage"), mnemonic: "U", enabled: () => settings.get().chatEnabled, run: helpActions.help_usage },
         { type: "item", label: t("menu.about"), mnemonic: "A", run: helpActions.help_about },
       ],
     },
