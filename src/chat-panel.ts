@@ -17,7 +17,7 @@ import { store } from "./store";
 import { settings, clampChatWidth } from "./settings";
 import { t, onLangChange } from "./i18n";
 import { diffLines, foldContext } from "./diff";
-import { svg } from "./toolbar";
+import { svg, ICONS } from "./toolbar";
 import { fileNameOf } from "./tabs";
 import { showContextMenu, type MenuItem } from "./context-menu";
 // 同梱スキル: プレゼンモード用mdの作成手順（ビルド時に文字列として焼き込む）
@@ -41,6 +41,11 @@ import {
 
 const ICON_SEND = "m22 2-7 20-4-9-9-4zM22 2 11 13";
 const ICON_STOP = "M7 7h10v10H7z";
+// ヘッダーボタン用: 履歴（時計＋巻き戻し矢印）と新しい会話（吹き出し＋プラス）
+const ICON_HISTORY =
+  "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5M12 7v5l4 2";
+const ICON_NEW_CHAT =
+  "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM12 8v6M9 11h6";
 
 /**
  * presentation-md スキルの発動条件:
@@ -109,11 +114,19 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
   });
   const presBtn = document.createElement("button");
   presBtn.className = "chat-header-btn";
+  presBtn.innerHTML = svg(ICONS.presentation);
   const historyBtn = document.createElement("button");
   historyBtn.className = "chat-header-btn";
+  historyBtn.innerHTML = svg(ICON_HISTORY);
   const newBtn = document.createElement("button");
   newBtn.className = "chat-header-btn";
-  header.append(title, usageBtn, presBtn, historyBtn, newBtn);
+  newBtn.innerHTML = svg(ICON_NEW_CHAT);
+  // 幅が足りないときに隠れたボタンをメニューで開く「»」（ツールバーと同方式）
+  const moreBtn = document.createElement("button");
+  moreBtn.className = "chat-header-btn";
+  moreBtn.innerHTML = svg(ICONS.chevrons_right);
+  moreBtn.hidden = true;
+  header.append(title, usageBtn, presBtn, historyBtn, newBtn, moreBtn);
 
   const bannerHost = document.createElement("div");
 
@@ -235,9 +248,10 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
 
   const applyLabels = () => {
     title.textContent = t("chat.title");
-    presBtn.textContent = t("chat.presentation");
-    historyBtn.textContent = t("chat.history");
-    newBtn.textContent = t("chat.new");
+    presBtn.title = t("chat.presentation");
+    historyBtn.title = t("chat.history");
+    newBtn.title = t("chat.new");
+    moreBtn.title = t("tb.more");
     input.placeholder = t("chat.placeholder");
     sendBtn.title = busy ? t("chat.stop") : t("chat.send");
   };
@@ -708,12 +722,22 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
     saveStore({ ...s, activeId: c.id });
   };
 
-  historyBtn.addEventListener("click", () => {
+  const openHistoryMenu = (anchor: HTMLElement) => {
     const s = loadStore();
     const items: MenuItem[] = s.conversations.map((c) => ({
       type: "item" as const,
       label: `${c.title} — ${new Date(c.updatedAt).toLocaleString()}`,
       action: () => openConversation(c),
+      deleteTitle: t("chat.historyDeleteOne"),
+      onDelete: () => {
+        const cur = loadStore();
+        saveStore({
+          activeId: cur.activeId === c.id ? null : cur.activeId,
+          conversations: cur.conversations.filter((x) => x.id !== c.id),
+        });
+        // メニューを開き直して削除を反映する
+        openHistoryMenu(anchor);
+      },
     }));
     if (items.length === 0) {
       items.push({
@@ -729,9 +753,10 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
         action: () => saveStore({ activeId: null, conversations: [] }),
       });
     }
-    const r = historyBtn.getBoundingClientRect();
+    const r = anchor.getBoundingClientRect();
     showContextMenu(r.left, r.bottom + 2, items);
-  });
+  };
+  historyBtn.addEventListener("click", () => openHistoryMenu(historyBtn));
 
   sendBtn.addEventListener("click", () => {
     if (busy) stop();
@@ -740,14 +765,15 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
 
   // プレゼン変換: /presentation コマンド付きで送信する。入力欄に要望が
   // 書かれていればそれも一緒に渡す（ユーザーの吹き出しにはコマンドが見える）。
-  presBtn.addEventListener("click", () => {
+  const runPresentation = () => {
     if (busy) return;
     const extra = input.value.trim();
     input.value = "/presentation" + (extra ? ` ${extra}` : "");
     void send();
-  });
+  };
+  presBtn.addEventListener("click", runPresentation);
 
-  newBtn.addEventListener("click", () => {
+  const startNewChat = () => {
     if (busy) stop();
     sessionId = null;
     inflightText = "";
@@ -763,6 +789,46 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
     const s = loadStore();
     saveStore({ ...s, activeId: null });
     input.focus();
+  };
+  newBtn.addEventListener("click", startNewChat);
+
+  // ── ヘッダーのオーバーフロー処理（toolbar.ts の relayout と同方式） ──
+  // パネルが狭くボタンが収まらないときは左側のボタンから隠し、「»」メニューへ逃がす。
+  const collapsibles: {
+    el: HTMLButtonElement;
+    icon: string;
+    labelKey: string;
+    action: () => void;
+  }[] = [
+    { el: presBtn, icon: ICONS.presentation, labelKey: "chat.presentation", action: runPresentation },
+    { el: historyBtn, icon: ICON_HISTORY, labelKey: "chat.history", action: () => openHistoryMenu(moreBtn) },
+    { el: newBtn, icon: ICON_NEW_CHAT, labelKey: "chat.new", action: startNewChat },
+  ];
+  const headerFits = (): boolean => header.scrollWidth <= header.clientWidth + 1;
+  const relayoutHeader = () => {
+    for (const c of collapsibles) c.el.hidden = false;
+    moreBtn.hidden = true;
+    if (headerFits()) return;
+    moreBtn.hidden = false;
+    for (const c of collapsibles) {
+      if (headerFits()) break;
+      c.el.hidden = true;
+    }
+  };
+  new ResizeObserver(relayoutHeader).observe(header);
+
+  moreBtn.addEventListener("click", () => {
+    const items: MenuItem[] = collapsibles
+      .filter((c) => c.el.hidden)
+      .map((c) => ({
+        type: "item" as const,
+        label: t(c.labelKey),
+        icon: svg(c.icon),
+        action: c.action,
+      }));
+    if (!items.length) return;
+    const r = moreBtn.getBoundingClientRect();
+    showContextMenu(r.left, r.bottom + 2, items);
   });
 
   // Enter で送信、Shift+Enter で改行。IME 変換確定の Enter では送らない。
@@ -879,6 +945,8 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
     }
     usageBtn.title = tips.join("  ");
     usageBtn.hidden = usageBtn.childElementCount === 0;
+    // バッジの出現/消失はヘッダー外形が変わらず ResizeObserver が発火しないため明示再計算
+    relayoutHeader();
   };
 
   /**
@@ -888,6 +956,7 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
   const refreshUsage = (force = false) => {
     if (!settings.get().chatUsageInHeader) {
       usageBtn.hidden = true;
+      relayoutHeader();
       return;
     }
     if (!panelVisible) return;
