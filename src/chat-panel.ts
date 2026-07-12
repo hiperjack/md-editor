@@ -892,7 +892,12 @@ export function createChatPanel(editor: EditorHost): ChatPanel {
     }
     if (!panelVisible) return;
     fetchUsage(force)
-      .then(renderUsage)
+      .then((d) => {
+        // 取得開始後に設定がOffへ変わっていたら描画しない（遅延解決した
+        // Promiseが「非表示」を追い越して再表示するのを防ぐ）
+        if (!settings.get().chatUsageInHeader) return;
+        renderUsage(d);
+      })
       .catch(() => {
         if (!usageBtn.childElementCount) usageBtn.hidden = true;
       });
