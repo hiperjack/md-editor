@@ -18,6 +18,7 @@ import { exitCode, joinBackward, lift } from "@milkdown/kit/prose/commands";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import {
   insertHardbreakCommand,
+  hardbreakFilterNodes,
   remarkPreserveEmptyLinePlugin,
 } from "@milkdown/preset-commonmark";
 import { keymap as cmKeymap } from "@codemirror/view";
@@ -67,6 +68,7 @@ import "@milkdown/crepe/theme/frame-dark.css";
 import { store, type Tab } from "./store";
 import { remarkBlankLines } from "./blank-lines";
 import { remarkFootnoteText } from "./remark-footnote-text";
+import { remarkTableBr } from "./remark-table-br";
 import { attachLineNumbers } from "./line-numbers";
 import { attachImageResolver, imageDirForMdPath } from "./image-resolver";
 import { persistEmbeddedImages, type PersistResult } from "./image-persist";
@@ -1355,7 +1357,13 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         // 脚注ノードをテキストへ展開（常時テキスト方針）。
         // remarkBlankLines は position 依存のため必ずその後に置く。
         { plugin: remarkFootnoteText, options: {} },
+        // 表セル内の <br> html ノードを break へ変換（GFM互換の表内改行）。
+        { plugin: remarkTableBr, options: {} },
       ]);
+      // milkdown既定では表の中のhardbreak挿入がfilterTransactionで棄却される
+      // （["table","code_block"]）。表セル内の改行は <br> でシリアライズできる
+      // ようにしたため（remark-table-br.ts / breakハンドラ）、表への挿入を許可する。
+      ctx.set(hardbreakFilterNodes.key, ["code_block"]);
       ctx.update(remarkStringifyOptionsCtx, (opts) => ({
         ...opts,
         // 箇条書きと水平線は `-` を使う (Marktext / Obsidian デフォルト)
@@ -1363,8 +1371,13 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         rule: "-" as const,
         handlers: {
           ...opts.handlers,
-          // hardbreak は \\\n でなく単一 \n で出力
-          break: () => "\n",
+          // hardbreak は \\\n でなく単一 \n で出力。
+          // 表セル内では生の改行がセルを壊すため、GFM互換の <br> を出力する
+          // （remark-table-br.ts のパースとペア）。
+          break: ((_node: unknown, _parent: unknown, state: unknown) => {
+            const s = state as { stack?: string[] };
+            return s.stack?.includes("tableCell") ? "<br>" : "\n";
+          }) as never,
           /*
             テキストノードのエスケープ抑止。
             remark-stringify は既定で markdown 特殊文字をエスケープし、

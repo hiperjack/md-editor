@@ -63,7 +63,7 @@ function initMermaid(mermaid: MermaidModule, scheme: "light" | "dark"): void {
     // - ガント軸目盛: attr("font-size", 10) 固定 → CSSが表示属性に勝つ
     // - ガントタイトル: .titleText { font-size: 18px } 固定
     themeCSS: `
-      &[aria-roledescription="gantt"] g.grid .tick text { font-size: 16px; }
+      &[aria-roledescription="gantt"] g.grid .tick text { font-size: ${MERMAID_FONT_SIZE}px; }
       &[aria-roledescription="gantt"] .titleText { font-size: 22px; }
     `,
   });
@@ -83,6 +83,31 @@ export function setMermaidColorScheme(scheme: "light" | "dark"): boolean {
 const MAX_CACHE_ENTRIES = 200;
 const svgCache = new Map<string, string>();
 let renderSeq = 0;
+
+/**
+ * ganttのセクション名は固定 x=10 から描かれ、グラフ領域は leftPadding から
+ * 始まる（initialize の既定150px）。長いセクション名はグリッド線・バーに
+ * かぶるため、名前の長さから必要な左余白を見積もり、図ごとに init
+ * ディレクティブで指定する。ユーザーが自分で %%{init...}%% を書いている
+ * 図には手を出さない。
+ */
+function ganttLeftPaddingDirective(source: string): string | null {
+  if (!/^\s*gantt\b/.test(source)) return null;
+  if (source.includes("%%{")) return null;
+  let maxLen = 0;
+  for (const m of source.matchAll(/^[ \t]*section[ \t]+(.+)$/gm)) {
+    // 全角=1文字ぶん、半角=0.5文字ぶんで幅を概算する
+    let len = 0;
+    for (const ch of m[1].trim()) len += (ch.codePointAt(0) ?? 0) > 0xff ? 1 : 0.5;
+    maxLen = Math.max(maxLen, len);
+  }
+  if (maxLen === 0) return null;
+  const px = Math.min(
+    400,
+    Math.max(150, Math.round(10 + maxLen * MERMAID_FONT_SIZE + 30)),
+  );
+  return `%%{init: {"gantt": {"leftPadding": ${px}}}}%%\n`;
+}
 
 /**
  * mermaid.render 出力の後処理。キャッシュ前に1回だけ行い、全経路
@@ -169,7 +194,9 @@ export async function renderMermaidSvg(
   initMermaid(mermaid, scheme);
   const id = `mmd-render-${++renderSeq}`;
   try {
-    const { svg } = await mermaid.render(id, source.trim());
+    const src = source.trim();
+    const directive = ganttLeftPaddingDirective(src);
+    const { svg } = await mermaid.render(id, directive ? directive + src : src);
     const fixed = postProcessSvg(svg);
     cachePut(key, fixed);
     return fixed;

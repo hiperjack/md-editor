@@ -10,7 +10,12 @@ import { emit, listen } from "@tauri-apps/api/event";
  * 巻き込まれないファイル保存とし、versionキーで将来の項目追加に備える。
  */
 
-export type DocFontId = "yu-gothic" | "meiryo" | "biz-ud" | "noto-sans";
+export type DocFontId =
+  | "yu-gothic"
+  | "meiryo-ui"
+  | "meiryo"
+  | "biz-ud"
+  | "noto-sans";
 export type HeadingStyle = "none" | "underline" | "left-border" | "filled";
 export type HighlightTheme = "github" | "atom-one-dark" | "vs";
 /** Mermaid図の配色。"system" はOSのライト/ダーク設定に追従する。 */
@@ -60,6 +65,11 @@ export const DOC_FONT_PRESETS: { id: DocFontId; labelKey: string; css: string }[
     css: "'Yu Gothic Medium', 'Yu Gothic', YuGothic, 'Yu Gothic UI', sans-serif",
   },
   {
+    id: "meiryo-ui",
+    labelKey: "docTheme.font.meiryoUi",
+    css: "'Meiryo UI', Meiryo, sans-serif",
+  },
+  {
     id: "meiryo",
     labelKey: "docTheme.font.meiryo",
     css: "Meiryo, 'Meiryo UI', sans-serif",
@@ -79,7 +89,7 @@ export const DOC_FONT_PRESETS: { id: DocFontId; labelKey: string; css: string }[
 export const DEFAULT_DOC_SETTINGS: DocSettings = {
   version: 1,
   theme: {
-    fontFamily: "yu-gothic",
+    fontFamily: "meiryo-ui",
     fontSize: 16,
     lineHeight: 1.7,
     accentColor: "#2563eb",
