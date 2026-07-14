@@ -42,6 +42,7 @@ import { exportActiveTabAsHtml, openHtmlPreviewTab, openPresentationPreviewTab, 
 import { startPresentation, togglePresentationView, togglePresentationLaser, selectPresentationSlide, isPresentationGridView, isPresentationFullscreen, setPresentationChromeSync, getPresentationToolbar } from "./presentation-lazy";
 import { expandAllPreviewFolds } from "./preview-fold";
 import { showContextMenu, type MenuItem } from "./context-menu";
+import { copySvgAsImage, effectiveBackground } from "./svg-image-copy";
 import { installDiagramViewerTrigger } from "./diagram-viewer";
 import { setMermaidColorScheme } from "./mermaid-renderer";
 import { setLang, t, onLangChange } from "./i18n";
@@ -756,7 +757,26 @@ async function bootstrap(): Promise<void> {
     "contextmenu",
     (e) => {
       const target = e.target as Element | null;
-      if (target?.closest(".editor-pane .ProseMirror")) {
+      // エディタ内のMermaidプレビュー: 図を画像としてコピーするメニューを出す。
+      // .ProseMirror 内にあるため、通常のエディタメニューより先に判定する。
+      const inlineMermaid = target?.closest<HTMLElement>(
+        ".editor-pane .preview .mermaid-preview",
+      );
+      const inlineMermaidSvg = inlineMermaid?.querySelector("svg");
+      if (inlineMermaid && inlineMermaidSvg) {
+        e.preventDefault();
+        showContextMenu(e.clientX, e.clientY, [
+          {
+            type: "item",
+            label: t("viewer.copyImage"),
+            action: () =>
+              void copySvgAsImage(
+                inlineMermaidSvg,
+                effectiveBackground(inlineMermaid),
+              ),
+          },
+        ]);
+      } else if (target?.closest(".editor-pane .ProseMirror")) {
         editorContextMenu(e);
       } else if (target?.closest(".preview-pane")) {
         // プレビューペイン上では「更新」メニューを出す。
@@ -788,6 +808,20 @@ async function bootstrap(): Promise<void> {
           if (idx !== undefined) selectPresentationSlide(tabId, Number(idx));
         }
         const items: MenuItem[] = [];
+        // Mermaid図の上なら「画像としてコピー」を先頭に出す。
+        const figure = target.closest<HTMLElement>(".mermaid-figure");
+        const figureSvg = figure?.querySelector("svg");
+        if (figure && figureSvg) {
+          items.push(
+            {
+              type: "item",
+              label: t("viewer.copyImage"),
+              action: () =>
+                void copySvgAsImage(figureSvg, effectiveBackground(figure)),
+            },
+            { type: "separator" },
+          );
+        }
         // プレゼンタブでは、発表・レーザー・デッキ/一覧切替を先頭に出す。
         if (isSlide && tabId) {
           items.push(

@@ -319,6 +319,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "viewer.modePan": "手のひらツール（ドラッグで移動）",
     "viewer.modeSelect": "テキスト選択ツール",
     "viewer.copy": "コピー",
+    "viewer.copyImage": "画像としてコピー",
     "viewer.selectAll": "すべて選択",
     "viewer.jump": "コードへジャンプ",
     // 印刷の向き
@@ -664,6 +665,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "viewer.modePan": "Hand tool (drag to pan)",
     "viewer.modeSelect": "Text selection tool",
     "viewer.copy": "Copy",
+    "viewer.copyImage": "Copy as image",
     "viewer.selectAll": "Select all",
     "viewer.jump": "Jump to code",
     "dlg.print.title": "Print orientation",
