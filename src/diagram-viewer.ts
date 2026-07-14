@@ -1,6 +1,7 @@
 import { EditorView } from "@codemirror/view";
 import { showContextMenu, type MenuItem } from "./context-menu";
 import { t } from "./i18n";
+import { copySvgAsImage, effectiveBackground } from "./svg-image-copy";
 
 /**
  * Mermaid図のビューアポップアップ。
@@ -403,7 +404,18 @@ export function openDiagramViewer(
     e.stopPropagation();
     const hasSelection = getSelectionText().trim().length > 0;
     const canJump = !!sourceRoot?.querySelector(".cm-content");
+    const stageSvg = stage.querySelector("svg");
     const items: MenuItem[] = [
+      {
+        type: "item",
+        label: t("viewer.copyImage"),
+        disabled: !stageSvg,
+        action: () => {
+          if (stageSvg)
+            void copySvgAsImage(stageSvg, effectiveBackground(stage));
+        },
+      },
+      { type: "separator" },
       {
         type: "item",
         label: t("viewer.copy"),
