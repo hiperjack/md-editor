@@ -75,6 +75,43 @@ function tableWrapPlugin(md: MarkdownIt): void {
   md.renderer.rules.table_close = () => "</table>\n</div>\n";
 }
 
+/**
+ * 表セル内の <br> テキストを実際の改行（hardbreak）にする。
+ * html:false のため <br> はエスケープされたテキストとして残るが、
+ * GFMの表はセル内に生の改行を書けないため <br> が唯一の改行手段。
+ * エディタ側（remark-table-br.ts）と同じ規約で、セル内に限って解釈する。
+ */
+function tableCellBrPlugin(md: MarkdownIt): void {
+  const BR_SPLIT_RE = /<br\s*\/?>/i;
+  md.core.ruler.after("inline", "table-cell-br", (state) => {
+    let inCell = 0;
+    for (const token of state.tokens) {
+      if (token.type === "td_open" || token.type === "th_open") inCell++;
+      else if (token.type === "td_close" || token.type === "th_close")
+        inCell--;
+      else if (inCell > 0 && token.type === "inline" && token.children) {
+        const out: typeof token.children = [];
+        for (const child of token.children) {
+          if (child.type !== "text" || !BR_SPLIT_RE.test(child.content)) {
+            out.push(child);
+            continue;
+          }
+          const parts = child.content.split(new RegExp(BR_SPLIT_RE, "gi"));
+          parts.forEach((part, i) => {
+            if (i > 0) out.push(new state.Token("hardbreak", "br", 0));
+            if (part) {
+              const text = new state.Token("text", "", 0);
+              text.content = part;
+              out.push(text);
+            }
+          });
+        }
+        token.children = out;
+      }
+    }
+  });
+}
+
 /** ```mermaid フェンスをプレースホルダdivへ変換する。 */
 function mermaidFencePlugin(md: MarkdownIt): void {
   const defaultFence =
@@ -141,6 +178,7 @@ function buildMarkdownIt(settings: DocSettings, hljs: Hljs | null): MarkdownIt {
   supSubTagPlugin(md);
   taskListPlugin(md);
   tableWrapPlugin(md);
+  tableCellBrPlugin(md);
   mermaidFencePlugin(md);
   return md;
 }
