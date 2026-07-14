@@ -233,19 +233,62 @@ export async function renderExportPreview(
 
 /**
  * 同じ元タブ×同じモードの既存プレビュータブ。あればタブを増やさず再利用する。
+ * 元タブが閉じられてディスク読みで開いた場合（sourceTabId=null）はパスで照合する。
  */
 function findExistingPreview(
-  sourceTabId: string,
+  sourceTabId: string | null,
+  sourceFilePath: string | null,
   mode: "export" | "slideshow",
 ): Tab | undefined {
-  return store
-    .getState()
-    .tabs.find(
-      (tb) =>
-        tb.kind === "preview" &&
-        tb.previewMode === mode &&
-        tb.sourceTabId === sourceTabId,
-    );
+  return store.getState().tabs.find(
+    (tb) =>
+      tb.kind === "preview" &&
+      tb.previewMode === mode &&
+      (sourceTabId
+        ? tb.sourceTabId === sourceTabId
+        : !!sourceFilePath && tb.sourceFilePath === sourceFilePath),
+  );
+}
+
+/**
+ * プレビュー生成の元となるMarkdownを解決する。
+ * - 通常タブ: そのタブの現在内容。
+ * - プレビュータブ（export/slideshow）: 元タブの現在内容を優先し、元タブが
+ *   閉じられていれば sourceFilePath をディスクから読む。これにより
+ *   HTMLプレビュー上でプレゼン表示（またはその逆）を押しても元MDから開ける。
+ * - 解決できない場合（外部HTMLプレビュー等）は null。
+ */
+async function resolvePreviewSource(
+  tab: Tab,
+  editor: EditorHost,
+): Promise<{
+  markdown: string;
+  sourceTabId: string | null;
+  filePath: string | null;
+} | null> {
+  const own = editor.getMarkdown(tab.id);
+  if (own !== null) {
+    return { markdown: own, sourceTabId: tab.id, filePath: tab.filePath };
+  }
+  if (tab.kind !== "preview" || tab.previewMode === "htmlfile") return null;
+  if (tab.sourceTabId) {
+    const live = editor.getMarkdown(tab.sourceTabId);
+    if (live !== null) {
+      const src = store.getState().tabs.find((t) => t.id === tab.sourceTabId);
+      return {
+        markdown: live,
+        sourceTabId: tab.sourceTabId,
+        filePath: src?.filePath ?? tab.sourceFilePath ?? null,
+      };
+    }
+  }
+  if (tab.sourceFilePath) {
+    const markdown = await invoke<string>("read_file", {
+      path: tab.sourceFilePath,
+    });
+    return { markdown, sourceTabId: null, filePath: tab.sourceFilePath };
+  }
+  return null;
 }
 
 /**
@@ -256,12 +299,22 @@ function findExistingPreview(
 export async function openHtmlPreviewTab(editor: EditorHost): Promise<void> {
   const tab = store.getActive();
   if (!tab) return;
-  const markdown = editor.getMarkdown(tab.id);
-  if (markdown === null) return; // プレビュータブ自身など、編集内容がない場合
 
   try {
-    const { html, title } = await renderExportPreview(tab.filePath, markdown);
-    const existing = findExistingPreview(tab.id, "export");
+    const src = await resolvePreviewSource(tab, editor);
+    if (!src) {
+      // プレゼンタブ等で元タブが閉じられパスも無い場合は案内を出す
+      // （外部HTMLプレビューは対象外なので黙って何もしない）。
+      if (tab.kind === "preview" && tab.previewMode !== "htmlfile") {
+        await message(t("preview.cannotRefresh"), { kind: "info" });
+      }
+      return;
+    }
+    const { html, title } = await renderExportPreview(
+      src.filePath,
+      src.markdown,
+    );
+    const existing = findExistingPreview(src.sourceTabId, src.filePath, "export");
     if (existing) {
       store.updatePreview(existing.id, { title, html });
       store.setActive(existing.id);
@@ -274,8 +327,8 @@ export async function openHtmlPreviewTab(editor: EditorHost): Promise<void> {
       title,
       html,
       mode: "export",
-      sourceTabId: tab.id,
-      sourceFilePath: tab.filePath,
+      sourceTabId: src.sourceTabId,
+      sourceFilePath: src.filePath,
     });
     const created = store.getActive();
     if (created) await editor.show(created);
@@ -298,13 +351,25 @@ export async function openPresentationPreviewTab(
 ): Promise<void> {
   const tab = store.getActive();
   if (!tab) return;
-  const markdown = editor.getMarkdown(tab.id);
-  if (markdown === null) return; // プレビュータブ自身など、編集内容がない場合
 
   try {
-    const { html, title } = await renderExportPreview(tab.filePath, markdown);
+    const src = await resolvePreviewSource(tab, editor);
+    if (!src) {
+      if (tab.kind === "preview" && tab.previewMode !== "htmlfile") {
+        await message(t("preview.cannotRefresh"), { kind: "info" });
+      }
+      return;
+    }
+    const { html, title } = await renderExportPreview(
+      src.filePath,
+      src.markdown,
+    );
     const slideTitle = `${t("preview.slideTabPrefix")}${title.replace(t("preview.tabPrefix"), "")}`;
-    const existing = findExistingPreview(tab.id, "slideshow");
+    const existing = findExistingPreview(
+      src.sourceTabId,
+      src.filePath,
+      "slideshow",
+    );
     if (existing) {
       store.updatePreview(existing.id, { title: slideTitle, html });
       store.setActive(existing.id);
@@ -317,8 +382,8 @@ export async function openPresentationPreviewTab(
       title: slideTitle,
       html,
       mode: "slideshow",
-      sourceTabId: tab.id,
-      sourceFilePath: tab.filePath,
+      sourceTabId: src.sourceTabId,
+      sourceFilePath: src.filePath,
     });
     const created = store.getActive();
     if (created) await editor.show(created);
