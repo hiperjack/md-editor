@@ -85,28 +85,40 @@ const svgCache = new Map<string, string>();
 let renderSeq = 0;
 
 /**
- * ganttのセクション名は固定 x=10 から描かれ、グラフ領域は leftPadding から
- * 始まる（initialize の既定150px）。長いセクション名はグリッド線・バーに
- * かぶるため、名前の長さから必要な左余白を見積もり、図ごとに init
- * ディレクティブで指定する。ユーザーが自分で %%{init...}%% を書いている
- * 図には手を出さない。
+ * gantt用の図ごとの init ディレクティブ。
+ *
+ * - leftPadding: セクション名は固定 x=10 から描かれ、グラフ領域は
+ *   leftPadding から始まる（initialize の既定150px）。長いセクション名は
+ *   グリッド線・バーにかぶるため、名前の長さから必要な左余白を見積もる。
+ * - useWidth: ganttは描画時のコンテナ幅を焼き込むため、ウィンドウ幅や
+ *   パネル状態で仕上がりが変わる（狭いとバーが潰れて崩れて見える）。
+ *   プロット幅が常に一定になる固定幅で描画し、表示側のCSSで縮小する。
+ *
+ * ユーザーが自分で %%{init...}%% を書いている図には手を出さない。
  */
 function ganttLeftPaddingDirective(source: string): string | null {
   if (!/^\s*gantt\b/.test(source)) return null;
   if (source.includes("%%{")) return null;
   let maxLen = 0;
   for (const m of source.matchAll(/^[ \t]*section[ \t]+(.+)$/gm)) {
-    // 全角=1文字ぶん、半角=0.5文字ぶんで幅を概算する
-    let len = 0;
-    for (const ch of m[1].trim()) len += (ch.codePointAt(0) ?? 0) > 0xff ? 1 : 0.5;
-    maxLen = Math.max(maxLen, len);
+    // セクション名は <br> で複数行にできる（mermaidが行ごとにtspan描画）ため、
+    // 行に分割して最長行だけを測る。全角=1、半角=0.5文字ぶんで幅を概算する。
+    for (const line of m[1].trim().split(/<br\s*\/?>/i)) {
+      let len = 0;
+      for (const ch of line.trim())
+        len += (ch.codePointAt(0) ?? 0) > 0xff ? 1 : 0.5;
+      maxLen = Math.max(maxLen, len);
+    }
   }
   if (maxLen === 0) return null;
+  // 上限は控えめに: 余白を取りすぎるとプロット領域が痩せる
   const px = Math.min(
-    400,
+    320,
     Math.max(150, Math.round(10 + maxLen * MERMAID_FONT_SIZE + 30)),
   );
-  return `%%{init: {"gantt": {"leftPadding": ${px}}}}%%\n`;
+  // プロット部が常に900pxになる固定幅（75は右余白の既定）
+  const width = px + 75 + 900;
+  return `%%{init: {"gantt": {"leftPadding": ${px}, "useWidth": ${width}}}}%%\n`;
 }
 
 /**
