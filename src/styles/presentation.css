@@ -288,11 +288,14 @@ body[data-tabkind="slideshow"] .toolbar-vis-hideslideshow {
   font-size: 14px;
 }
 
-/* ── レーザーポインタ ── */
-.presentation.laser-on .slide-canvas,
-.presentation.laser-on .pres-mainview,
-.presentation.laser-on .pres-fullscreen {
-  cursor: none;
+/* ── レーザーポインタ ──
+   レーザー中はスライド上のカーソルを完全に隠す。コンテナだけに cursor:none を
+   掛けると、自前の cursor ルールを持つ子孫（Mermaid図の zoom-in／全画面時の
+   default 打ち消し等）が勝ってレーザー点の上にカーソルが重なって見えるため、
+   子孫全体へ !important で強制する（レーザーはモーダルな状態なので優先が正しい）。 */
+.presentation.laser-on :is(.slide-canvas, .pres-mainview, .pres-fullscreen),
+.presentation.laser-on :is(.slide-canvas, .pres-mainview, .pres-fullscreen) * {
+  cursor: none !important;
 }
 .pres-laser {
   position: fixed;
