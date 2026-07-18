@@ -262,6 +262,13 @@ body[data-tabkind="slideshow"] .toolbar-vis-hideslideshow {
 }
 .slide-body-inner > :first-child { margin-top: 0; }
 
+/* スライド上のMermaid図は中央寄せ（文書プレビュー/HTML出力は左寄せのまま）。
+ * document.css の `.document figure.mermaid-figure { text-align: left }`
+ * (0,2,1) に注入順で負けないよう .document を挟んで詳細度 (0,3,1) にする。 */
+.slide-canvas .document figure.mermaid-figure {
+  text-align: center;
+}
+
 /* ── タイトルスライド（見出し1で始まるスライド） ──
  * 紙面の縦中央に、左揃えでタイトルを特大表示する。 */
 .slide-canvas .document.slide-doc.slide-title-page {
