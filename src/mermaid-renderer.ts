@@ -93,8 +93,9 @@ let renderSeq = 0;
  * - useWidth: ganttは描画時のコンテナ幅を焼き込むため、ウィンドウ幅や
  *   パネル状態で仕上がりが変わる（狭いとバーが潰れて崩れて見える）。
  *   プロット幅が常に一定になる固定幅で描画し、表示側のCSSで縮小する。
- *   基準は900pxだが、タスク名がバーに収まらないと左右にあふれて見切れ・
- *   詰まりの原因になるため、最長タスク名の2倍まで広げる（上限1600px）。
+ *   基準は900pxだが、(1)タスク名がバーに収まらないと左右にあふれて
+ *   見切れ・詰まりの原因になるため最長タスク名の2倍、(2)長期の図は
+ *   軸目盛とバーが詰まるため月数×90px、の大きい方まで広げる（上限1600px）。
  *
  * ユーザーが自分で %%{init...}%% を書いている図には手を出さない。
  */
@@ -130,6 +131,23 @@ export function ganttInitDirective(source: string): string | null {
     if (task) maxTask = Math.max(maxTask, measure(task[1].trim()));
   }
   if (maxSection === 0 && maxTask === 0) return null;
+  // 期間もプロット幅の根拠にする: 長期（年単位）のガントは900pxでは
+  // 軸目盛とバーが詰まるため、月数×90pxを確保する。YYYY-MM-DD形の
+  // 日付だけを対象にした概算で、見つからなければ期間は考慮しない
+  // （dateFormatが別形式の図は従来どおり）。
+  let months = 0;
+  const dates = source.match(/\b\d{4}-\d{1,2}-\d{1,2}\b/g);
+  if (dates && dates.length >= 2) {
+    let min = Infinity;
+    let max = -Infinity;
+    for (const d of dates) {
+      const [y, m, day] = d.split("-").map(Number);
+      const t = Date.UTC(y, m - 1, day); // 不正な日は翌月へ繰り越されるが概算には十分
+      min = Math.min(min, t);
+      max = Math.max(max, t);
+    }
+    months = (max - min) / (1000 * 60 * 60 * 24 * 30.44);
+  }
   // 上限は控えめに: 余白を取りすぎるとプロット領域が痩せる
   const px = Math.min(
     320,
@@ -137,7 +155,11 @@ export function ganttInitDirective(source: string): string | null {
   );
   const plot = Math.min(
     1600,
-    Math.max(900, Math.round(maxTask * MERMAID_FONT_SIZE) * 2),
+    Math.max(
+      900,
+      Math.round(maxTask * MERMAID_FONT_SIZE) * 2,
+      Math.round(months * 90),
+    ),
   );
   // 75は右余白の既定
   const width = px + 75 + plot;

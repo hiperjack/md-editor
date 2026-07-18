@@ -352,6 +352,20 @@ export function fitBody(canvas: HTMLElement, minZoom: number = MIN_BODY_ZOOM): v
   if (!body || !inner) return;
   inner.style.zoom = "1";
   body.classList.remove("scrollable");
+  // width="100%" のMermaid SVGは zoom で縮まない: zoom を下げるとレイアウト幅が
+  // 1/zoom に広がり、SVGが幅いっぱいへ再拡大されて描画高さが変わらないため、
+  // fitBody の「zoomで線形に縮む」前提が崩れ、図が枠下にはみ出したままになる。
+  // zoom=1 時点のレイアウト幅を px で焼き込み、zoom に比例して縮むようにする。
+  // （キャンバスは論理1280×720固定のため、この幅が後で変わることはない）
+  for (const svg of inner.querySelectorAll<SVGSVGElement>(
+    "figure.mermaid-figure svg[width='100%']",
+  )) {
+    const w = parseFloat(getComputedStyle(svg).width);
+    if (w > 0) {
+      svg.style.width = `${w}px`;
+      svg.removeAttribute("width");
+    }
+  }
   const avail = body.clientHeight;
   // 本文の実高さは body 側の scrollHeight で測る。body は overflow:hidden で
   // BFC を作るため、最後の子要素の margin-bottom が body の領域に含まれる。

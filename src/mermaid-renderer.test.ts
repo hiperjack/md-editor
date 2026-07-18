@@ -85,4 +85,35 @@ describe("ganttInitDirective", () => {
   it("セクションもタスクも無ければ null", () => {
     expect(ganttInitDirective("gantt\n    dateFormat YYYY-MM-DD")).toBeNull();
   });
+
+  it("期間が長い図はプロット幅を月数に応じて広げる", () => {
+    // 2026-07-01〜2027-09-30 = 456日 ≈ 14.98ヶ月 → round(14.98×90) = 1348
+    // タスク名は短い（拡大の根拠にならない）
+    const src = `gantt
+    dateFormat YYYY-MM-DD
+    section 工程管理表示
+    作業一 :2026-07-01, 2026-11-30
+    作業二 :2027-05-01, 2027-09-30`;
+    // leftPadding: 全角6文字 → max(150, 10+120+30) = 160
+    expect(ganttInitDirective(src)).toBe(
+      '%%{init: {"gantt": {"leftPadding": 160, "useWidth": 1583}}}%%\n',
+    );
+  });
+
+  it("期間が短い図は基準900pxのまま", () => {
+    const src = `gantt
+    dateFormat YYYY-MM-DD
+    section S
+    タスク :2026-01-01, 2026-03-31`;
+    expect(ganttInitDirective(src)).toContain('"useWidth": 1125');
+  });
+
+  it("ゼロ埋めなし・存在しない日付でも期間の概算に使える", () => {
+    // 2026-9-01 と 2027-02-31（2027-03-03扱い）→ 約6ヶ月 → 900のまま
+    const src = `gantt
+    dateFormat YYYY-MM-DD
+    section S
+    タスク :2026-9-01, 2027-02-31`;
+    expect(ganttInitDirective(src)).toContain('"useWidth": 1125');
+  });
 });
