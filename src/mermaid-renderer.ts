@@ -93,31 +93,54 @@ let renderSeq = 0;
  * - useWidth: ganttは描画時のコンテナ幅を焼き込むため、ウィンドウ幅や
  *   パネル状態で仕上がりが変わる（狭いとバーが潰れて崩れて見える）。
  *   プロット幅が常に一定になる固定幅で描画し、表示側のCSSで縮小する。
+ *   基準は900pxだが、タスク名がバーに収まらないと左右にあふれて見切れ・
+ *   詰まりの原因になるため、最長タスク名の2倍まで広げる（上限1600px）。
  *
  * ユーザーが自分で %%{init...}%% を書いている図には手を出さない。
  */
-function ganttLeftPaddingDirective(source: string): string | null {
+export function ganttInitDirective(source: string): string | null {
   if (!/^\s*gantt\b/.test(source)) return null;
   if (source.includes("%%{")) return null;
-  let maxLen = 0;
-  for (const m of source.matchAll(/^[ \t]*section[ \t]+(.+)$/gm)) {
-    // セクション名は <br> で複数行にできる（mermaidが行ごとにtspan描画）ため、
-    // 行に分割して最長行だけを測る。全角=1、半角=0.5文字ぶんで幅を概算する。
-    for (const line of m[1].trim().split(/<br\s*\/?>/i)) {
+  // 名前は <br> で複数行にできる（mermaidが行ごとにtspan描画）ため、
+  // 行に分割して最長行だけを測る。全角=1、半角=0.5文字ぶんで幅を概算する。
+  const measure = (text: string): number => {
+    let max = 0;
+    for (const line of text.split(/<br\s*\/?>/i)) {
       let len = 0;
       for (const ch of line.trim())
         len += (ch.codePointAt(0) ?? 0) > 0xff ? 1 : 0.5;
-      maxLen = Math.max(maxLen, len);
+      max = Math.max(max, len);
     }
+    return max;
+  };
+  // タスク行以外でコロンを含みうるキーワード行（todayMarker等）とコメント行
+  const nonTask =
+    /^[ \t]*(?:%%|gantt\b|title\b|dateFormat\b|axisFormat\b|tickInterval\b|includes\b|excludes\b|todayMarker\b|weekday\b|weekend\b|inclusiveEndDates\b|topAxis\b|displayMode\b|accTitle\b|accDescr\b|click\b)/;
+  let maxSection = 0;
+  let maxTask = 0;
+  for (const line of source.split("\n")) {
+    const sec = /^[ \t]*section[ \t]+(.+)$/.exec(line);
+    if (sec) {
+      maxSection = Math.max(maxSection, measure(sec[1].trim()));
+      continue;
+    }
+    if (nonTask.test(line)) continue;
+    // タスク行は「名前 :メタデータ」。名前にコロンは使えない（mermaidの文法）
+    const task = /^[ \t]*([^:\n]+):/.exec(line);
+    if (task) maxTask = Math.max(maxTask, measure(task[1].trim()));
   }
-  if (maxLen === 0) return null;
+  if (maxSection === 0 && maxTask === 0) return null;
   // 上限は控えめに: 余白を取りすぎるとプロット領域が痩せる
   const px = Math.min(
     320,
-    Math.max(150, Math.round(10 + maxLen * MERMAID_FONT_SIZE + 30)),
+    Math.max(150, Math.round(10 + maxSection * MERMAID_FONT_SIZE + 30)),
   );
-  // プロット部が常に900pxになる固定幅（75は右余白の既定）
-  const width = px + 75 + 900;
+  const plot = Math.min(
+    1600,
+    Math.max(900, Math.round(maxTask * MERMAID_FONT_SIZE) * 2),
+  );
+  // 75は右余白の既定
+  const width = px + 75 + plot;
   return `%%{init: {"gantt": {"leftPadding": ${px}, "useWidth": ${width}}}}%%\n`;
 }
 
@@ -207,7 +230,7 @@ export async function renderMermaidSvg(
   const id = `mmd-render-${++renderSeq}`;
   try {
     const src = source.trim();
-    const directive = ganttLeftPaddingDirective(src);
+    const directive = ganttInitDirective(src);
     const { svg } = await mermaid.render(id, directive ? directive + src : src);
     const fixed = postProcessSvg(svg);
     cachePut(key, fixed);
