@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseGantt } from "./gantt-schedule";
+import { parseGantt, layoutSchedule, LAYOUT } from "./gantt-schedule";
 
 const utc = (s: string) => {
   const [y, m, d] = s.split("-").map(Number);
@@ -83,5 +83,60 @@ describe("parseGantt", () => {
     ].join("\n");
     const m = parseGantt(src)!;
     expect(m.sections[0].tasks).toHaveLength(1);
+  });
+});
+
+describe("layoutSchedule", () => {
+  const model = (lines: string[]) => parseGantt(["gantt", ...lines].join("\n"))!;
+
+  it("非重複タスクは同じ行に詰め、重複すると行が増える", () => {
+    const m = model([
+      "section S",
+      "a :2026-01-01, 2026-02-01",
+      "b :2026-03-01, 2026-04-01", // a と重ならない → 同じ行
+      "c :2026-01-15, 2026-03-15", // a とも b とも重なる → 別行
+    ]);
+    const layout = layoutSchedule(m, new Date(Date.UTC(2030, 0, 1)));
+    const tasks = layout.boxes.filter((b) => b.kind === "task");
+    const ys = new Set(tasks.map((b) => b.y));
+    expect(ys.size).toBe(2); // 2行に収まる
+  });
+
+  it("マイルストーンは帯の先頭行、タスクはその下", () => {
+    const m = model([
+      "section S",
+      "ms :milestone, 2026-02-01, 0d",
+      "t :2026-01-01, 2026-03-01",
+    ]);
+    const layout = layoutSchedule(m, new Date(Date.UTC(2030, 0, 1)));
+    const ms = layout.boxes.find((b) => b.kind === "milestone")!;
+    const t = layout.boxes.find((b) => b.kind === "task")!;
+    expect(ms.y).toBeLessThan(t.y);
+  });
+
+  it("月次目盛の数が範囲の月数と一致する", () => {
+    const m = model([
+      "section S",
+      "t :2026-01-01, 2026-04-30", // 1,2,3,4月 = 4目盛
+    ]);
+    const layout = layoutSchedule(m, new Date(Date.UTC(2030, 0, 1)));
+    expect(layout.ticks.map((x) => x.label)).toEqual([
+      "26/01", "26/02", "26/03", "26/04",
+    ]);
+  });
+
+  it("今日が範囲内なら todayX を持ち、範囲外なら null", () => {
+    const m = model(["section S", "t :2026-01-01, 2026-04-30"]);
+    const inside = layoutSchedule(m, new Date(Date.UTC(2026, 1, 15)));
+    expect(inside.todayX).not.toBeNull();
+    const outside = layoutSchedule(m, new Date(Date.UTC(2030, 0, 1)));
+    expect(outside.todayX).toBeNull();
+  });
+
+  it("プロット幅は月数×pxPerMonth（下限・上限クランプ）", () => {
+    const m = model(["section S", "t :2026-01-01, 2026-04-30"]); // 4ヶ月
+    const layout = layoutSchedule(m, new Date(Date.UTC(2030, 0, 1)));
+    // width = labelWidth + clamp(4*90, 600, 1600) = 140 + 600 = 740
+    expect(layout.width).toBe(LAYOUT.labelWidth + LAYOUT.minPlot);
   });
 });

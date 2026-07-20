@@ -106,3 +106,151 @@ export function parseGantt(source: string): GanttModel | null {
   const max = new Date(Math.max(...all.map((t) => t.end.getTime())));
   return { title, sections, min, max };
 }
+
+export type PlacedBox = {
+  x: number; y: number; w: number; h: number;
+  label: string;
+  kind: "task" | "milestone";
+  isCrit: boolean;
+};
+export type MonthTick = { x: number; label: string };
+export type SectionBand = { name: string; y: number; h: number };
+export type ScheduleLayout = {
+  width: number;
+  height: number;
+  labelWidth: number;
+  headerHeight: number;
+  ticks: MonthTick[];
+  bands: SectionBand[];
+  boxes: PlacedBox[];
+  todayX: number | null;
+};
+
+export const LAYOUT = {
+  labelWidth: 140,
+  headerHeight: 40,
+  rowHeight: 34,
+  rowGap: 6,
+  bandPadY: 8,
+  pxPerMonth: 90,
+  minPlot: 600,
+  maxPlot: 1600,
+} as const;
+
+function monthStart(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+}
+function monthCount(a: Date, b: Date): number {
+  return (
+    (b.getUTCFullYear() - a.getUTCFullYear()) * 12 +
+    (b.getUTCMonth() - a.getUTCMonth()) +
+    1
+  );
+}
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+export function layoutSchedule(
+  model: GanttModel,
+  today: Date = new Date(),
+): ScheduleLayout {
+  const rangeStart = monthStart(model.min);
+  // 範囲末は max の翌月頭（右端まで使う）
+  const endMonth = monthStart(model.max);
+  const rangeEnd = new Date(
+    Date.UTC(endMonth.getUTCFullYear(), endMonth.getUTCMonth() + 1, 1),
+  );
+  const months = monthCount(model.min, model.max);
+  const plot = Math.min(
+    LAYOUT.maxPlot,
+    Math.max(LAYOUT.minPlot, months * LAYOUT.pxPerMonth),
+  );
+  const span = rangeEnd.getTime() - rangeStart.getTime();
+  const xOf = (d: Date): number =>
+    LAYOUT.labelWidth + ((d.getTime() - rangeStart.getTime()) / span) * plot;
+
+  const ticks: MonthTick[] = [];
+  for (let i = 0; i < months; i++) {
+    const m = new Date(
+      Date.UTC(rangeStart.getUTCFullYear(), rangeStart.getUTCMonth() + i, 1),
+    );
+    ticks.push({
+      x: xOf(m),
+      label: `${pad2(m.getUTCFullYear() % 100)}/${pad2(m.getUTCMonth() + 1)}`,
+    });
+  }
+
+  const boxes: PlacedBox[] = [];
+  const bands: SectionBand[] = [];
+  let y: number = LAYOUT.headerHeight;
+
+  for (const section of model.sections) {
+    const bandTop = y;
+    let rowY = y + LAYOUT.bandPadY;
+
+    const milestones = section.tasks.filter((t) => t.isMilestone);
+    const tasks = section.tasks.filter((t) => !t.isMilestone);
+
+    if (milestones.length > 0) {
+      for (const ms of milestones) {
+        boxes.push({
+          x: xOf(ms.start),
+          y: rowY,
+          w: 0,
+          h: LAYOUT.rowHeight,
+          label: ms.name,
+          kind: "milestone",
+          isCrit: ms.isCrit,
+        });
+      }
+      rowY += LAYOUT.rowHeight + LAYOUT.rowGap;
+    }
+
+    // 貪欲な行詰め込み: 開始日昇順、各行の末尾endを保持
+    const sorted = [...tasks].sort(
+      (a, b) => a.start.getTime() - b.start.getTime(),
+    );
+    const rowEnds: number[] = [];
+    for (const t of sorted) {
+      let row = rowEnds.findIndex((end) => end <= t.start.getTime());
+      if (row === -1) {
+        row = rowEnds.length;
+        rowEnds.push(0);
+      }
+      rowEnds[row] = t.end.getTime();
+      const x = xOf(t.start);
+      const w = Math.max(2, xOf(t.end) - x);
+      boxes.push({
+        x,
+        y: rowY + row * (LAYOUT.rowHeight + LAYOUT.rowGap),
+        w,
+        h: LAYOUT.rowHeight,
+        label: t.name,
+        kind: "task",
+        isCrit: t.isCrit,
+      });
+    }
+    const taskRows = rowEnds.length;
+    rowY += taskRows * (LAYOUT.rowHeight + LAYOUT.rowGap);
+
+    const bandBottom = rowY + LAYOUT.bandPadY - LAYOUT.rowGap;
+    bands.push({ name: section.name, y: bandTop, h: bandBottom - bandTop });
+    y = bandBottom;
+  }
+
+  const todayIn =
+    today.getTime() >= rangeStart.getTime() &&
+    today.getTime() <= rangeEnd.getTime();
+
+  return {
+    width: LAYOUT.labelWidth + plot,
+    height: y,
+    labelWidth: LAYOUT.labelWidth,
+    headerHeight: LAYOUT.headerHeight,
+    ticks,
+    bands,
+    boxes,
+    todayX: todayIn ? xOf(today) : null,
+  };
+}
