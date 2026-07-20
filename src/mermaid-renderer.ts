@@ -12,6 +12,8 @@
  */
 
 import { t } from "./i18n";
+import { renderScheduleGanttSvg } from "./gantt-schedule";
+import { settings } from "./settings";
 
 type MermaidModule = typeof import("mermaid").default;
 
@@ -347,6 +349,18 @@ export function mermaidCodePreview(
   if (!src) return null;
 
   const seq = ++applySeq;
+
+  // 文書系ガントスタイルが ppt で、gantt として解釈できれば PPT風SVGを同期返し。
+  // （PPT生成は純粋・軽量なのでデバウンス/キャッシュ不要。gantt以外や解釈不能は null →
+  //   従来の Mermaid 経路へフォールバック。）
+  if (settings.get().ganttStyleDocument === "ppt") {
+    const ppt = renderScheduleGanttSvg(src, colorScheme);
+    if (ppt) {
+      lastAppliedSeq = seq;
+      return buildPreviewFigure(ppt);
+    }
+  }
+
   // renderMermaidSvg と同じ配色込みキーで引く（素のsrcだとヒットせず常に再描画になる）
   const cached = svgCache.get(cacheKey(src, colorScheme));
   if (cached) {

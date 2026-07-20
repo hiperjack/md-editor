@@ -147,6 +147,13 @@ describe("layoutSchedule", () => {
     expect(outside.todayX).toBeNull();
   });
 
+  it("縦に短い図は16:9に寄せる（高さ = round(幅×9/16)）", () => {
+    // 1 section・1タスクの短い図 → 内容は16:9より縦に短い → 16:9へ拡張
+    const m = model(["section S", "t :2026-01-01, 2026-04-30"]);
+    const layout = layoutSchedule(m, new Date(Date.UTC(2030, 0, 1)));
+    expect(layout.height).toBe(Math.round((layout.width * 9) / 16));
+  });
+
   it("プロット幅は月数×pxPerMonth（下限・上限クランプ）", () => {
     const m = model(["section S", "t :2026-01-01, 2026-04-30"]); // 4ヶ月
     const layout = layoutSchedule(m, new Date(Date.UTC(2030, 0, 1)));

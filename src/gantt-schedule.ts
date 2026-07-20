@@ -130,7 +130,7 @@ export type ScheduleLayout = {
 export const LAYOUT = {
   labelWidth: 140,
   labelMax: 260,
-  headerHeight: 40,
+  headerHeight: 46,
   rowHeight: 34,
   rowGap: 6,
   bandPadY: 8,
@@ -138,9 +138,11 @@ export const LAYOUT = {
   minPlot: 600,
   maxPlot: 1600,
   rightPad: 24,
+  vFillCap: 2.4, // 16:9調整で行を広げる上限倍率（バーが太くなりすぎないように）
 } as const;
 
-const SECTION_FONT = 14;
+const SECTION_FONT = 16; // 左のセクション名の文字サイズ（幅見積りと描画で共用）
+const HEADER_FONT = 15; // ヘッダー（タイムライン）の月ラベルの文字サイズ
 
 /** section名の最長行の概算幅（全角=1、半角=0.5文字ぶん）。<br> は行分割して最長行のみ見る。 */
 function measureLabel(text: string): number {
@@ -276,9 +278,35 @@ export function layoutSchedule(
     today.getTime() >= rangeStart.getTime() &&
     today.getTime() <= rangeEnd.getTime();
 
+  const width = labelWidth + plot + LAYOUT.rightPad;
+
+  // 全体を 16:9 に寄せる（横は月数ベースのまま）。内容が16:9より縦に短ければ、
+  // 行（バー）の高さを広げて埋める。広げすぎない上限を超える分は下を余白（背景）に
+  // 残す。縦に長い図はそのまま（16:9より縦長可）。プレゼンで1スライドに収めやすくする。
+  const target = Math.round((width * 9) / 16);
+  let height = y;
+  if (y < target) {
+    const plotH = y - LAYOUT.headerHeight;
+    const scale =
+      plotH > 0
+        ? Math.min((target - LAYOUT.headerHeight) / plotH, LAYOUT.vFillCap)
+        : 1;
+    if (scale > 1) {
+      for (const b of bands) {
+        b.y = LAYOUT.headerHeight + (b.y - LAYOUT.headerHeight) * scale;
+        b.h *= scale;
+      }
+      for (const bx of boxes) {
+        bx.y = LAYOUT.headerHeight + (bx.y - LAYOUT.headerHeight) * scale;
+        bx.h *= scale;
+      }
+    }
+    height = target;
+  }
+
   return {
-    width: labelWidth + plot + LAYOUT.rightPad,
-    height: y,
+    width,
+    height,
     labelWidth,
     headerHeight: LAYOUT.headerHeight,
     ticks,
@@ -435,8 +463,8 @@ export function renderScheduleSvg(
     .sched-grid { stroke: ${p.grid}; stroke-width: 1; }
     .sched-headerbar { fill: ${p.header}; }
     .sched-hgrid { stroke: rgba(255,255,255,0.3); stroke-width: 1; }
-    .sched-tick { fill: #ffffff; font-size: 12px; }
-    .sched-secname { fill: ${p.text}; font-weight: 600; }
+    .sched-tick { fill: #ffffff; font-size: ${HEADER_FONT}px; }
+    .sched-secname { fill: ${p.text}; font-weight: 600; font-size: ${SECTION_FONT}px; }
     .sched-task { fill: ${p.accent}; stroke: ${p.accentEdge}; stroke-width: 1; }
     .sched-task.sched-crit { fill: ${p.crit}; stroke: ${p.critEdge}; }
     .sched-label { fill: ${p.text}; font-size: ${FONT}px; }
