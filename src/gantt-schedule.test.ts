@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseGantt, layoutSchedule, LAYOUT } from "./gantt-schedule";
-import { renderScheduleGanttSvg } from "./gantt-schedule";
+import { renderScheduleGanttSvg, fitLabelInBar } from "./gantt-schedule";
 
 const utc = (s: string) => {
   const [y, m, d] = s.split("-").map(Number);
@@ -236,7 +236,7 @@ describe("renderScheduleGanttSvg", () => {
     expect(svg).not.toContain('class="sched-label-out"');
   });
 
-  it("バーからはみ出す長いタスク名はバー外に本文色（sched-label-out）で置く", () => {
+  it("バーからはみ出す長いタスク名も常にバー内（白文字）に置く（外出ししない）", () => {
     const src = [
       "gantt",
       "    section S",
@@ -245,6 +245,31 @@ describe("renderScheduleGanttSvg", () => {
       "    余白確保 :2026-02-01, 2026-12-31",
     ].join("\n");
     const svg = renderScheduleGanttSvg(src, "light")!;
-    expect(svg).toContain('class="sched-label-out"');
+    expect(svg).toContain('class="sched-label"');
+    expect(svg).not.toContain("sched-label-out"); // バー外描画は廃止
+  });
+});
+
+describe("fitLabelInBar", () => {
+  it("短い名前は1行・基準フォント", () => {
+    const r = fitLabelInBar("短い", 200, 34);
+    expect(r.lines).toEqual(["短い"]);
+    expect(r.fontPx).toBe(13);
+  });
+
+  it("収まらなければ最大2行に折り返し、全文字を保持する", () => {
+    const label = "あ".repeat(14); // 全角14
+    const r = fitLabelInBar(label, 100, 34);
+    expect(r.lines.length).toBe(2);
+    expect(r.lines.join("")).toBe(label); // 省略なし
+    expect(r.fontPx).toBeLessThanOrEqual(13);
+  });
+
+  it("極端に長い名前×狭いバーは最小フォント2行＋末尾を…で省略", () => {
+    const label = "あ".repeat(40);
+    const r = fitLabelInBar(label, 60, 34);
+    expect(r.fontPx).toBe(8);
+    expect(r.lines.length).toBe(2);
+    expect(r.lines[1].endsWith("…")).toBe(true);
   });
 });

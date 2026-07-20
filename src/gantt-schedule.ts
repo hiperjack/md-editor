@@ -317,16 +317,86 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** name の <br> を tspan 分割して1つの <text> を返す。x はテキスト基準位置。 */
-function textLines(
-  name: string,
+const FONT = 13;
+const MIN_FONT = 8; // 矢羽内に折り返しても収まらないときの縮小下限
+
+/** 1文字の概算幅（全角=1、半角=0.5文字ぶん）。 */
+function charUnit(ch: string): number {
+  return (ch.codePointAt(0) ?? 0) > 0xff ? 1 : 0.5;
+}
+
+/** text を、1行あたり maxUnits 文字ぶんに収まるよう文字単位で必要なだけ折り返す。 */
+function wrapUnits(text: string, maxUnits: number): string[] {
+  const lines: string[] = [];
+  let cur = "";
+  let curU = 0;
+  for (const ch of [...text]) {
+    const u = charUnit(ch);
+    if (cur !== "" && curU + u > maxUnits) {
+      lines.push(cur);
+      cur = "";
+      curU = 0;
+    }
+    cur += ch;
+    curU += u;
+  }
+  if (cur !== "") lines.push(cur);
+  return lines.length ? lines : [""];
+}
+
+/** text を maxUnits 文字ぶんに収まるよう切り詰め、末尾に … を付ける。 */
+function truncateUnits(text: string, maxUnits: number): string {
+  const budget = Math.max(0, maxUnits - 1); // … のぶんを1文字ぶん確保
+  let cur = "";
+  let curU = 0;
+  for (const ch of [...text]) {
+    const u = charUnit(ch);
+    if (curU + u > budget) break;
+    cur += ch;
+    curU += u;
+  }
+  return cur + "…";
+}
+
+/**
+ * 矢羽（バー）内にタスク名を収めるための行分割とフォントサイズを決める。
+ * 幅 innerPx に対し、基準フォントから縮小しつつ最大2行で収める。最小フォントでも
+ * 2行に収まらなければ2行に切り詰め、2行目を … で省略する（常にバー内・可読を優先）。
+ */
+export function fitLabelInBar(
+  label: string,
+  innerPx: number,
+  barH: number,
+): { lines: string[]; fontPx: number } {
+  const plain = label.replace(/<br\s*\/?>/gi, "").trim();
+  for (let f = FONT; f >= MIN_FONT; f--) {
+    const maxUnits = innerPx / f;
+    const lines = wrapUnits(plain, maxUnits);
+    const lineH = f + 3;
+    if (lines.length <= 2 && lines.length * lineH <= barH - 2) {
+      return { lines, fontPx: f };
+    }
+  }
+  // 最小フォントでも2行に収まらない: 1行目＋残りを切り詰めた2行目。
+  const maxUnits = innerPx / MIN_FONT;
+  const all = wrapUnits(plain, maxUnits);
+  const lines =
+    all.length <= 2
+      ? all
+      : [all[0], truncateUnits(all.slice(1).join(""), maxUnits)];
+  return { lines, fontPx: MIN_FONT };
+}
+
+/** 事前に行分割済みのテキストを1つの <text>（複数tspan）で返す。x はテキスト基準位置。 */
+function textBlockLines(
+  lines: string[],
   x: number,
   cy: number,
   anchor: "start" | "middle" | "end",
   cls: string,
+  fontPx: number = FONT,
 ): string {
-  const lines = name.split(/<br\s*\/?>/i).map((s) => s.trim());
-  const lh = 15;
+  const lh = fontPx + 3;
   const top = cy - ((lines.length - 1) * lh) / 2;
   const tspans = lines
     .map(
@@ -334,10 +404,26 @@ function textLines(
         `<tspan x="${x.toFixed(1)}" y="${(top + i * lh).toFixed(1)}">${esc(ln)}</tspan>`,
     )
     .join("");
-  return `<text class="${cls}" text-anchor="${anchor}" dominant-baseline="middle">${tspans}</text>`;
+  const fs = fontPx !== FONT ? ` font-size="${fontPx}"` : "";
+  return `<text class="${cls}"${fs} text-anchor="${anchor}" dominant-baseline="middle">${tspans}</text>`;
 }
 
-const FONT = 13;
+/** name の <br> を行分割して1つの <text> を返す（section名・マイルストーン名用）。 */
+function textLines(
+  name: string,
+  x: number,
+  cy: number,
+  anchor: "start" | "middle" | "end",
+  cls: string,
+): string {
+  return textBlockLines(
+    name.split(/<br\s*\/?>/i).map((s) => s.trim()),
+    x,
+    cy,
+    anchor,
+    cls,
+  );
+}
 
 export function renderScheduleSvg(
   layout: ScheduleLayout,
@@ -364,7 +450,6 @@ export function renderScheduleSvg(
     .sched-task { fill: ${p.accent}; stroke: ${p.accentEdge}; stroke-width: 1; }
     .sched-task.sched-crit { fill: ${p.crit}; stroke: ${p.critEdge}; }
     .sched-label { fill: #ffffff; font-size: ${FONT}px; }
-    .sched-label-out { fill: ${p.text}; font-size: ${FONT}px; }
     .sched-mslabel { fill: ${p.text}; font-size: ${FONT}px; }
     .sched-ms { fill: ${p.accentEdge}; }
     .sched-ms.sched-crit { fill: ${p.critEdge}; }
@@ -437,20 +522,12 @@ export function renderScheduleSvg(
       .map(([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`)
       .join(" ");
     parts.push(`<polygon class="sched-task${crit}" points="${pts}"/>`);
-    // ラベルはバーに収まれば内側に白文字。収まらないと白文字が背景に被って
-    // 読めなくなるため、バー外に本文色で描く（右端付近は左へ寄せて見切れ防止）。
+    // ラベルは常に矢羽の中に白文字で。幅に合わせ最大2行に折り返し、収まらなければ
+    // フォントを縮小（最小8px、それでも無理なら2行目を … で省略）する。
     const cy = y + h / 2;
-    const labelPx = measureLabel(box.label) * FONT;
     const inner = w - d - 12; // 左パディング＋右の矢尻ぶんを除いた実効幅
-    if (labelPx <= inner) {
-      parts.push(textLines(box.label, x + 8, cy, "start", "sched-label"));
-    } else if (x + w + 6 + labelPx <= labelWidth + plotWidth + LAYOUT.rightPad) {
-      // バーの右外に置く余地がある
-      parts.push(textLines(box.label, x + w + 6, cy, "start", "sched-label-out"));
-    } else {
-      // 右端に寄っているのでバーの左外へ右寄せで置く
-      parts.push(textLines(box.label, x - 6, cy, "end", "sched-label-out"));
-    }
+    const { lines, fontPx } = fitLabelInBar(box.label, inner, h);
+    parts.push(textBlockLines(lines, x + 8, cy, "start", "sched-label", fontPx));
   }
 
   parts.push(`</svg>`);
