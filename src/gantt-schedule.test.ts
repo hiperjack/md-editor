@@ -137,8 +137,26 @@ describe("layoutSchedule", () => {
   it("プロット幅は月数×pxPerMonth（下限・上限クランプ）", () => {
     const m = model(["section S", "t :2026-01-01, 2026-04-30"]); // 4ヶ月
     const layout = layoutSchedule(m, new Date(Date.UTC(2030, 0, 1)));
-    // width = labelWidth + clamp(4*90, 600, 1600) = 140 + 600 = 740
-    expect(layout.width).toBe(LAYOUT.labelWidth + LAYOUT.minPlot);
+    // width = labelWidth + clamp(4*90, 600, 1600) + rightPad = 140 + 600 + 24 = 764
+    expect(layout.width).toBe(
+      LAYOUT.labelWidth + LAYOUT.minPlot + LAYOUT.rightPad,
+    );
+  });
+
+  it("section名が短ければラベル幅は下限のまま", () => {
+    const m = model(["section S", "t :2026-01-01, 2026-04-30"]); // "S" は1文字
+    const layout = layoutSchedule(m, new Date(Date.UTC(2030, 0, 1)));
+    expect(layout.labelWidth).toBe(LAYOUT.labelWidth);
+  });
+
+  it("section名が長ければラベル幅を拡張する（上限あり）", () => {
+    const m = model([
+      "section 分類名ラベルの長い見本",
+      "t :2026-01-01, 2026-04-30",
+    ]);
+    const layout = layoutSchedule(m, new Date(Date.UTC(2030, 0, 1)));
+    expect(layout.labelWidth).toBeGreaterThan(LAYOUT.labelWidth);
+    expect(layout.labelWidth).toBeLessThanOrEqual(LAYOUT.labelMax);
   });
 });
 
@@ -174,5 +192,27 @@ describe("renderScheduleGanttSvg", () => {
   it("crit タスクは強調色クラスを持つ", () => {
     const svg = renderScheduleGanttSvg(gantt, "light")!;
     expect(svg).toContain("sched-crit");
+  });
+
+  it("右端寄りのマイルストーンはラベルを左（end）に反転する", () => {
+    const src = [
+      "gantt",
+      "    section S",
+      "    t :2026-01-01, 2026-01-31",
+      "    ms :milestone, 2026-06-30, 0d",
+    ].join("\n");
+    const svg = renderScheduleGanttSvg(src, "light")!;
+    expect(svg).toMatch(/class="sched-mslabel" text-anchor="end"/);
+  });
+
+  it("左端寄りのマイルストーンはラベルを右（start）のまま", () => {
+    const src = [
+      "gantt",
+      "    section S",
+      "    ms :milestone, 2026-01-01, 0d",
+      "    t :2026-01-01, 2026-06-30",
+    ].join("\n");
+    const svg = renderScheduleGanttSvg(src, "light")!;
+    expect(svg).toMatch(/class="sched-mslabel" text-anchor="start"/);
   });
 });

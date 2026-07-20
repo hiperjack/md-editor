@@ -477,7 +477,7 @@ export async function refreshPreviewTab(
       await editor.refreshPreviewPane(previewTabId);
       return;
     }
-    // export モード
+    // export / slideshow モード（previewMode !== "htmlfile"）
     let markdown: string | null = null;
     let filePath: string | null = tab.sourceFilePath ?? null;
     if (tab.sourceTabId) {

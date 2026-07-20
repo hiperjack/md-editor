@@ -128,6 +128,7 @@ export type ScheduleLayout = {
 
 export const LAYOUT = {
   labelWidth: 140,
+  labelMax: 260,
   headerHeight: 40,
   rowHeight: 34,
   rowGap: 6,
@@ -135,7 +136,22 @@ export const LAYOUT = {
   pxPerMonth: 90,
   minPlot: 600,
   maxPlot: 1600,
+  rightPad: 24,
 } as const;
+
+const SECTION_FONT = 14;
+
+/** section名の最長行の概算幅（全角=1、半角=0.5文字ぶん）。<br> は行分割して最長行のみ見る。 */
+function measureLabel(text: string): number {
+  let max = 0;
+  for (const line of text.split(/<br\s*\/?>/i)) {
+    let len = 0;
+    for (const ch of line.trim())
+      len += (ch.codePointAt(0) ?? 0) > 0xff ? 1 : 0.5;
+    max = Math.max(max, len);
+  }
+  return max;
+}
 
 function monthStart(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
@@ -155,6 +171,16 @@ export function layoutSchedule(
   model: GanttModel,
   today: Date = new Date(),
 ): ScheduleLayout {
+  // 左ラベル列は section 名の長さに応じて可変（短い名前は下限140pxのまま）。
+  const maxSectionMeasure =
+    model.sections.length > 0
+      ? Math.max(...model.sections.map((s) => measureLabel(s.name)))
+      : 0;
+  const labelWidth = Math.min(
+    LAYOUT.labelMax,
+    Math.max(LAYOUT.labelWidth, Math.round(maxSectionMeasure * SECTION_FONT + 20)),
+  );
+
   const rangeStart = monthStart(model.min);
   // 範囲末は max の翌月頭（右端まで使う）
   const endMonth = monthStart(model.max);
@@ -168,7 +194,7 @@ export function layoutSchedule(
   );
   const span = rangeEnd.getTime() - rangeStart.getTime();
   const xOf = (d: Date): number =>
-    LAYOUT.labelWidth + ((d.getTime() - rangeStart.getTime()) / span) * plot;
+    labelWidth + ((d.getTime() - rangeStart.getTime()) / span) * plot;
 
   const ticks: MonthTick[] = [];
   for (let i = 0; i < months; i++) {
@@ -244,9 +270,9 @@ export function layoutSchedule(
     today.getTime() <= rangeEnd.getTime();
 
   return {
-    width: LAYOUT.labelWidth + plot,
+    width: labelWidth + plot + LAYOUT.rightPad,
     height: y,
-    labelWidth: LAYOUT.labelWidth,
+    labelWidth,
     headerHeight: LAYOUT.headerHeight,
     ticks,
     bands,
@@ -289,7 +315,7 @@ function textLines(
   name: string,
   x: number,
   cy: number,
-  anchor: "start" | "middle",
+  anchor: "start" | "middle" | "end",
   cls: string,
 ): string {
   const lines = name.split(/<br\s*\/?>/i).map((s) => s.trim());
@@ -312,6 +338,7 @@ export function renderScheduleSvg(
 ): string {
   const p = palette(scheme);
   const { width, height, labelWidth, headerHeight } = layout;
+  const plotWidth = width - labelWidth - LAYOUT.rightPad;
   const parts: string[] = [];
 
   parts.push(
@@ -380,9 +407,12 @@ export function renderScheduleSvg(
       parts.push(
         `<path class="sched-ms${crit}" d="M ${cx.toFixed(1)} ${(cy - r).toFixed(1)} L ${(cx + r).toFixed(1)} ${cy.toFixed(1)} L ${cx.toFixed(1)} ${(cy + r).toFixed(1)} L ${(cx - r).toFixed(1)} ${cy.toFixed(1)} Z"/>`,
       );
-      // ラベルは◆の右
+      // ラベルは通常◆の右。右端付近では見切れを避けるため左に反転する。
+      const flip = cx > labelWidth + plotWidth * 0.68;
       parts.push(
-        textLines(box.label, cx + r + 6, cy, "start", "sched-mslabel"),
+        flip
+          ? textLines(box.label, cx - r - 6, cy, "end", "sched-mslabel")
+          : textLines(box.label, cx + r + 6, cy, "start", "sched-mslabel"),
       );
       continue;
     }
