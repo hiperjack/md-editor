@@ -434,6 +434,7 @@ export function renderScheduleSvg(
     .sched-band-alt { fill: ${p.bandAlt}; }
     .sched-grid { stroke: ${p.grid}; stroke-width: 1; }
     .sched-headerbar { fill: ${p.header}; }
+    .sched-hgrid { stroke: rgba(255,255,255,0.3); stroke-width: 1; }
     .sched-tick { fill: #ffffff; font-size: 12px; }
     .sched-secname { fill: ${p.text}; font-weight: 600; }
     .sched-task { fill: ${p.accent}; stroke: ${p.accentEdge}; stroke-width: 1; }
@@ -462,8 +463,11 @@ export function renderScheduleSvg(
     `<rect class="sched-headerbar" x="0" y="0" width="${width}" height="${headerHeight}"/>`,
   );
 
-  // 月次グリッド（線は月境界・ヘッダーより下）＋目盛ラベル（月カラム中央・白文字）
+  // 月次の縦線: ヘッダー内は白系の区切り線、プロット部はグリッド線。ラベルは月カラム中央（白文字）。
   for (const tick of layout.ticks) {
+    parts.push(
+      `<line class="sched-hgrid" x1="${tick.x.toFixed(1)}" y1="0" x2="${tick.x.toFixed(1)}" y2="${headerHeight}"/>`,
+    );
     parts.push(
       `<line class="sched-grid" x1="${tick.x.toFixed(1)}" y1="${headerHeight}" x2="${tick.x.toFixed(1)}" y2="${height}"/>`,
     );
@@ -476,13 +480,6 @@ export function renderScheduleSvg(
   parts.push(
     `<line class="sched-grid" x1="${labelWidth}" y1="${headerHeight}" x2="${labelWidth}" y2="${height}"/>`,
   );
-
-  // 今日線
-  if (layout.todayX !== null) {
-    parts.push(
-      `<line class="sched-today" x1="${layout.todayX.toFixed(1)}" y1="${headerHeight}" x2="${layout.todayX.toFixed(1)}" y2="${height}"/>`,
-    );
-  }
 
   // ボックス（矢羽・マイルストーン）
   for (const box of layout.boxes) {
@@ -516,12 +513,19 @@ export function renderScheduleSvg(
       .map(([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`)
       .join(" ");
     parts.push(`<polygon class="sched-task${crit}" points="${pts}"/>`);
-    // ラベルは常に矢羽の中に白文字で。幅に合わせ最大2行に折り返し、収まらなければ
-    // フォントを縮小（最小8px、それでも無理なら2行目を … で省略）する。
+    // ラベルは矢羽の中。幅に合わせ最大2行に折り返し、収まらなければフォントを縮小。
+    // それでも収まらない分は帯へはみ出させる（濃色文字なので読める）。
     const cy = y + h / 2;
     const inner = w - d - 12; // 左パディング＋右の矢尻ぶんを除いた実効幅
     const { lines, fontPx } = fitLabelInBar(box.label, inner, h);
     parts.push(textBlockLines(lines, x + 8, cy, "start", "sched-label", fontPx));
+  }
+
+  // 当日線は最前面（バーやラベルの上）に描く。範囲外なら描かない。
+  if (layout.todayX !== null) {
+    parts.push(
+      `<line class="sched-today" x1="${layout.todayX.toFixed(1)}" y1="${headerHeight}" x2="${layout.todayX.toFixed(1)}" y2="${height}"/>`,
+    );
   }
 
   parts.push(`</svg>`);

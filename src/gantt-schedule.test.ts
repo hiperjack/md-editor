@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { parseGantt, layoutSchedule, LAYOUT } from "./gantt-schedule";
-import { renderScheduleGanttSvg, fitLabelInBar } from "./gantt-schedule";
+import {
+  renderScheduleGanttSvg,
+  renderScheduleSvg,
+  fitLabelInBar,
+} from "./gantt-schedule";
 
 const utc = (s: string) => {
   const [y, m, d] = s.split("-").map(Number);
@@ -208,6 +212,22 @@ describe("renderScheduleGanttSvg", () => {
     expect(svg).toContain('class="sched-headerbar"'); // ヘッダー色地
     expect(svg).toContain(".sched-tick { fill: #ffffff"); // 目盛は白文字
     expect(svg).not.toContain("paint-order"); // 矢羽ラベルの輪郭は廃止
+  });
+
+  it("ヘッダーにも月カラムの区切り縦線を引く（sched-hgrid）", () => {
+    const svg = renderScheduleGanttSvg(gantt, "light")!;
+    expect(svg).toContain('class="sched-hgrid"');
+  });
+
+  it("当日線はバー・ラベルより後（最前面）に描画する", () => {
+    const m = parseGantt("gantt\n    section S\n    t :2026-01-01, 2026-12-31")!;
+    const layout = layoutSchedule(m, new Date(Date.UTC(2026, 5, 15))); // 範囲内
+    const svg = renderScheduleSvg(layout, "light");
+    expect(layout.todayX).not.toBeNull();
+    // SVGは後に書いたものが上に載る → today が task より後ろにあること
+    expect(svg.lastIndexOf("sched-today")).toBeGreaterThan(
+      svg.lastIndexOf("sched-task"),
+    );
   });
 
   it("右端寄りのマイルストーンはラベルを左（end）に反転する", () => {
