@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseGantt, layoutSchedule, LAYOUT } from "./gantt-schedule";
+import { renderScheduleGanttSvg } from "./gantt-schedule";
 
 const utc = (s: string) => {
   const [y, m, d] = s.split("-").map(Number);
@@ -138,5 +139,40 @@ describe("layoutSchedule", () => {
     const layout = layoutSchedule(m, new Date(Date.UTC(2030, 0, 1)));
     // width = labelWidth + clamp(4*90, 600, 1600) = 140 + 600 = 740
     expect(layout.width).toBe(LAYOUT.labelWidth + LAYOUT.minPlot);
+  });
+});
+
+describe("renderScheduleGanttSvg", () => {
+  const gantt = [
+    "gantt",
+    "    title FY26",
+    "    section 昇進",
+    "    意思表明 :crit, milestone, 2026-07-31, 0d",
+    "    プロセス :2027-05-20, 2027-06-30",
+  ].join("\n");
+
+  it("gantt以外は null（フォールバック）", () => {
+    expect(renderScheduleGanttSvg("graph TD\n A-->B", "light")).toBeNull();
+  });
+
+  it("%%{init}%% 入りは null（フォールバック）", () => {
+    expect(
+      renderScheduleGanttSvg(`%%{init:{}}%%\n${gantt}`, "light"),
+    ).toBeNull();
+  });
+
+  it("gantt を <svg> 文字列にする", () => {
+    const svg = renderScheduleGanttSvg(gantt, "light")!;
+    expect(svg.startsWith("<svg")).toBe(true);
+    expect(svg).toContain("</svg>");
+    expect(svg).toContain("プロセス");   // タスク名
+    expect(svg).toContain("意思表明");   // マイルストーン名
+    expect(svg).toContain("polygon");    // 矢羽
+    expect(svg).toContain('aria-roledescription="gantt"'); // 既存gantt後処理と同じ扱い
+  });
+
+  it("crit タスクは強調色クラスを持つ", () => {
+    const svg = renderScheduleGanttSvg(gantt, "light")!;
+    expect(svg).toContain("sched-crit");
   });
 });

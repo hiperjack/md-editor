@@ -254,3 +254,166 @@ export function layoutSchedule(
     todayX: todayIn ? xOf(today) : null,
   };
 }
+
+type Palette = {
+  bg: string; band: string; bandAlt: string; grid: string;
+  text: string; sub: string; accent: string; accentEdge: string;
+  crit: string; critEdge: string; today: string;
+};
+function palette(scheme: "light" | "dark"): Palette {
+  return scheme === "dark"
+    ? {
+        bg: "#1e1e1e", band: "#262626", bandAlt: "#2d2d2d", grid: "#3a3a3a",
+        text: "#e6e6e6", sub: "#9aa0a6", accent: "#256abf",
+        accentEdge: "#6ea8fe", crit: "#8a2430", critEdge: "#f06a75",
+        today: "#f06a75",
+      }
+    : {
+        bg: "#ffffff", band: "#f4f6fb", bandAlt: "#eef1f8", grid: "#d7dbe6",
+        text: "#1f2430", sub: "#5b6472", accent: "#3b6fd6",
+        accentEdge: "#2b57ad", crit: "#c93d47", critEdge: "#a3242f",
+        today: "#a3242f",
+      };
+}
+
+function esc(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** name の <br> を tspan 分割して1つの <text> を返す。x はテキスト基準位置。 */
+function textLines(
+  name: string,
+  x: number,
+  cy: number,
+  anchor: "start" | "middle",
+  cls: string,
+): string {
+  const lines = name.split(/<br\s*\/?>/i).map((s) => s.trim());
+  const lh = 15;
+  const top = cy - ((lines.length - 1) * lh) / 2;
+  const tspans = lines
+    .map(
+      (ln, i) =>
+        `<tspan x="${x.toFixed(1)}" y="${(top + i * lh).toFixed(1)}">${esc(ln)}</tspan>`,
+    )
+    .join("");
+  return `<text class="${cls}" text-anchor="${anchor}" dominant-baseline="middle">${tspans}</text>`;
+}
+
+const FONT = 13;
+
+export function renderScheduleSvg(
+  layout: ScheduleLayout,
+  scheme: "light" | "dark",
+): string {
+  const p = palette(scheme);
+  const { width, height, labelWidth, headerHeight } = layout;
+  const parts: string[] = [];
+
+  parts.push(
+    `<svg xmlns="http://www.w3.org/2000/svg" ` +
+      `viewBox="0 0 ${width} ${height}" width="100%" ` +
+      `aria-roledescription="gantt" role="img" ` +
+      `font-family="Meiryo UI, Meiryo, sans-serif" font-size="${FONT}">`,
+  );
+
+  parts.push(`<style>
+    .sched-band { fill: ${p.band}; }
+    .sched-band-alt { fill: ${p.bandAlt}; }
+    .sched-grid { stroke: ${p.grid}; stroke-width: 1; }
+    .sched-tick { fill: ${p.sub}; font-size: 12px; }
+    .sched-secname { fill: ${p.text}; font-weight: 600; }
+    .sched-task { fill: ${p.accent}; stroke: ${p.accentEdge}; stroke-width: 1; }
+    .sched-task.sched-crit { fill: ${p.crit}; stroke: ${p.critEdge}; }
+    .sched-label { fill: #ffffff; font-size: ${FONT}px; }
+    .sched-mslabel { fill: ${p.text}; font-size: ${FONT}px; }
+    .sched-ms { fill: ${p.accentEdge}; }
+    .sched-ms.sched-crit { fill: ${p.critEdge}; }
+    .sched-today { stroke: ${p.today}; stroke-width: 1.5; stroke-dasharray: 4 3; }
+  </style>`);
+
+  parts.push(`<rect x="0" y="0" width="${width}" height="${height}" fill="${p.bg}"/>`);
+
+  // section 帯（交互色）
+  layout.bands.forEach((b, i) => {
+    parts.push(
+      `<rect class="${i % 2 ? "sched-band-alt" : "sched-band"}" x="0" y="${b.y.toFixed(1)}" width="${width}" height="${b.h.toFixed(1)}"/>`,
+    );
+    parts.push(
+      textLines(b.name, 10, b.y + b.h / 2, "start", "sched-secname"),
+    );
+  });
+
+  // 月次グリッド＋目盛ラベル
+  for (const tick of layout.ticks) {
+    parts.push(
+      `<line class="sched-grid" x1="${tick.x.toFixed(1)}" y1="${headerHeight}" x2="${tick.x.toFixed(1)}" y2="${height}"/>`,
+    );
+    parts.push(
+      `<text class="sched-tick" x="${tick.x.toFixed(1)}" y="${(headerHeight - 14).toFixed(1)}" text-anchor="middle" dominant-baseline="middle">${esc(tick.label)}</text>`,
+    );
+  }
+
+  // 左ラベルカラムとプロットの境界線
+  parts.push(
+    `<line class="sched-grid" x1="${labelWidth}" y1="0" x2="${labelWidth}" y2="${height}"/>`,
+  );
+
+  // 今日線
+  if (layout.todayX !== null) {
+    parts.push(
+      `<line class="sched-today" x1="${layout.todayX.toFixed(1)}" y1="${headerHeight}" x2="${layout.todayX.toFixed(1)}" y2="${height}"/>`,
+    );
+  }
+
+  // ボックス（矢羽・マイルストーン）
+  for (const box of layout.boxes) {
+    const crit = box.isCrit ? " sched-crit" : "";
+    if (box.kind === "milestone") {
+      const cx = box.x;
+      const cy = box.y + box.h / 2;
+      const r = 8;
+      parts.push(
+        `<path class="sched-ms${crit}" d="M ${cx.toFixed(1)} ${(cy - r).toFixed(1)} L ${(cx + r).toFixed(1)} ${cy.toFixed(1)} L ${cx.toFixed(1)} ${(cy + r).toFixed(1)} L ${(cx - r).toFixed(1)} ${cy.toFixed(1)} Z"/>`,
+      );
+      // ラベルは◆の右
+      parts.push(
+        textLines(box.label, cx + r + 6, cy, "start", "sched-mslabel"),
+      );
+      continue;
+    }
+    // 矢羽（五角形シェブロン）: 右側が矢尻
+    const { x, y, w, h } = box;
+    const d = Math.min(12, h / 2, w / 2);
+    const pts = [
+      [x, y],
+      [x + w - d, y],
+      [x + w, y + h / 2],
+      [x + w - d, y + h],
+      [x, y + h],
+    ]
+      .map(([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`)
+      .join(" ");
+    parts.push(`<polygon class="sched-task${crit}" points="${pts}"/>`);
+    parts.push(
+      textLines(box.label, x + 8, y + h / 2, "start", "sched-label"),
+    );
+  }
+
+  parts.push(`</svg>`);
+  return parts.join("\n");
+}
+
+export function renderScheduleGanttSvg(
+  source: string,
+  scheme: "light" | "dark",
+): string | null {
+  const model = parseGantt(source.trim());
+  if (!model) return null;
+  const layout = layoutSchedule(model);
+  return renderScheduleSvg(layout, scheme);
+}
