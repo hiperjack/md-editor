@@ -26,19 +26,19 @@ describe("parseGantt", () => {
       "gantt",
       "    title FY26",
       "    dateFormat YYYY-MM-DD",
-      "    section 昇進",
-      "    意思表明 :crit, milestone, 2026-07-31, 0d",
-      "    プロセス :2027-05-20, 2027-06-30",
-      "    section 次案件",
-      "    契約 :crit, 2027-01-01, 2027-04-30",
-      "    協業 :2026-07-01, 30d",
+      "    section フェーズA",
+      "    マイルストーンX :crit, milestone, 2026-07-31, 0d",
+      "    タスクY :2027-05-20, 2027-06-30",
+      "    section フェーズB",
+      "    タスクZ :crit, 2027-01-01, 2027-04-30",
+      "    タスクW :2026-07-01, 30d",
     ].join("\n");
     const m = parseGantt(src)!;
     expect(m.title).toBe("FY26");
-    expect(m.sections.map((s) => s.name)).toEqual(["昇進", "次案件"]);
+    expect(m.sections.map((s) => s.name)).toEqual(["フェーズA", "フェーズB"]);
 
     const ms = m.sections[0].tasks[0];
-    expect(ms.name).toBe("意思表明");
+    expect(ms.name).toBe("マイルストーンX");
     expect(ms.isMilestone).toBe(true);
     expect(ms.isCrit).toBe(true);
     expect(ms.start.getTime()).toBe(utc("2026-07-31"));
@@ -164,9 +164,9 @@ describe("renderScheduleGanttSvg", () => {
   const gantt = [
     "gantt",
     "    title FY26",
-    "    section 昇進",
-    "    意思表明 :crit, milestone, 2026-07-31, 0d",
-    "    プロセス :2027-05-20, 2027-06-30",
+    "    section フェーズA",
+    "    マイルストーンX :crit, milestone, 2026-07-31, 0d",
+    "    タスクY :2027-05-20, 2027-06-30",
   ].join("\n");
 
   it("gantt以外は null（フォールバック）", () => {
@@ -183,8 +183,8 @@ describe("renderScheduleGanttSvg", () => {
     const svg = renderScheduleGanttSvg(gantt, "light")!;
     expect(svg.startsWith("<svg")).toBe(true);
     expect(svg).toContain("</svg>");
-    expect(svg).toContain("プロセス");   // タスク名
-    expect(svg).toContain("意思表明");   // マイルストーン名
+    expect(svg).toContain("タスクY");   // タスク名
+    expect(svg).toContain("マイルストーンX");   // マイルストーン名
     expect(svg).toContain("polygon");    // 矢羽
     expect(svg).toContain('aria-roledescription="gantt"'); // 既存gantt後処理と同じ扱い
   });
