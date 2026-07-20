@@ -47,6 +47,8 @@ export function openFontSettings(): Promise<void> {
       lang: before.lang as LangSetting,
       theme: before.theme as Theme,
       mermaidWidthMode: before.mermaidWidthMode,
+      ganttStyleDocument: before.ganttStyleDocument,
+      ganttStyleSlide: before.ganttStyleSlide,
     };
     // 文書テーマ（HTML出力・印刷用）のドラフト。Applyで永続化、Cancelで破棄。
     const docDraft: DocSettings = docTheme.get();
@@ -476,6 +478,59 @@ export function openFontSettings(): Promise<void> {
       });
       widthRow.appendChild(widthSelect);
       c.appendChild(widthRow);
+
+      // ── ガント表示スタイル ──────────────────────────────
+      const ganttHeading = document.createElement("div");
+      ganttHeading.className = "settings-subheading";
+      ganttHeading.textContent = t("settings.gantt.section");
+      c.appendChild(ganttHeading);
+
+      const ganttOptions: { value: "mermaid" | "ppt"; labelKey: string }[] = [
+        { value: "mermaid", labelKey: "settings.gantt.mermaid" },
+        { value: "ppt", labelKey: "settings.gantt.ppt" },
+      ];
+
+      // 文書系（プレビュー・HTML出力・印刷）
+      const ganttDocRow = document.createElement("label");
+      ganttDocRow.className = "settings-row";
+      const ganttDocSpan = document.createElement("span");
+      ganttDocSpan.textContent = t("settings.gantt.document");
+      ganttDocRow.appendChild(ganttDocSpan);
+      const ganttDocSelect = document.createElement("select");
+      ganttDocSelect.className = "settings-input";
+      for (const opt of ganttOptions) {
+        const o = document.createElement("option");
+        o.value = opt.value;
+        o.textContent = t(opt.labelKey);
+        if (opt.value === draft.ganttStyleDocument) o.selected = true;
+        ganttDocSelect.appendChild(o);
+      }
+      ganttDocSelect.addEventListener("change", () => {
+        draft.ganttStyleDocument = ganttDocSelect.value as "mermaid" | "ppt";
+      });
+      ganttDocRow.appendChild(ganttDocSelect);
+      c.appendChild(ganttDocRow);
+
+      // スライド系（プレゼン・スライド出力）
+      const ganttSlideRow = document.createElement("label");
+      ganttSlideRow.className = "settings-row";
+      const ganttSlideSpan = document.createElement("span");
+      ganttSlideSpan.textContent = t("settings.gantt.slide");
+      ganttSlideRow.appendChild(ganttSlideSpan);
+      const ganttSlideSelect = document.createElement("select");
+      ganttSlideSelect.className = "settings-input";
+      for (const opt of ganttOptions) {
+        const o = document.createElement("option");
+        o.value = opt.value;
+        o.textContent = t(opt.labelKey);
+        if (opt.value === draft.ganttStyleSlide) o.selected = true;
+        ganttSlideSelect.appendChild(o);
+      }
+      ganttSlideSelect.addEventListener("change", () => {
+        draft.ganttStyleSlide = ganttSlideSelect.value as "mermaid" | "ppt";
+      });
+      ganttSlideRow.appendChild(ganttSlideSelect);
+      c.appendChild(ganttSlideRow);
 
       return c;
     }
@@ -913,6 +968,8 @@ export function openFontSettings(): Promise<void> {
       draft.lang = "system";
       draft.theme = "system";
       draft.mermaidWidthMode = "fit";
+      draft.ganttStyleDocument = "mermaid";
+      draft.ganttStyleSlide = "mermaid";
       const docDefaults = structuredClone(DEFAULT_DOC_SETTINGS);
       docDraft.theme = docDefaults.theme;
       docDraft.decorations = docDefaults.decorations;
@@ -975,6 +1032,8 @@ export function openFontSettings(): Promise<void> {
       settings.setLang(s.lang);
       settings.setTheme(s.theme);
       settings.setMermaidWidthMode(s.mermaidWidthMode);
+      settings.setGanttStyleDocument(s.ganttStyleDocument);
+      settings.setGanttStyleSlide(s.ganttStyleSlide);
     };
 
     /** Preview を1回でも押されたか。Cancel 時に before へ戻すかの判定に使う。 */
@@ -998,6 +1057,8 @@ export function openFontSettings(): Promise<void> {
           lang: before.lang,
           theme: before.theme,
           mermaidWidthMode: before.mermaidWidthMode,
+          ganttStyleDocument: before.ganttStyleDocument,
+          ganttStyleSlide: before.ganttStyleSlide,
         });
         // プレビューで反映した文書テーマ（Mermaid配色等）も元に戻す（保存しない）
         docTheme.previewLive(beforeDoc);
