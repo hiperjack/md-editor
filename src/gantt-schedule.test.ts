@@ -126,6 +126,15 @@ describe("layoutSchedule", () => {
     ]);
   });
 
+  it("目盛ラベルは月境界線の右（月カラムの中央）に置く", () => {
+    const m = model(["section S", "t :2026-01-01, 2026-04-30"]);
+    const layout = layoutSchedule(m, new Date(Date.UTC(2030, 0, 1)));
+    // labelX は境界線 x と次の境界の中点 → 常に x より右
+    for (const tick of layout.ticks) {
+      expect(tick.labelX).toBeGreaterThan(tick.x);
+    }
+  });
+
   it("今日が範囲内なら todayX を持ち、範囲外なら null", () => {
     const m = model(["section S", "t :2026-01-01, 2026-04-30"]);
     const inside = layoutSchedule(m, new Date(Date.UTC(2026, 1, 15)));
@@ -214,5 +223,28 @@ describe("renderScheduleGanttSvg", () => {
     ].join("\n");
     const svg = renderScheduleGanttSvg(src, "light")!;
     expect(svg).toMatch(/class="sched-mslabel" text-anchor="start"/);
+  });
+
+  it("バーに収まる短いタスク名は内側に白文字（sched-label）で置く", () => {
+    const src = [
+      "gantt",
+      "    section S",
+      "    短 :2026-01-01, 2026-12-31",
+    ].join("\n");
+    const svg = renderScheduleGanttSvg(src, "light")!;
+    expect(svg).toContain('class="sched-label"');
+    expect(svg).not.toContain('class="sched-label-out"');
+  });
+
+  it("バーからはみ出す長いタスク名はバー外に本文色（sched-label-out）で置く", () => {
+    const src = [
+      "gantt",
+      "    section S",
+      // 1ヶ月弱の短いバーに、収まらない長い名前
+      "    とても長いタスク名のサンプルでバー幅に収まらない例 :2026-01-01, 2026-01-20",
+      "    余白確保 :2026-02-01, 2026-12-31",
+    ].join("\n");
+    const svg = renderScheduleGanttSvg(src, "light")!;
+    expect(svg).toContain('class="sched-label-out"');
   });
 });

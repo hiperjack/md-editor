@@ -113,7 +113,8 @@ export type PlacedBox = {
   kind: "task" | "milestone";
   isCrit: boolean;
 };
-export type MonthTick = { x: number; label: string };
+// x: 月境界のグリッド線位置。labelX: ラベルを置く月カラムの中央（線と線の間）。
+export type MonthTick = { x: number; labelX: number; label: string };
 export type SectionBand = { name: string; y: number; h: number };
 export type ScheduleLayout = {
   width: number;
@@ -201,8 +202,14 @@ export function layoutSchedule(
     const m = new Date(
       Date.UTC(rangeStart.getUTCFullYear(), rangeStart.getUTCMonth() + i, 1),
     );
+    // 次月頭（最終月は rangeEnd = 右端）。ラベルはこの月カラムの中央に置く。
+    const next = new Date(
+      Date.UTC(rangeStart.getUTCFullYear(), rangeStart.getUTCMonth() + i + 1, 1),
+    );
+    const x = xOf(m);
     ticks.push({
-      x: xOf(m),
+      x,
+      labelX: (x + xOf(next)) / 2,
       label: `${pad2(m.getUTCFullYear() % 100)}/${pad2(m.getUTCMonth() + 1)}`,
     });
   }
@@ -357,6 +364,7 @@ export function renderScheduleSvg(
     .sched-task { fill: ${p.accent}; stroke: ${p.accentEdge}; stroke-width: 1; }
     .sched-task.sched-crit { fill: ${p.crit}; stroke: ${p.critEdge}; }
     .sched-label { fill: #ffffff; font-size: ${FONT}px; }
+    .sched-label-out { fill: ${p.text}; font-size: ${FONT}px; }
     .sched-mslabel { fill: ${p.text}; font-size: ${FONT}px; }
     .sched-ms { fill: ${p.accentEdge}; }
     .sched-ms.sched-crit { fill: ${p.critEdge}; }
@@ -375,13 +383,13 @@ export function renderScheduleSvg(
     );
   });
 
-  // 月次グリッド＋目盛ラベル
+  // 月次グリッド（線は月境界）＋目盛ラベル（線と線の間＝月カラム中央に置く）
   for (const tick of layout.ticks) {
     parts.push(
       `<line class="sched-grid" x1="${tick.x.toFixed(1)}" y1="${headerHeight}" x2="${tick.x.toFixed(1)}" y2="${height}"/>`,
     );
     parts.push(
-      `<text class="sched-tick" x="${tick.x.toFixed(1)}" y="${(headerHeight - 14).toFixed(1)}" text-anchor="middle" dominant-baseline="middle">${esc(tick.label)}</text>`,
+      `<text class="sched-tick" x="${tick.labelX.toFixed(1)}" y="${(headerHeight - 14).toFixed(1)}" text-anchor="middle" dominant-baseline="middle">${esc(tick.label)}</text>`,
     );
   }
 
@@ -429,9 +437,20 @@ export function renderScheduleSvg(
       .map(([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`)
       .join(" ");
     parts.push(`<polygon class="sched-task${crit}" points="${pts}"/>`);
-    parts.push(
-      textLines(box.label, x + 8, y + h / 2, "start", "sched-label"),
-    );
+    // ラベルはバーに収まれば内側に白文字。収まらないと白文字が背景に被って
+    // 読めなくなるため、バー外に本文色で描く（右端付近は左へ寄せて見切れ防止）。
+    const cy = y + h / 2;
+    const labelPx = measureLabel(box.label) * FONT;
+    const inner = w - d - 12; // 左パディング＋右の矢尻ぶんを除いた実効幅
+    if (labelPx <= inner) {
+      parts.push(textLines(box.label, x + 8, cy, "start", "sched-label"));
+    } else if (x + w + 6 + labelPx <= labelWidth + plotWidth + LAYOUT.rightPad) {
+      // バーの右外に置く余地がある
+      parts.push(textLines(box.label, x + w + 6, cy, "start", "sched-label-out"));
+    } else {
+      // 右端に寄っているのでバーの左外へ右寄せで置く
+      parts.push(textLines(box.label, x - 6, cy, "end", "sched-label-out"));
+    }
   }
 
   parts.push(`</svg>`);
