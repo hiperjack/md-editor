@@ -203,9 +203,11 @@ describe("renderScheduleGanttSvg", () => {
     expect(svg).toContain("sched-crit");
   });
 
-  it("タスク名（白文字）にはみ出し対策の縁取り（paint-order stroke）が付く", () => {
+  it("ヘッダー（タイムライン）は色地＋白文字、タスク名は輪郭なし", () => {
     const svg = renderScheduleGanttSvg(gantt, "light")!;
-    expect(svg).toContain("paint-order: stroke");
+    expect(svg).toContain('class="sched-headerbar"'); // ヘッダー色地
+    expect(svg).toContain(".sched-tick { fill: #ffffff"); // 目盛は白文字
+    expect(svg).not.toContain("paint-order"); // 矢羽ラベルの輪郭は廃止
   });
 
   it("右端寄りのマイルストーンはラベルを左（end）に反転する", () => {
