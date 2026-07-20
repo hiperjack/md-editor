@@ -203,6 +203,11 @@ describe("renderScheduleGanttSvg", () => {
     expect(svg).toContain("sched-crit");
   });
 
+  it("タスク名（白文字）にはみ出し対策の縁取り（paint-order stroke）が付く", () => {
+    const svg = renderScheduleGanttSvg(gantt, "light")!;
+    expect(svg).toContain("paint-order: stroke");
+  });
+
   it("右端寄りのマイルストーンはラベルを左（end）に反転する", () => {
     const src = [
       "gantt",

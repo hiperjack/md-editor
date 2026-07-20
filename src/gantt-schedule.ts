@@ -291,21 +291,22 @@ export function layoutSchedule(
 type Palette = {
   bg: string; band: string; bandAlt: string; grid: string;
   text: string; sub: string; accent: string; accentEdge: string;
-  crit: string; critEdge: string; today: string;
+  crit: string; critEdge: string; today: string; halo: string;
 };
 function palette(scheme: "light" | "dark"): Palette {
+  // halo: 白のタスク名に付ける縁取り色。バー上でも帯の上でも読めるよう濃色にする。
   return scheme === "dark"
     ? {
         bg: "#1e1e1e", band: "#262626", bandAlt: "#2d2d2d", grid: "#3a3a3a",
         text: "#e6e6e6", sub: "#9aa0a6", accent: "#256abf",
         accentEdge: "#6ea8fe", crit: "#8a2430", critEdge: "#f06a75",
-        today: "#f06a75",
+        today: "#f06a75", halo: "rgba(0,0,0,0.65)",
       }
     : {
         bg: "#ffffff", band: "#f4f6fb", bandAlt: "#eef1f8", grid: "#d7dbe6",
         text: "#1f2430", sub: "#5b6472", accent: "#3b6fd6",
         accentEdge: "#2b57ad", crit: "#c93d47", critEdge: "#a3242f",
-        today: "#a3242f",
+        today: "#a3242f", halo: "rgba(20,28,42,0.6)",
       };
 }
 
@@ -449,7 +450,11 @@ export function renderScheduleSvg(
     .sched-secname { fill: ${p.text}; font-weight: 600; }
     .sched-task { fill: ${p.accent}; stroke: ${p.accentEdge}; stroke-width: 1; }
     .sched-task.sched-crit { fill: ${p.crit}; stroke: ${p.critEdge}; }
-    .sched-label { fill: #ffffff; font-size: ${FONT}px; }
+    .sched-label {
+      fill: #ffffff; font-size: ${FONT}px;
+      stroke: ${p.halo}; stroke-width: 2px; paint-order: stroke;
+      stroke-linejoin: round;
+    }
     .sched-mslabel { fill: ${p.text}; font-size: ${FONT}px; }
     .sched-ms { fill: ${p.accentEdge}; }
     .sched-ms.sched-crit { fill: ${p.critEdge}; }
