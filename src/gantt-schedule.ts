@@ -345,24 +345,11 @@ function wrapUnits(text: string, maxUnits: number): string[] {
   return lines.length ? lines : [""];
 }
 
-/** text を maxUnits 文字ぶんに収まるよう切り詰め、末尾に … を付ける。 */
-function truncateUnits(text: string, maxUnits: number): string {
-  const budget = Math.max(0, maxUnits - 1); // … のぶんを1文字ぶん確保
-  let cur = "";
-  let curU = 0;
-  for (const ch of [...text]) {
-    const u = charUnit(ch);
-    if (curU + u > budget) break;
-    cur += ch;
-    curU += u;
-  }
-  return cur + "…";
-}
-
 /**
  * 矢羽（バー）内にタスク名を収めるための行分割とフォントサイズを決める。
  * 幅 innerPx に対し、基準フォントから縮小しつつ最大2行で収める。最小フォントでも
- * 2行に収まらなければ2行に切り詰め、2行目を … で省略する（常にバー内・可読を優先）。
+ * 2行に収まらなければ、残り全文を2行目に置く（省略はしない。はみ出しは呼び出し側の
+ * 縁取りで可読になる）。
  */
 export function fitLabelInBar(
   label: string,
@@ -378,13 +365,9 @@ export function fitLabelInBar(
       return { lines, fontPx: f };
     }
   }
-  // 最小フォントでも2行に収まらない: 1行目＋残りを切り詰めた2行目。
-  const maxUnits = innerPx / MIN_FONT;
-  const all = wrapUnits(plain, maxUnits);
-  const lines =
-    all.length <= 2
-      ? all
-      : [all[0], truncateUnits(all.slice(1).join(""), maxUnits)];
+  // 最小フォントでも2行に収まらない: 1行目＋残り全文の2行目（2行目ははみ出す）。
+  const all = wrapUnits(plain, innerPx / MIN_FONT);
+  const lines = all.length <= 2 ? all : [all[0], all.slice(1).join("")];
   return { lines, fontPx: MIN_FONT };
 }
 

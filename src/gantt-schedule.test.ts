@@ -270,11 +270,12 @@ describe("fitLabelInBar", () => {
     expect(r.fontPx).toBeLessThanOrEqual(13);
   });
 
-  it("極端に長い名前×狭いバーは最小フォント2行＋末尾を…で省略", () => {
+  it("極端に長い名前×狭いバーは最小フォント2行で全文を保持（省略しない）", () => {
     const label = "あ".repeat(40);
     const r = fitLabelInBar(label, 60, 34);
     expect(r.fontPx).toBe(8);
     expect(r.lines.length).toBe(2);
-    expect(r.lines[1].endsWith("…")).toBe(true);
+    expect(r.lines.join("")).toBe(label); // 省略なし・全文
+    expect(r.lines[1].endsWith("…")).toBe(false);
   });
 });
