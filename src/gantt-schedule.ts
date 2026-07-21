@@ -457,6 +457,9 @@ export function renderScheduleSvg(
   parts.push(
     `<svg xmlns="http://www.w3.org/2000/svg" ` +
       `viewBox="0 0 ${width} ${height}" width="100%" ` +
+      // data-schedule-chart: エディタ内プレビューで自然幅固定にせず幅可変のまま
+      // 表示させるための目印（buildPreviewFigure が参照）。
+      `data-schedule-chart="1" ` +
       `aria-roledescription="gantt" role="img" ` +
       `font-family="Meiryo UI, Meiryo, sans-serif" font-size="${FONT}">`,
   );
