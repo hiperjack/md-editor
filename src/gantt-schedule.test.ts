@@ -147,12 +147,19 @@ describe("layoutSchedule", () => {
     expect(outside.todayX).toBeNull();
   });
 
-  it("図は横長・低めの自然サイズ（縦に引き伸ばして16:9にはしない）", () => {
-    // 1 section・1タスクの短い図は、幅に対して十分低い（横長）ままにする
-    const m = model(["section S", "t :2026-01-01, 2026-04-30"]);
+  it("スライド本文を埋めるよう縦を適度に伸ばす（16:9より横長のアスペクト）", () => {
+    const m = model([
+      "section A",
+      "a :2026-01-01, 2026-04-30",
+      "section B",
+      "b :2026-01-01, 2026-04-30",
+      "section C",
+      "c :2026-01-01, 2026-04-30",
+    ]);
     const layout = layoutSchedule(m, new Date(Date.UTC(2030, 0, 1)));
-    expect(layout.height).toBeLessThan(layout.width); // 横長
-    expect(layout.height).toBeLessThan(Math.round((layout.width * 9) / 16)); // 16:9より低い
+    const aspect = layout.width / layout.height;
+    expect(aspect).toBeCloseTo(LAYOUT.fillAspect, 1); // 目標アスペクトに寄せる
+    expect(aspect).toBeGreaterThan(16 / 9); // 16:9より横長（縦長で縮小されない）
   });
 
   it("プロット幅は月数×pxPerMonth（下限・上限クランプ）", () => {

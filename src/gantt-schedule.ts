@@ -138,6 +138,11 @@ export const LAYOUT = {
   minPlot: 600,
   maxPlot: 1600,
   rightPad: 24,
+  // 縦の伸ばし方: スライド本文（タイトルを除いた横長領域）を埋めるよう、
+  // 幅/高さ ≈ fillAspect を狙って行を広げる。16:9(1.78)より横長にすることで、
+  // 縦長になって高さ合わせで縮小され左右余白＋文字縮小に戻るのを防ぐ。
+  fillAspect: 2.3,
+  vFillCap: 2.6, // 行を広げる上限倍率（バーが太くなりすぎないように）
 } as const;
 
 const SECTION_FONT = 16; // 左のセクション名の文字サイズ（幅見積りと描画で共用）
@@ -277,16 +282,35 @@ export function layoutSchedule(
     today.getTime() >= rangeStart.getTime() &&
     today.getTime() <= rangeEnd.getTime();
 
-  // 図は横長・低めの自然サイズ（横は月数ベース、縦は内容の行数ぶん）。SVGは
-  // width="100%" で表示側の幅いっぱいに広がるため、スライドでも文書でも横幅を
-  // 使い切り、左右に余白が出ない。縦に引き伸ばして16:9にすると、スライド本文
-  // （タイトルを除いた横長領域）より縦長になって縮小され、逆に左右余白＋文字が
-  // 小さくなるため行わない。
+  // 横は月数ベース。縦は幅/高さ ≈ fillAspect を狙って行（バー）を広げ、スライド
+  // 本文の縦を埋める。ただし 16:9 のように縦長にはしない（縦長だと高さ合わせで
+  // 縮小され、左右余白＋文字縮小に戻るため）。広げすぎない上限（vFillCap）を超える
+  // ぶんは伸ばさない。内容が既にアスペクトより縦長（行が多い）ならそのまま。
   const width = labelWidth + plot + LAYOUT.rightPad;
+  const target = Math.round(width / LAYOUT.fillAspect);
+  let height = y;
+  if (y < target) {
+    const plotH = y - LAYOUT.headerHeight;
+    const scale =
+      plotH > 0
+        ? Math.min((target - LAYOUT.headerHeight) / plotH, LAYOUT.vFillCap)
+        : 1;
+    if (scale > 1) {
+      for (const b of bands) {
+        b.y = LAYOUT.headerHeight + (b.y - LAYOUT.headerHeight) * scale;
+        b.h *= scale;
+      }
+      for (const bx of boxes) {
+        bx.y = LAYOUT.headerHeight + (bx.y - LAYOUT.headerHeight) * scale;
+        bx.h *= scale;
+      }
+      height = LAYOUT.headerHeight + plotH * scale; // 実際に伸ばした高さ（余白を残さない）
+    }
+  }
 
   return {
     width,
-    height: y,
+    height,
     labelWidth,
     headerHeight: LAYOUT.headerHeight,
     ticks,
