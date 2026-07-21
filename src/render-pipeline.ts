@@ -5,6 +5,7 @@ import githubAlerts from "markdown-it-github-alerts";
 import footnote from "markdown-it-footnote";
 import { type DocSettings, isLightColor } from "./theme";
 import { renderMermaidSvg } from "./mermaid-renderer";
+import { renderScheduleGanttSvg } from "./gantt-schedule";
 import {
   ensureBlankLineBeforeTables,
   ensureBlankLineBeforeFootnoteDefs,
@@ -32,6 +33,8 @@ export type MermaidProgress = (done: number, total: number) => void;
 export type RenderOptions = {
   /** Mermaid変換の進捗通知（HTML出力時のプログレス表示用） */
   onMermaidProgress?: MermaidProgress;
+  /** ガント表示スタイル（呼び出し経路が設定から解決して渡す）。既定 mermaid。 */
+  ganttStyle?: "mermaid" | "ppt";
 };
 
 /** 見出しスラッグ。日本語等の非ASCII文字をそのまま残す（anchor/toc共用）。 */
@@ -188,6 +191,7 @@ async function resolveMermaidBlocks(
   container: HTMLElement,
   scheme: "light" | "dark",
   onProgress?: MermaidProgress,
+  ganttStyle: "mermaid" | "ppt" = "mermaid",
 ): Promise<void> {
   const blocks = Array.from(
     container.querySelectorAll<HTMLElement>("div.mermaid-block"),
@@ -199,7 +203,10 @@ async function resolveMermaidBlocks(
   for (const block of blocks) {
     const source = block.dataset.source ?? "";
     try {
-      const svg = await renderMermaidSvg(source, scheme);
+      // PPT指定かつganttとして解釈できれば独自SVG、無理ならMermaidにフォールバック
+      let svg: string | null = null;
+      if (ganttStyle === "ppt") svg = renderScheduleGanttSvg(source, scheme);
+      if (svg === null) svg = await renderMermaidSvg(source, scheme);
       const figure = document.createElement("figure");
       figure.className = "mermaid-figure";
       figure.innerHTML = svg;
@@ -245,7 +252,12 @@ export async function renderDocumentBody(
   container.innerHTML = html;
   // Mermaid図は文書背景の明暗に合わせて配色する（白背景→ライト図）
   const scheme = isLightColor(settings.theme.bgColor) ? "light" : "dark";
-  await resolveMermaidBlocks(container, scheme, opts.onMermaidProgress);
+  await resolveMermaidBlocks(
+    container,
+    scheme,
+    opts.onMermaidProgress,
+    opts.ganttStyle ?? "mermaid",
+  );
   return container;
 }
 

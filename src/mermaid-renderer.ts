@@ -12,6 +12,8 @@
  */
 
 import { t } from "./i18n";
+import { renderScheduleGanttSvg } from "./gantt-schedule";
+import { settings } from "./settings";
 
 type MermaidModule = typeof import("mermaid").default;
 
@@ -288,7 +290,7 @@ function buildPreviewFigure(svg: string): HTMLElement {
   // CSS の max-width(100% / none)に委ねる。この正規化はエディタ内プレビュー専用パス
   // (buildPreviewFigure)のみで行い、HTML出力・印刷・図ビューアの SVG には影響しない。
   const svgEl = el.querySelector<SVGSVGElement>("svg");
-  if (svgEl) {
+  if (svgEl && !svgEl.hasAttribute("data-schedule-chart")) {
     const naturalWidth =
       parseFloat(svgEl.style.maxWidth) || svgEl.viewBox?.baseVal?.width || 0;
     if (naturalWidth > 0) {
@@ -297,6 +299,8 @@ function buildPreviewFigure(svg: string): HTMLElement {
       svgEl.removeAttribute("width");
     }
   }
+  // PPTスケジュール図(data-schedule-chart)は幅可変(width=100%)のまま残し、
+  // プレビューパネルの幅いっぱいに広げる（自然幅固定にすると左右に余白が出る）。
   return el;
 }
 
@@ -347,6 +351,18 @@ export function mermaidCodePreview(
   if (!src) return null;
 
   const seq = ++applySeq;
+
+  // 文書系ガントスタイルが ppt で、gantt として解釈できれば PPT風SVGを同期返し。
+  // （PPT生成は純粋・軽量なのでデバウンス/キャッシュ不要。gantt以外や解釈不能は null →
+  //   従来の Mermaid 経路へフォールバック。）
+  if (settings.get().ganttStyleDocument === "ppt") {
+    const ppt = renderScheduleGanttSvg(src, colorScheme);
+    if (ppt) {
+      lastAppliedSeq = seq;
+      return buildPreviewFigure(ppt);
+    }
+  }
+
   // renderMermaidSvg と同じ配色込みキーで引く（素のsrcだとヒットせず常に再描画になる）
   const cached = svgCache.get(cacheKey(src, colorScheme));
   if (cached) {

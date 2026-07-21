@@ -165,7 +165,10 @@ export async function exportActiveTabAsHtml(editor: EditorHost): Promise<void> {
         ? await renderMermaidDocumentBody(extractMermaidSource(markdown), settings, {
             onMermaidProgress,
           })
-        : await renderDocumentBody(markdown, settings, { onMermaidProgress });
+        : await renderDocumentBody(markdown, settings, {
+            onMermaidProgress,
+            ganttStyle: appSettings.get().ganttStyleDocument,
+          });
 
     progress.update(t("export.rendering"));
     await embedLocalImages(body, filePath);
@@ -195,6 +198,7 @@ export async function exportActiveTabAsHtml(editor: EditorHost): Promise<void> {
 export async function renderExportPreview(
   filePath: string | null,
   markdown: string,
+  ganttStyle: "mermaid" | "ppt" = "mermaid",
 ): Promise<{ html: string; title: string }> {
   const settings = docTheme.get();
   const progress = showProgress(t("export.rendering"));
@@ -211,7 +215,10 @@ export async function renderExportPreview(
         ? await renderMermaidDocumentBody(extractMermaidSource(markdown), settings, {
             onMermaidProgress,
           })
-        : await renderDocumentBody(markdown, settings, { onMermaidProgress });
+        : await renderDocumentBody(markdown, settings, {
+            onMermaidProgress,
+            ganttStyle,
+          });
 
     await embedLocalImages(body, filePath);
 
@@ -313,6 +320,7 @@ export async function openHtmlPreviewTab(editor: EditorHost): Promise<void> {
     const { html, title } = await renderExportPreview(
       src.filePath,
       src.markdown,
+      appSettings.get().ganttStyleDocument,
     );
     const existing = findExistingPreview(src.sourceTabId, src.filePath, "export");
     if (existing) {
@@ -363,6 +371,7 @@ export async function openPresentationPreviewTab(
     const { html, title } = await renderExportPreview(
       src.filePath,
       src.markdown,
+      appSettings.get().ganttStyleSlide,
     );
     const slideTitle = `${t("preview.slideTabPrefix")}${title.replace(t("preview.tabPrefix"), "")}`;
     const existing = findExistingPreview(
@@ -468,7 +477,7 @@ export async function refreshPreviewTab(
       await editor.refreshPreviewPane(previewTabId);
       return;
     }
-    // export モード
+    // export / slideshow モード（previewMode !== "htmlfile"）
     let markdown: string | null = null;
     let filePath: string | null = tab.sourceFilePath ?? null;
     if (tab.sourceTabId) {
@@ -489,7 +498,15 @@ export async function refreshPreviewTab(
       await message(t("preview.cannotRefresh"), { kind: "info" });
       return;
     }
-    const { html, title } = await renderExportPreview(filePath, markdown);
+    // export/slideshow どちらのプレビューも本関数で更新されるため、
+    // タブの previewMode に応じて文脈別のガントスタイルを渡す。
+    const { html, title } = await renderExportPreview(
+      filePath,
+      markdown,
+      tab.previewMode === "slideshow"
+        ? appSettings.get().ganttStyleSlide
+        : appSettings.get().ganttStyleDocument,
+    );
     store.updatePreview(previewTabId, { html, title });
     await editor.refreshPreviewPane(previewTabId);
   } catch (e) {

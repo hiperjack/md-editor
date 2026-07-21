@@ -77,6 +77,10 @@ export type Settings = {
   chatPanelWidth: number;
   /** エディタ内Mermaidプレビューの表示幅モード。fit=エディタ幅に縮小, native=原寸+横スクロール。 */
   mermaidWidthMode: "fit" | "native";
+  /** ガント表示スタイル（文書系: エディタプレビュー・HTML出力・印刷）。 */
+  ganttStyleDocument: "mermaid" | "ppt";
+  /** ガント表示スタイル（スライド系: プレゼン・スライドHTML/PDF出力）。 */
+  ganttStyleSlide: "mermaid" | "ppt";
   /** 文字色ボタンが直近に適用した色（"#rrggbb"）。ボタン本体クリックで再適用する。 */
   lastTextColor: string;
   /** ハイライトボタンが直近に適用した色。"" は標準マーカー（属性なし <mark>）。 */
@@ -98,6 +102,8 @@ const DEFAULT_SETTINGS: Settings = {
   outlineWidth: 250,
   chatPanelWidth: 320,
   mermaidWidthMode: "fit",
+  ganttStyleDocument: "mermaid",
+  ganttStyleSlide: "mermaid",
   lastTextColor: "#ff0000",
   lastHighlightColor: "",
 };
@@ -189,6 +195,15 @@ function loadFromStorage(): Settings {
         parsed.mermaidWidthMode === "fit" || parsed.mermaidWidthMode === "native"
           ? parsed.mermaidWidthMode
           : DEFAULT_SETTINGS.mermaidWidthMode,
+      ganttStyleDocument:
+        parsed.ganttStyleDocument === "mermaid" ||
+        parsed.ganttStyleDocument === "ppt"
+          ? parsed.ganttStyleDocument
+          : DEFAULT_SETTINGS.ganttStyleDocument,
+      ganttStyleSlide:
+        parsed.ganttStyleSlide === "mermaid" || parsed.ganttStyleSlide === "ppt"
+          ? parsed.ganttStyleSlide
+          : DEFAULT_SETTINGS.ganttStyleSlide,
       lastTextColor:
         typeof parsed.lastTextColor === "string" &&
         /^#[0-9a-fA-F]{6}$/.test(parsed.lastTextColor)
@@ -427,6 +442,20 @@ export const settings = {
     current = { ...current, mermaidWidthMode: v };
     saveToStorage(current);
     applyToDom();
+    notify();
+  },
+
+  setGanttStyleDocument(v: "mermaid" | "ppt"): void {
+    if (v === current.ganttStyleDocument) return;
+    current = { ...current, ganttStyleDocument: v };
+    saveToStorage(current);
+    notify();
+  },
+
+  setGanttStyleSlide(v: "mermaid" | "ppt"): void {
+    if (v === current.ganttStyleSlide) return;
+    current = { ...current, ganttStyleSlide: v };
+    saveToStorage(current);
     notify();
   },
 

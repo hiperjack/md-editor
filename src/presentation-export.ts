@@ -181,7 +181,11 @@ export async function exportPresentationPdf(editor: EditorHost): Promise<void> {
     const { markdown, filePath } = await resolveTabMarkdown(editor, tab);
     if (markdown === null) return;
 
-    const { html } = await renderExportPreview(filePath, markdown);
+    const { html } = await renderExportPreview(
+      filePath,
+      markdown,
+      appSettings.get().ganttStyleSlide,
+    );
     const progress = showProgress(t("presPdf.preparing"));
     try {
       // PDFはスクロール不可のため縮小下限なしで全内容を収める。
@@ -319,7 +323,11 @@ export async function exportPresentationAsHtml(
     });
     if (!picked) return;
 
-    const { html } = await renderExportPreview(filePath, markdown);
+    const { html } = await renderExportPreview(
+      filePath,
+      markdown,
+      appSettings.get().ganttStyleSlide,
+    );
     const progress = showProgress(t("export.rendering"));
     try {
       const canvases = await buildSlideCanvases(html);

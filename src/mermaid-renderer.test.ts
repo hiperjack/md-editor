@@ -37,11 +37,11 @@ describe("ganttInitDirective", () => {
     const src = `gantt
     dateFormat YYYY-MM-DD
     section 分類名ラベルの長い見本
-    長いタスク名の見本サンプルテキスト部分の例 :2026-07-01, 2027-04-30`;
-    // タスク名: 全角29 + 半角11(UAT/CO/PJ)*0.5 = 34.5文字 → 690px
-    // プロット: max(900, 690*2) = 1380、幅: 260 + 75 + 1380 = 1715
+    ${"作".repeat(35)} :2026-07-01, 2027-04-30`;
+    // タスク名: 全角35文字 → 700px
+    // プロット: max(900, 700*2) = 1400、幅: 260 + 75 + 1400 = 1735
     expect(ganttInitDirective(src)).toBe(
-      '%%{init: {"gantt": {"leftPadding": 260, "useWidth": 1715}}}%%\n',
+      '%%{init: {"gantt": {"leftPadding": 260, "useWidth": 1735}}}%%\n',
     );
   });
 

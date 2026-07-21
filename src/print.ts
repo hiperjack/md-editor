@@ -13,6 +13,7 @@ import { embedLocalImages } from "./embed-images";
 import { buildStandaloneHtml, resolveTabMarkdown } from "./exporter";
 import { buildPrintDocument } from "./print-doc";
 import { showProgress } from "./progress";
+import { settings as appSettings } from "./settings";
 import { t } from "./i18n";
 
 /**
@@ -129,7 +130,10 @@ export async function printActiveTab(editor: EditorHost): Promise<void> {
           ? await renderMermaidDocumentBody(extractMermaidSource(markdown), settings, {
               onMermaidProgress,
             })
-          : await renderDocumentBody(markdown, settings, { onMermaidProgress });
+          : await renderDocumentBody(markdown, settings, {
+              onMermaidProgress,
+              ganttStyle: appSettings.get().ganttStyleDocument,
+            });
 
       // iframe では相対パス画像を解決できないため data URI 化する。
       await embedLocalImages(body, filePath);
