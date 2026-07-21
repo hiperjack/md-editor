@@ -381,11 +381,16 @@ function wrapUnits(text: string, maxUnits: number): string[] {
   return lines.length ? lines : [""];
 }
 
+/** バー高さ barH とフォント font から、縦に入る行数（最低1行）。 */
+function maxLinesFor(barH: number, font: number): number {
+  return Math.max(1, Math.floor((barH - 2) / (font + 3)));
+}
+
 /**
  * 矢羽（バー）内にタスク名を収めるための行分割とフォントサイズを決める。
- * 幅 innerPx に対し、基準フォントから縮小しつつ最大2行で収める。最小フォントでも
- * 2行に収まらなければ、残り全文を2行目に置く（省略はしない。はみ出しは呼び出し側の
- * 縁取りで可読になる）。
+ * 幅 innerPx に対し基準フォントから縮小しつつ、バー高さに入る行数まで折り返す
+ * （高いバーは3行以上も可）。最小フォントでも入りきらなければ、許容行数に詰め、
+ * 余りは最終行へ載せる（省略なし。はみ出しは呼び出し側の縁取りで可読になる）。
  */
 export function fitLabelInBar(
   label: string,
@@ -394,16 +399,19 @@ export function fitLabelInBar(
 ): { lines: string[]; fontPx: number } {
   const plain = label.replace(/<br\s*\/?>/gi, "").trim();
   for (let f = FONT; f >= MIN_FONT; f--) {
-    const maxUnits = innerPx / f;
-    const lines = wrapUnits(plain, maxUnits);
-    const lineH = f + 3;
-    if (lines.length <= 2 && lines.length * lineH <= barH - 2) {
+    const lines = wrapUnits(plain, innerPx / f);
+    if (lines.length <= maxLinesFor(barH, f)) {
       return { lines, fontPx: f };
     }
   }
-  // 最小フォントでも2行に収まらない: 1行目＋残り全文の2行目（2行目ははみ出す）。
+  // 最小フォントでも入りきらない: 許容行数に詰め、余りを最終行へ連結（横にはみ出す）。
+  const maxLines = maxLinesFor(barH, MIN_FONT);
   const all = wrapUnits(plain, innerPx / MIN_FONT);
-  const lines = all.length <= 2 ? all : [all[0], all.slice(1).join("")];
+  let lines = all;
+  if (all.length > maxLines) {
+    lines = all.slice(0, maxLines);
+    lines[maxLines - 1] = all.slice(maxLines - 1).join("");
+  }
   return { lines, fontPx: MIN_FONT };
 }
 

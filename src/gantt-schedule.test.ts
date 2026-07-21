@@ -299,20 +299,29 @@ describe("fitLabelInBar", () => {
     expect(r.fontPx).toBe(13);
   });
 
-  it("収まらなければ最大2行に折り返し、全文字を保持する", () => {
+  it("低いバーでは最大2行に折り返し、全文字を保持する", () => {
     const label = "あ".repeat(14); // 全角14
-    const r = fitLabelInBar(label, 100, 34);
+    const r = fitLabelInBar(label, 100, 34); // 低いバー → 2行まで
     expect(r.lines.length).toBe(2);
     expect(r.lines.join("")).toBe(label); // 省略なし
     expect(r.fontPx).toBeLessThanOrEqual(13);
   });
 
-  it("極端に長い名前×狭いバーは最小フォント2行で全文を保持（省略しない）", () => {
+  it("背の高いバーでは3行以上に折り返す", () => {
+    const label = "あ".repeat(20); // 100px幅・基準フォントだと約3行ぶん
+    const low = fitLabelInBar(label, 100, 34); // 低いバー → 2行に制限
+    expect(low.lines.length).toBe(2);
+    const tall = fitLabelInBar(label, 100, 120); // 高いバー → 3行以上OK
+    expect(tall.lines.length).toBeGreaterThanOrEqual(3);
+    expect(tall.fontPx).toBe(13); // 縮小せず基準フォントのまま
+    expect(tall.lines.join("")).toBe(label); // 全文保持
+  });
+
+  it("極端に長い名前×狭く低いバーは全文を保持（省略しない）", () => {
     const label = "あ".repeat(40);
     const r = fitLabelInBar(label, 60, 34);
     expect(r.fontPx).toBe(8);
-    expect(r.lines.length).toBe(2);
     expect(r.lines.join("")).toBe(label); // 省略なし・全文
-    expect(r.lines[1].endsWith("…")).toBe(false);
+    expect(r.lines.some((l) => l.endsWith("…"))).toBe(false);
   });
 });
