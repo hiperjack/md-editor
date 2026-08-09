@@ -2231,3 +2231,22 @@ body.pres-window-boot #app {
   align-items: center;
   gap: 3px;
 }
+
+/* ── キーボードマクロ: 記録中インジケータ ── */
+#macro-rec-indicator {
+  position: fixed;
+  top: 4px;
+  right: 8px;
+  z-index: 1000;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #fff;
+  background: #d33;
+  pointer-events: none;
+}
+/* hidden 属性は author CSS の display 指定に負けるため明示的にペアで書く */
+#macro-rec-indicator[hidden] {
+  display: none;
+}

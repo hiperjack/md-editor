@@ -2,6 +2,7 @@ import { store } from "./store";
 import { settings } from "./settings";
 import type { EditorHost } from "./editor";
 import type { FindReplaceController } from "./find-replace";
+import type { MacroController } from "./macro";
 
 function isModifier(e: KeyboardEvent): boolean {
   return e.ctrlKey || e.metaKey;
@@ -32,10 +33,25 @@ export function setupShortcuts(
   editor: EditorHost,
   fileActions: Record<string, () => void>,
   find: FindReplaceController,
+  macro: MacroController,
 ): void {
   window.addEventListener(
     "keydown",
     (e) => {
+      // マクロ記録/再生（Shift+F1 / Shift+F2）。Ctrl系判定より先に拾う。
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key === "F1") {
+          e.preventDefault();
+          macro.toggleRecord();
+          return;
+        }
+        if (e.key === "F2") {
+          e.preventDefault();
+          macro.play();
+          return;
+        }
+      }
+
       if (!isModifier(e)) return;
 
       // Mermaid図ビューア表示中は、Ctrl+Tab等のショートカットをビューアに譲る。
