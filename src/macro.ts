@@ -173,16 +173,40 @@ function moveHorizontal(view: EditorView, dir: 1 | -1, extend: boolean): boolean
 function moveVertical(view: EditorView, dir: 1 | -1, extend: boolean): boolean {
   const { state } = view;
   const sel = state.selection;
+  const $head = state.doc.resolve(sel.head);
   const coords = view.coordsAtPos(sel.head);
   const lineH = Math.max(coords.bottom - coords.top, 8);
+  const curMid = (coords.top + coords.bottom) / 2;
+  // 現在位置がテキストブロックの視覚的な端（その方向にこれ以上行が無い側）かどうか。
+  // 端にいる場合、posAtCoords が文書末尾等で同じブロックの境界位置に
+  // クランプされることがあるため、見つかった位置が本当に別ブロックかどうかも検証する。
+  const atBlockEdge = view.endOfTextblock(dir < 0 ? "up" : "down");
+  // 現在ブロック自身の直前・直後の位置（$head.parent===doc になる文書端の境界では
+  // .parent の同一性比較だけでは「同じブロックの外側境界」を検出できないため、
+  // 位置の数値範囲で判定する）。
+  const blockBefore = $head.depth > 0 ? $head.before($head.depth) : null;
+  const blockAfter = $head.depth > 0 ? $head.after($head.depth) : null;
   // 段落間マージンを跨げるよう、少しずつ遠くを何度か探る
   for (const mul of [0.6, 1.4, 2.4, 4]) {
     const y = dir < 0 ? coords.top - lineH * mul : coords.bottom + lineH * mul;
     const found = view.posAtCoords({ left: coords.left, top: y });
     if (!found || found.pos === sel.head) continue;
+    // ブロック端にいるのに見つかった位置が現在ブロックの範囲内（境界含む）なら、
+    // 座標の丸め誤差による誤検出（文書端で移動できないのに成功扱いになる）。
+    if (
+      atBlockEdge &&
+      blockBefore !== null &&
+      blockAfter !== null &&
+      found.pos >= blockBefore &&
+      found.pos <= blockAfter
+    ) {
+      continue;
+    }
     const fc = view.coordsAtPos(found.pos);
-    // 反対方向へ飛んでいたら不採用（余白の当たり判定の揺れ対策）
-    if (dir < 0 ? fc.top >= coords.top : fc.bottom <= coords.bottom) continue;
+    const fMid = (fc.top + fc.bottom) / 2;
+    // 中央Y座標で同一行判定する（同一行への誤検出を、top/bottomの微小な誤差に
+    // 依らず確実に弾く）。
+    if (dir < 0 ? fMid >= curMid : fMid <= curMid) continue;
     const $found = state.doc.resolve(found.pos);
     const next = extend
       ? TextSelection.between(state.doc.resolve(sel.anchor), $found)
@@ -193,13 +217,29 @@ function moveVertical(view: EditorView, dir: 1 | -1, extend: boolean): boolean {
   return false;
 }
 
+/**
+ * 現在位置を含むブロック要素（段落・リスト項目内の段落等）のDOM矩形を返す。
+ * リスト項目・引用等はインデントで左端がエディタ全体の左端よりずれるため、
+ * Home/End の基準にはエディタ全体ではなくこのブロック自身の矩形を使う必要がある。
+ */
+function currentBlockRect(view: EditorView, pos: number): DOMRect {
+  const { node } = view.domAtPos(pos);
+  const el = node.nodeType === 3 ? node.parentElement : (node as HTMLElement);
+  const block = el?.closest<HTMLElement>(
+    "p, li, h1, h2, h3, h4, h5, h6, blockquote, pre, td, th, dd, dt",
+  );
+  return (block ?? view.dom).getBoundingClientRect();
+}
+
 /** Home/End を視覚行の行頭/行末へ移動/拡張（取れなければ論理段落の先頭/末尾）。 */
 function moveLineEdge(view: EditorView, dir: 1 | -1, extend: boolean): boolean {
   const { state } = view;
   const sel = state.selection;
   const coords = view.coordsAtPos(sel.head);
   const mid = (coords.top + coords.bottom) / 2;
-  const rect = view.dom.getBoundingClientRect();
+  // リスト項目などインデントされたブロックでは、エディタ全体の左端を使うと
+  // 前行にスナップしてしまうため、現在ブロック自身の矩形を基準にする。
+  const rect = currentBlockRect(view, sel.head);
   const x = dir < 0 ? rect.left + 1 : rect.right - 1;
   const found = view.posAtCoords({ left: x, top: mid });
   let pos: number;
@@ -417,6 +457,11 @@ export function createMacroController(editor: EditorHost): MacroController {
     } finally {
       playing = false;
       notifyState();
+      // メニュー経由（非フォーカス状態）での再生は、view.dispatch がDOM選択を
+      // 同期しないままになる（ProseMirrorは非フォーカス時にDOM選択更新を
+      // スキップする）。ここで明示的に view.focus() し、表示上のカーソルを
+      // 実際のモデル選択位置へ同期させる。
+      editor.getActiveView()?.focus();
     }
   };
 
