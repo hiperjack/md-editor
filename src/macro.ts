@@ -443,6 +443,16 @@ export function createMacroController(editor: EditorHost): MacroController {
         const view = editor.getActiveView();
         if (!view) return;
         for (const step of steps) {
+          // 合成キー（Ctrl+Tab等）でタブ切替が起きた場合、残りのステップが
+          // 背後のviewへ流れてしまうため、差し替わりを検知して中断する
+          if (editor.getActiveView() !== view) {
+            toast(
+              t("macro.aborted")
+                .replace("{done}", String(i))
+                .replace("{total}", String(count)),
+            );
+            return;
+          }
           if (!playStep(view, step)) {
             // 文書端などでこれ以上進めない: 残りを中断して通知
             toast(
@@ -492,10 +502,15 @@ export function createMacroController(editor: EditorHost): MacroController {
         defaultPath: "macro.json",
       });
       if (!picked) return;
-      await invoke<void>("write_file", {
-        path: picked,
-        content: serializeMacro(steps),
-      });
+      try {
+        await invoke<void>("write_file", {
+          path: picked,
+          content: serializeMacro(steps),
+        });
+      } catch {
+        // ファイルロック・権限エラー等のI/O失敗をユーザーへ通知する
+        void message(t("macro.saveFailed"), { kind: "error" });
+      }
     },
     async loadFromFile() {
       const picked = await openDialog({
@@ -504,7 +519,14 @@ export function createMacroController(editor: EditorHost): MacroController {
         multiple: false,
       });
       if (typeof picked !== "string") return;
-      const content = await invoke<string>("read_file", { path: picked });
+      let content: string;
+      try {
+        content = await invoke<string>("read_file", { path: picked });
+      } catch {
+        // ファイルロック・権限エラー等のI/O失敗をユーザーへ通知する
+        void message(t("macro.loadFailed"), { kind: "error" });
+        return;
+      }
       const parsed = parseMacro(content);
       if (!parsed) {
         void message(t("macro.invalidFile"), { kind: "error" });

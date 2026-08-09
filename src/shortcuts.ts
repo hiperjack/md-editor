@@ -40,6 +40,11 @@ export function setupShortcuts(
     (e) => {
       // マクロ記録/再生（Shift+F1 / Shift+F2）。Ctrl系判定より先に拾う。
       if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key === "F1" || e.key === "F2") {
+          // キーリピートでの連打防止、および図ビューア表示中は反応しない
+          if (e.repeat) return;
+          if (document.querySelector(".diagram-viewer-overlay")) return;
+        }
         if (e.key === "F1") {
           e.preventDefault();
           macro.toggleRecord();
@@ -159,7 +164,11 @@ export function setupShortcuts(
           e.preventDefault();
           e.stopPropagation();
           const id = store.getActive()?.id;
-          if (id) editor.toggleSourceMode(id);
+          if (id) {
+            // ソースモードでは記録対象のWYSIWYG viewが破棄されるため、記録中なら即停止する
+            if (macro.isRecording()) macro.toggleRecord();
+            editor.toggleSourceMode(id);
+          }
           return;
         }
         return;

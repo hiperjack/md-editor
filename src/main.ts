@@ -478,7 +478,11 @@ async function bootstrap(): Promise<void> {
     },
     view_source: () => {
       const a = store.getActive();
-      if (a) editor.toggleSourceMode(a.id);
+      if (a) {
+        // ソースモードでは記録対象のWYSIWYG viewが破棄されるため、記録中なら即停止する
+        if (macro.isRecording()) macro.toggleRecord();
+        editor.toggleSourceMode(a.id);
+      }
     },
     // プレゼンタブのときだけ、デッキ／一覧モードを切り替える（Alt+V→D）。
     view_present_toggle: () => {
