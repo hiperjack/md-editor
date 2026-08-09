@@ -274,9 +274,18 @@ function playStep(view: EditorView, step: MacroStep): boolean {
     }
   }
   if (ctrl && !alt && (key === "Home" || key === "End")) {
-    const doc = view.state.doc;
-    const next = key === "Home" ? Selection.atStart(doc) : Selection.atEnd(doc);
-    view.dispatch(view.state.tr.setSelection(next).scrollIntoView());
+    const { state } = view;
+    // Shift併用時は文書先頭/末尾まで選択拡張する
+    const edge = key === "Home"
+      ? Selection.atStart(state.doc)
+      : Selection.atEnd(state.doc);
+    const next = shift
+      ? TextSelection.between(
+          state.doc.resolve(state.selection.anchor),
+          state.doc.resolve(edge.head),
+        )
+      : edge;
+    view.dispatch(state.tr.setSelection(next).scrollIntoView());
     return true;
   }
   return dispatchSyntheticKey(view, step);
