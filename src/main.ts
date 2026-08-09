@@ -14,6 +14,7 @@ import { makeEditOps } from "./edit-ops";
 import { expandAllHeadingFolds } from "./heading-fold";
 import { expandAllListFolds } from "./list-fold";
 import { setupShortcuts } from "./shortcuts";
+import { createMacroController } from "./macro";
 import { createFindReplace } from "./find-replace";
 import { createOutlinePanel } from "./outline";
 import { createChatPanel } from "./chat-panel";
@@ -477,7 +478,11 @@ async function bootstrap(): Promise<void> {
     },
     view_source: () => {
       const a = store.getActive();
-      if (a) editor.toggleSourceMode(a.id);
+      if (a) {
+        // ソースモードでは記録対象のWYSIWYG viewが破棄されるため、記録中なら即停止する
+        if (macro.isRecording()) macro.toggleRecord();
+        editor.toggleSourceMode(a.id);
+      }
     },
     // プレゼンタブのときだけ、デッキ／一覧モードを切り替える（Alt+V→D）。
     view_present_toggle: () => {
@@ -564,6 +569,20 @@ async function bootstrap(): Promise<void> {
     const a = store.getActive();
     return a?.kind === "preview" && a.previewMode === "slideshow";
   };
+
+  // ── キーボードマクロ ──────────────
+  const macro = createMacroController(editor);
+  const macroIndicator = document.createElement("div");
+  macroIndicator.id = "macro-rec-indicator";
+  macroIndicator.hidden = true;
+  macroIndicator.textContent = t("macro.recording");
+  document.body.appendChild(macroIndicator);
+  macro.onStateChange(() => {
+    macroIndicator.hidden = !macro.isRecording();
+  });
+  onLangChange(() => {
+    macroIndicator.textContent = t("macro.recording");
+  });
 
   const buildMenus = (): TopMenu[] => [
     {
@@ -719,6 +738,50 @@ async function bootstrap(): Promise<void> {
           run: viewActions.view_present_toggle,
         },
         { type: "item", label: t("menu.settings"), mnemonic: "S", accel: "Ctrl+,", run: viewActions.view_font },
+      ],
+    },
+    {
+      id: "macro",
+      label: t("menu.macro"),
+      mnemonic: "M",
+      items: () => [
+        {
+          type: "item",
+          label: t("menu.macroRecord"),
+          mnemonic: "R",
+          accel: "Shift+F1",
+          enabled: () => macro.isRecording() || macro.canRecord(),
+          run: () => macro.toggleRecord(),
+        },
+        {
+          type: "item",
+          label: t("menu.macroPlay"),
+          mnemonic: "P",
+          accel: "Shift+F2",
+          enabled: () => macro.canPlay(),
+          run: () => macro.play(),
+        },
+        {
+          type: "item",
+          label: t("menu.macroPlayRepeat"),
+          mnemonic: "T",
+          enabled: () => macro.canPlay(),
+          run: () => void macro.playRepeat(),
+        },
+        { type: "sep" },
+        {
+          type: "item",
+          label: t("menu.macroSave"),
+          mnemonic: "S",
+          enabled: () => macro.hasMacro(),
+          run: () => void macro.saveToFile(),
+        },
+        {
+          type: "item",
+          label: t("menu.macroLoad"),
+          mnemonic: "L",
+          run: () => void macro.loadFromFile(),
+        },
       ],
     },
     {
@@ -919,7 +982,7 @@ async function bootstrap(): Promise<void> {
   settings.subscribe(syncPanelButtons);
 
   setupTitle();
-  setupShortcuts(editor, fileActions, find);
+  setupShortcuts(editor, fileActions, find, macro);
 
   if (isTauriContext()) {
     // メニューは上で生成した HTML メニューバーを使う（ネイティブメニューは廃止）。
