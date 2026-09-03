@@ -44,6 +44,9 @@ The menu bar is drawn in HTML rather than natively, so it supports mnemonic keyb
 - **Recent files**: The File menu lists recently opened files (on/off in settings). If a file from history or a file-association launch can't be found, an error is reported.
 - **Unsaved-change detection**: Compares against a baseline of the "post-Milkdown-normalization string", avoiding false positives caused by WYSIWYG auto-normalization.
 - **GFM support**: Tables, task lists, strikethrough, GitHub alerts, table of contents (`[[toc]]`), heading anchors (CommonMark + GFM preset).
+  - Tables are inserted from the toolbar table button (hover/click) or the Format menu via a PowerPoint-style 10×8 grid picker that sets rows × columns (the row count includes the header row)
+  - Pressing `Tab` at the end of the text in the last cell appends a new row and moves the caret to its first cell (`Tab` elsewhere in a cell keeps its usual behavior)
+  - The column/row action popup flips below the handle automatically when the table sits near the top of the document, so it is never clipped by the editor viewport
 - **Internationalization**: Switch between Japanese / English / follow-system language (the menu bar, settings UI, and confirmation dialogs all switch together).
 - **Themes**: Dark / light / follow-system. Also tracks dynamic changes to `prefers-color-scheme`.
 - **Context menu**: A custom right-click menu on the editor (cut/copy/paste/select-all; bold/italic/link when text is selected; image editing over an image; find). Outside the editor, the default menu is suppressed.
@@ -203,6 +206,8 @@ Opened with `Ctrl+Shift+P`. The following keys are active while a presentation t
 | `Backspace` (start of a blockquote) | Remove the blockquote |
 | `Backspace` (start of a list item) | Merge with the previous line (does not remove the list) |
 | `Enter` (second time on a trailing empty line inside a code block) | Exit the code block |
+| `Tab` / `Shift+Tab` (inside a table) | Move to the next / previous cell |
+| `Tab` (end of text in the last table cell) | Append a row and move to its first cell |
 | Triangle icon on heading hover | Fold/unfold the contents below (display only) |
 | Double-click an image | Edit URL / alt text / width (px) |
 

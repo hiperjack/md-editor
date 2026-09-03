@@ -1248,6 +1248,22 @@ body.is-resizing-chat {
   font-size: 1em;
 }
 
+/*
+  表の列・行ハンドルの操作ポップアップ（Crepe の .button-group）は既定で
+  ハンドルの上 52px に出る。表が文書の上端付近にあるとエディタ領域
+  (.editor-pane はスクロールコンテナ) の外へはみ出して見えないため、
+  table-handle-popup.ts が余白不足を実測して data-popup-below を付けたときは
+  ハンドルの下側へ反転表示する（ホバー橋渡し用の ::after も上側へ移す）。
+*/
+#editor-host .milkdown .milkdown-table-block .cell-handle[data-popup-below] .button-group {
+  top: calc(100% + 8px);
+}
+
+#editor-host .milkdown .milkdown-table-block .cell-handle[data-popup-below] .button-group::after {
+  bottom: auto;
+  top: -8px;
+}
+
 #editor-host .milkdown .ProseMirror pre,
 #editor-host .milkdown .ProseMirror code {
   white-space: pre-wrap;
@@ -1808,6 +1824,49 @@ body.is-resizing-chat {
 
 .color-palette__clear:hover {
   background: var(--tab-hover-bg);
+}
+
+/* ===== 表挿入の行列数ピッカー（table-picker.ts） ===== */
+
+.table-picker {
+  position: fixed;
+  z-index: 10002;
+  padding: 8px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  user-select: none;
+  font-family: inherit;
+}
+
+.table-picker__grid {
+  display: grid;
+  /* 列数は table-picker.ts が grid-template-columns で指定する */
+  gap: 3px;
+}
+
+.table-picker__cell {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: var(--bg-1, transparent);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.table-picker__cell.is-active {
+  background: color-mix(in srgb, var(--accent), transparent 65%);
+  border-color: var(--accent);
+}
+
+.table-picker__label {
+  margin-top: 6px;
+  text-align: center;
+  color: var(--fg-1, var(--fg-0));
+  font-size: 12px;
+  min-height: 1.4em;
 }
 
 /* ===== エディタ内の脚注表示 =====

@@ -75,6 +75,8 @@ import { persistEmbeddedImages, type PersistResult } from "./image-persist";
 import { editImageNodeAtPos, isImageNode } from "./image-edit";
 import { searchPlugin } from "./search-plugin";
 import { footnotePairPlugin } from "./footnote-pair";
+import { addRowOnTabAtLastCell } from "./table-tab";
+import { tableHandlePopupPlugin } from "./table-handle-popup";
 import { headingFoldPlugin } from "./heading-fold";
 import { listFoldPlugin } from "./list-fold";
 import { fileTypeOfPath, wrapMermaidSource } from "./mmd";
@@ -1231,6 +1233,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         gapClickPlugin,
         codeBlockUnwrapPlugin,
         tableCellCaretPlugin,
+        tableHandlePopupPlugin,
         imageDoubleClickPlugin,
         imageWheelResizePlugin,
         imageBlockSizePlugin,
@@ -1270,7 +1273,9 @@ export function createEditorHost(root: HTMLElement): EditorHost {
             if (inBlockquote) return lift(state, dispatch);
             return false;
           },
+          // 表の最終セルの文末では行を追加（table-tab.ts）。それ以外は画像行の字下げ。
           Tab: (state, dispatch, view) =>
+            addRowOnTabAtLastCell(state, dispatch) ||
             indentImageRow(state, dispatch, view ?? null, +1),
           "Shift-Tab": (state, dispatch, view) =>
             indentImageRow(state, dispatch, view ?? null, -1),
