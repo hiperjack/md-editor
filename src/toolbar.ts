@@ -32,6 +32,11 @@ import {
   getColorPaletteEl,
 } from "./color-palette";
 import {
+  showTablePicker,
+  closeTablePicker,
+  getTablePickerEl,
+} from "./table-picker";
+import {
   showContextMenu,
   closeContextMenu,
   getContextMenuEl,
@@ -311,8 +316,12 @@ export function makeToolbarActions(editor: EditorHost): Record<string, Action> {
         view.focus();
       }
     },
+    // 表: 行列数グリッドピッカー（PowerPoint 風）を開き、選んだサイズで挿入。
+    // ホバー・クリック・書式メニューのいずれからも同じピッカーを使う。
     fmt_table: () =>
-      run((c) => c.call(insertTableCommand.key, { row: 3, col: 3 })),
+      showTablePicker(anchorForButton(editor, "fmt_table"), ({ rows, cols }) =>
+        run((c) => c.call(insertTableCommand.key, { row: rows, col: cols })),
+      ),
     fmt_hr: () => run((c) => c.call(insertHrCommand.key)),
     fmt_link: () =>
       promptLink((href) =>
@@ -472,6 +481,18 @@ export function createToolbar(
         () => actions[menuAction]?.(),
         getColorPaletteEl,
         closeColorPalette,
+      );
+    }
+    // 表ボタン: ホバー/クリックで行列数ピッカーを開く（右下に▼バッジ）。
+    if (spec.key === "fmt_table") {
+      const caret = document.createElement("span");
+      caret.className = "toolbar-caret";
+      btn.appendChild(caret);
+      wireHoverPopup(
+        btn,
+        () => actions.fmt_table?.(),
+        getTablePickerEl,
+        closeTablePicker,
       );
     }
     // コールアウトボタン: ホバー/クリックで種類メニューを開く（右下に▼バッジ）。
