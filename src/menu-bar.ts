@@ -73,7 +73,7 @@ function escapeHtml(s: string): string {
 }
 
 /** ラベル中のニーモニック文字に下線を付ける。無ければ "(X)" を末尾に付す。 */
-function labelHtml(label: string, mnemonic?: string): string {
+export function labelHtml(label: string, mnemonic?: string): string {
   const esc = escapeHtml(label);
   if (!mnemonic) return esc;
   const i = label.toLowerCase().indexOf(mnemonic.toLowerCase());
