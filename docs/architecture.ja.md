@@ -156,6 +156,8 @@ npm run tauri:build
 | `Ctrl+F` | 検索バーを開く |
 | `Ctrl+H` | 置換欄付きで検索バーを開く |
 | `Enter` / `Shift+Enter`（検索欄） | 次 / 前のマッチへ移動 |
+| `Tab` / `Shift+Tab` | 検索欄 → 置換欄 / 置換欄 → 検索欄（置換欄表示時） |
+| `Alt+R` / `Alt+A` | 置換 / すべて置換（置換欄表示時） |
 | `Esc`（検索バー） | 閉じてエディタに戻る |
 
 ### 書式（ツールバーおよびメニュー）
@@ -240,6 +242,7 @@ md-editor/
 │   ├── context-menu.ts          # 汎用コンテキストメニュー基盤
 │   ├── editor-context-menu.ts   # エディタ用の独自右クリックメニュー
 │   ├── find-replace.ts          # 検索・置換バー（UI＋オーケストレーション）
+│   ├── find-bar-keys.ts         # 検索バーのキー判定（Alt+R/A・Tab 移動）の純粋ロジック
 │   ├── search-core.ts           # 検索の純粋ロジック（regex構築・マッチ・置換解決）
 │   ├── search-plugin.ts         # 検索マッチのハイライト（ProseMirror Decoration）
 │   ├── outline.ts               # 見出しアウトラインパネル（左サイドバー）
