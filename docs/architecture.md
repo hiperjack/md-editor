@@ -156,6 +156,8 @@ Dragging to reorder, detaching out of the window, merging into another window, a
 | `Ctrl+F` | Open the search bar |
 | `Ctrl+H` | Open the search bar with the replace field |
 | `Enter` / `Shift+Enter` (in the search field) | Go to next / previous match |
+| `Tab` / `Shift+Tab` | Search field → replace field / back (when the replace field is shown) |
+| `Alt+R` / `Alt+A` | Replace / Replace all (when the replace field is shown) |
 | `Esc` (search bar) | Close and return to the editor |
 
 ### Formatting (toolbar and menu)
@@ -240,6 +242,7 @@ md-editor/
 │   ├── context-menu.ts          # Generic context-menu foundation
 │   ├── editor-context-menu.ts   # The editor's custom right-click menu
 │   ├── find-replace.ts          # Find & replace bar (UI + orchestration)
+│   ├── find-bar-keys.ts         # Pure key handling for the find bar (Alt+R/A, Tab navigation)
 │   ├── search-core.ts           # Pure search logic (regex building / matching / replacement resolution)
 │   ├── search-plugin.ts         # Highlighting of search matches (ProseMirror Decoration)
 │   ├── outline.ts               # Heading outline panel (left sidebar)
