@@ -265,7 +265,7 @@ export function docThemeCssVars(theme: DocTheme): string {
     `--doc-accent-bg: ${rgba(theme.accentColor, 0.08)};`,
     `--doc-text: ${theme.textColor};`,
     `--doc-muted: ${rgba(theme.textColor, 0.62)};`,
-    `--doc-border: ${rgba(theme.textColor, 0.18)};`,
+    `--doc-border: ${rgba(theme.textColor, 0.35)};`,
     `--doc-border-soft: ${rgba(theme.textColor, 0.1)};`,
     `--doc-bg: ${theme.bgColor};`,
     `--doc-code-bg: ${rgba(theme.textColor, 0.055)};`,

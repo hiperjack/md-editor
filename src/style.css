@@ -1178,10 +1178,16 @@ body.is-resizing-chat {
   height: 1em;
 }
 
+/*
+  Crepe 既定のセル罫線は outline 色を透過 80% にした色で、ダーク/ライトどちらも
+  背景に溶けて見えづらい。透過を 40% に抑えて視認できる濃さにする。
+*/
 #editor-host .milkdown .ProseMirror td,
 #editor-host .milkdown .ProseMirror th {
   padding: 4px 8px;
   line-height: 1.5;
+  border: 1px solid
+    color-mix(in srgb, var(--crepe-color-outline, var(--border)), transparent 40%);
 }
 
 #editor-host .milkdown .ProseMirror td > p,
