@@ -69,6 +69,7 @@ import { store, type Tab } from "./store";
 import { remarkBlankLines } from "./blank-lines";
 import { remarkFootnoteText } from "./remark-footnote-text";
 import { remarkTableBr } from "./remark-table-br";
+import { mergeTableCellBlocks } from "./table-paste";
 import { attachLineNumbers } from "./line-numbers";
 import { attachImageResolver, imageDirForMdPath } from "./image-resolver";
 import { persistEmbeddedImages, type PersistResult } from "./image-persist";
@@ -1069,6 +1070,12 @@ export function createEditorHost(root: HTMLElement): EditorHost {
             if (html && /<table[\s>]/i.test(html)) {
               try {
                 const doc = new DOMParser().parseFromString(html, "text/html");
+                /*
+                  PowerPoint/Word はセル内の行ごとに <p> を出力する。table_cell は
+                  段落を 1 つしか持てず、2 つ目以降が隣の列へ押し出されるため、
+                  先に <br> 区切りの 1 段落へまとめる（table-paste.ts 参照）。
+                */
+                mergeTableCellBlocks(doc);
                 /*
                   GFM テーブルのスキーマは content="table_header_row table_row+"
                   で、先頭行がヘッダ行であることを要求する。ヘッダ行の parseDOM は

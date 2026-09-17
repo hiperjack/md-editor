@@ -47,6 +47,7 @@ The menu bar is drawn in HTML rather than natively, so it supports mnemonic keyb
   - Tables are inserted from the toolbar table button (hover/click) or the Format menu via a PowerPoint-style 10×8 grid picker that sets rows × columns (the row count includes the header row)
   - Pressing `Tab` at the end of the text in the last cell appends a new row and moves the caret to its first cell (`Tab` elsewhere in a cell keeps its usual behavior)
   - The column/row action popup flips below the handle automatically when the table sits near the top of the document, so it is never clipped by the editor viewport
+  - Tables copied from Excel / PowerPoint / Word (clipboard `text/html`) are pasted as GFM tables rather than images. The first row is promoted to a header row, and when each line inside a cell is a separate `<p>` (as PowerPoint / Word emit), the blocks are merged into one `<br>`-separated paragraph before parsing (`table-paste.ts`; without this, the second line onward spills into the neighboring column)
 - **Internationalization**: Switch between Japanese / English / follow-system language (the menu bar, settings UI, and confirmation dialogs all switch together).
 - **Themes**: Dark / light / follow-system. Also tracks dynamic changes to `prefers-color-scheme`.
 - **Context menu**: A custom right-click menu on the editor (cut/copy/paste/select-all; bold/italic/link when text is selected; image editing over an image; find). Outside the editor, the default menu is suppressed.
@@ -232,6 +233,7 @@ md-editor/
 │   ├── main.ts                  # Entry point
 │   ├── editor.ts                # Milkdown Crepe integration, per-tab editor management, preview-tab creation
 │   ├── edit-ops.ts              # The actual Edit-menu operations (undo/copy/paste, etc.)
+│   ├── table-paste.ts           # Pre-processing for tables pasted from other apps (merge multi-paragraph cells into one <br>-separated paragraph)
 │   ├── heading-fold.ts          # Heading folding (ProseMirror Decoration)
 │   ├── store.ts                 # Tab state management
 │   ├── tabs.ts                  # Tab bar UI (reorder / detach / merge / right-click)
