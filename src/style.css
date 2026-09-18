@@ -1255,6 +1255,16 @@ body.is-resizing-chat {
 }
 
 /*
+  prosemirror-tables の基本 CSS は table-layout: fixed; width: 100% のため、
+  GFM 表（幅情報なし）は全列が等分になる。プレビュー/出力側 (document.css) は
+  auto レイアウトで内容に応じた列幅になるので、エディタ側も auto に揃え、
+  セル内の文字量に応じて列幅が配分されるようにする。
+*/
+#editor-host .milkdown .ProseMirror table {
+  table-layout: auto;
+}
+
+/*
   表の列・行ハンドルの操作ポップアップ（Crepe の .button-group）は既定で
   ハンドルの上 52px に出る。表が文書の上端付近にあるとエディタ領域
   (.editor-pane はスクロールコンテナ) の外へはみ出して見えないため、
