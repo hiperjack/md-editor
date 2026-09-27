@@ -338,6 +338,8 @@ Tauri's `assetProtocol` is enabled, and `convertFileSrc()` converts paths into U
 
 A bare file name (no directory separator) tries `<mdDir>/img/<basename>/<file>` first and, if loading fails (`<img onerror>`), falls back to `<mdDir>/<file>` — a two-stage approach. On HTML export, `embed-images.ts` embeds the resolved images as data URIs.
 
+When a path contains URL encoding (`My%20Image.png`, `%E7%94%BB%E5%83%8F.png`, etc.), the decoded path is tried first and the path as written is tried after it (for files whose name really contains `%20`). Decoding happens exactly once in `resolveImagePathCandidates`, so it covers both the editor (Milkdown passes the Markdown value through unchanged) and HTML export (markdown-it encodes spaces as `%20` and `%` as `%25`). The Markdown text itself is never rewritten. Windows absolute paths (`C:\...` / `C:/...`) are checked first so the drive letter is not mistaken for a URL scheme.
+
 ### Find & replace approach
 
 Rather than rewriting the DOM directly, find & replace operates on the ProseMirror document model. `find-replace.ts` concatenates strings per textblock, converts match positions to doc positions, and replaces with `tr.insertText`. Code blocks are handled the same way as PM nodes, preserving state consistency and undo. Match highlighting is drawn with a Decoration in `search-plugin.ts`.

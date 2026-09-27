@@ -11,6 +11,8 @@ import { store } from "./store";
  */
 
 function isExternalUrl(src: string): boolean {
+  // "C:\..." / "C:/..." のドライブレターを URL スキームと誤判定しない
+  if (isWindowsAbsolute(src)) return false;
   return /^(?:[a-z]+:|\/\/|#)/i.test(src);
 }
 
@@ -93,6 +95,12 @@ export function imageDirForMdPath(mdFilePath: string | null): string | null {
  * - `file://` / 絶対パス → 単一候補
  * - 相対パス → md ディレクトリ基準の単一候補
  * - 「ベアファイル名」 → `<mdDir>/img/<mdBasename>/<file>` 優先、`<mdDir>/<file>` フォールバック
+ *
+ * パスが URL エンコード（`%20` や `%E7%94%BB` 等）を含む場合は、デコードしたパスの候補を先に、
+ * 元の表記のままの候補を後ろに並べる（ファイル名に本当に `%20` を含むケースの救済）。
+ * エディタ（Milkdown は Markdown の値をそのまま渡す）と HTML 出力（markdown-it は
+ * 空白を %20 に、`%` を %25 にエンコードする）の双方がこの関数を通るので、
+ * デコードはここで 1 回だけ行う。
  */
 export function resolveImagePathCandidates(
   src: string,
@@ -101,12 +109,30 @@ export function resolveImagePathCandidates(
   if (!src) return [];
   if (isExternalUrl(src) && !src.startsWith("file:")) return [];
   if (src.startsWith("file://")) {
-    try {
-      return [decodeURI(src.replace(/^file:\/\/\/?/, ""))];
-    } catch {
-      return [];
+    return [safeDecode(src.replace(/^file:\/\/\/?/, ""))];
+  }
+  const decoded = safeDecode(src);
+  const list = resolveRawPathCandidates(decoded, mdFilePath);
+  if (decoded !== src) {
+    for (const p of resolveRawPathCandidates(src, mdFilePath)) {
+      if (!list.includes(p)) list.push(p);
     }
   }
+  return list;
+}
+
+/** パーセントエンコードをデコードする。不正な並び（素の `%` 等）なら元の値を返す。 */
+function safeDecode(s: string): string {
+  if (!s.includes("%")) return s;
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
+/** デコード済み（または元表記）のパスを、md ファイル基準の絶対パス候補に解決する。 */
+function resolveRawPathCandidates(src: string, mdFilePath: string | null): string[] {
   if (isWindowsAbsolute(src) || isPosixAbsolute(src)) {
     return [src];
   }

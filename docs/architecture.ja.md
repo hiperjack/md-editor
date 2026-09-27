@@ -338,6 +338,8 @@ Tauri の `assetProtocol` を有効化し、`convertFileSrc()` で WebView か�
 
 ベアファイル名（ディレクトリ区切りなし）は `<mdDir>/img/<basename>/<file>` を優先試行し、`<img onerror>` でロード失敗したら `<mdDir>/<file>` にフォールバックする 2 段構え。HTML 出力時は `embed-images.ts` が解決済み画像を data URI として埋め込む。
 
+パスが URL エンコード（`My%20Image.png` や `%E7%94%BB%E5%83%8F.png` 等）を含む場合は、デコードしたパスを先に、元の表記のままのパスを後ろに試す（ファイル名に本当に `%20` を含むケースの救済）。デコードは `resolveImagePathCandidates` で 1 回だけ行い、エディタ（Milkdown は Markdown の値をそのまま渡す）と HTML 出力（markdown-it は空白を `%20`、`%` を `%25` にエンコードする）の双方に効く。Markdown 側の表記は書き換えない。Windows の絶対パス（`C:\...` / `C:/...`）はドライブレターを URL スキームと誤判定しないよう先に判定する。
+
 ### 検索・置換の方式
 
 DOM を直接書き換えず、ProseMirror のドキュメントモデル上で検索・置換する。textblock 単位で文字列を連結して `find-replace.ts` がマッチ位置を doc 位置へ変換し、`tr.insertText` で置換する。コードブロックも PM ノードとして同じ仕組みで扱え、状態の整合性と undo が保たれる。マッチのハイライトは `search-plugin.ts` の Decoration で描画。
