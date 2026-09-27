@@ -55,7 +55,7 @@ The menu bar is drawn in HTML rather than natively, so it supports mnemonic keyb
 - **Flexible image handling**:
   - Displays images by path relative to the md file (via the Tauri asset protocol)
   - Auto-resolves the conventional path `<mdDir>/img/<basename>/<file>` (falling back to a file next to the md)
-  - Double-click an image to edit its URL, alt text and width (px) in a single dialog (the original size is hinted)
+  - Double-click an image to edit its URL, alt text, caption and width (px) in a single dialog (the original size is hinted). Stored as `![alt text|width](URL "caption")` (Obsidian-compatible; the older `![320](URL)` is still read as a width)
   - `Alt+wheel` over an image resizes its pixel width in place (the size is preserved across save/reload)
   - On HTML export, local images are embedded as data URIs
 - **Editing key behavior**:
@@ -331,6 +331,8 @@ A tab's contents (including unsaved changes and the baseline; for preview tabs, 
 ### Specifying image pixel width
 
 The `ratio` attribute of the `image-block` node is reinterpreted as "pixel width". When `> 10` it is an explicit pixel width; when `≤ 10` it is treated as automatic (natural fit). The ratio value is serialized into the markdown alt field, so it persists in the form `![320](img.png)`. If the alt is empty or non-numeric, it reverts to automatic.
+
+To keep both alt text and a width, the alt also accepts `description|320` (Obsidian-compatible). Parsing and composing live in `parseImageAlt` / `composeImageAlt` in `image-row.ts`, shared by inline width rendering, Alt+wheel, serialization and HTML export (`markdown-it-image-width.ts` splits it into the alt and width attributes). The caption goes into the title (`"…"`). Crepe's `image-block` reads the alt only as a numeric ratio and drops alt text, so `remark-image-alt.ts` keeps standalone images that have alt text as inline images. That remark plugin must run after Crepe's remark-image-block, so it is registered with `crepe.editor.use` rather than in the config list. Entering alt text for an image block converts it to an inline image first.
 
 ### Resolving relative-path images
 

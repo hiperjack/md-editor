@@ -55,7 +55,7 @@ mdedit は Tauri 2.x + Vite + TypeScript で構築された、複数ウィンド
 - **画像の柔軟な扱い**:
   - md ファイルとの相対パスで画像を表示（Tauri asset プロトコル経由）
   - 慣例パス `<mdDir>/img/<basename>/<file>` を自動解決（フォールバックとして md 隣のファイルも試行）
-  - 画像ダブルクリックで URL・代替テキスト・幅(px) を 1 枚のダイアログで編集（元サイズもヒント表示）
+  - 画像ダブルクリックで URL・代替テキスト・キャプション・幅(px) を 1 枚のダイアログで編集（元サイズもヒント表示）。保存形式は `![代替テキスト|幅](URL "キャプション")`（Obsidian 互換。従来の `![320](URL)` も幅として読む）
   - 画像上で `Alt+ホイール` でピクセル幅をその場で拡縮（保存・再読込でサイズが維持される）
   - HTML 出力時はローカル画像を data URI として埋め込み
 - **編集時のキー挙動**:
@@ -331,6 +331,8 @@ HTML 出力と HTML プレビュータブは同一の `render-pipeline.ts` を�
 ### 画像のピクセル幅指定
 
 `image-block` ノードの `ratio` 属性を「ピクセル幅」として再解釈している。`> 10` のとき明示的なピクセル幅、`≤ 10` のとき自動（natural fit）扱い。ratio 値は markdown の alt フィールドにシリアライズされるので、`![320](img.png)` の形で永続化される。alt が空 / 数値でなければ自動扱いに復帰。
+
+代替テキストと幅を両立させるため、alt は `説明|320`（Obsidian 互換）も受け付ける。分解・組み立ては `image-row.ts` の `parseImageAlt` / `composeImageAlt` に集約し、インライン画像の幅反映・Alt+ホイール・書き出し・HTML 出力（`markdown-it-image-width.ts` が alt と width 属性に分ける）が共通で使う。キャプションは title（`"…"`）に入る。Crepe の `image-block` は alt を数値の ratio としてしか読まず代替テキストを捨てるため、`remark-image-alt.ts` が代替テキスト付きの単独行画像をインライン画像のまま残す。この remark プラグインは Crepe の remark-image-block より後に走る必要があり、config の一覧ではなく `crepe.editor.use` で登録する。画像ブロックに代替テキストを入力した場合は、インライン画像へ変換してから設定する。
 
 ### 相対パス画像の解決
 

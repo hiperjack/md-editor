@@ -16,6 +16,7 @@ import { textColorTagPlugin } from "./markdown-it-text-color";
 import { highlightTagPlugin } from "./markdown-it-highlight";
 import { supSubTagPlugin } from "./markdown-it-supsub";
 import { mathPlugin } from "./markdown-it-math";
+import { imageAltWidthPlugin } from "./markdown-it-image-width";
 
 /**
  * 出力用レンダリングパイプライン（markdown → 文書HTML）。
@@ -176,6 +177,7 @@ function buildMarkdownIt(settings: DocSettings, hljs: Hljs | null): MarkdownIt {
   md.use(footnote);
   // 数式 $…$ / $$…$$（エディタの Crepe LaTeX 機能と同じ remark-math 記法）。
   mathPlugin(md);
+  imageAltWidthPlugin(md);
   underlineTagPlugin(md);
   textColorTagPlugin(md);
   highlightTagPlugin(md);

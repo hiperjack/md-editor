@@ -8,6 +8,7 @@ import { insertImageCommand } from "@milkdown/kit/preset/commonmark";
 import { t } from "./i18n";
 import { convertImageBlockToInline } from "./editor";
 import { promptFields, type PromptField } from "./modal";
+import { parseImageAlt, composeImageAlt } from "./image-row";
 
 /**
  * Crepe で画像として扱われるノード名一覧。
@@ -36,85 +37,72 @@ export function findSelectedImage(
 
 type PromptInput = {
   src: string;
+  /** 代替テキスト（alt の「説明|幅」の説明部分）。 */
+  alt: string;
+  /** キャプション（インライン画像は title、画像ブロックは caption）。 */
   caption: string;
   /** 画像幅 (px)。0 か未定義は「未設定 = 自動」。 */
   width?: number;
-  /** プロンプトに「元サイズ: ◯◯px」と表示するためのヒント。0 ならヒント省略。 */
+  /** ダイアログに「元サイズ: ◯◯px」と表示するためのヒント。0 ならヒント省略。 */
   naturalWidth?: number;
-  /** width プロンプトを表示するか。インライン画像 (`image`) では false。 */
-  supportsWidth?: boolean;
 };
 
 type PromptResult = {
   src: string;
+  alt: string;
   caption: string;
   /** undefined: 触らない / 0: クリア (auto) / 正の整数: 明示幅 */
   width?: number;
 };
 
 /**
- * 画像のURL・代替テキスト・サイズ (px) を 1 枚のダイアログで尋ねる。
+ * 画像の URL・代替テキスト・キャプション・幅 (px) を 1 枚のダイアログで尋ねる。
  * 既存値があれば編集、無ければ挿入用として動作する（title で見出しを切り替える）。
  * キャンセル、または URL が空なら null を返す。
- * サイズ欄は supportsWidth=true のときだけ表示される。
+ * markdown では `![代替テキスト|幅](URL "キャプション")` として保存される。
  */
 export async function promptForImage(
   initial: PromptInput | undefined,
   title: string,
 ): Promise<PromptResult | null> {
+  const sizeLabel =
+    initial?.naturalWidth && initial.naturalWidth > 0
+      ? t("dlg.image.size").replace("{natural}", String(initial.naturalWidth))
+      : t("dlg.image.sizeNoHint");
   const fields: PromptField[] = [
     { label: t("dlg.image.url"), value: initial?.src ?? "" },
-    { label: t("dlg.image.alt"), value: initial?.caption ?? "" },
-  ];
-  if (initial?.supportsWidth) {
-    const naturalHint =
-      initial.naturalWidth && initial.naturalWidth > 0
-        ? t("dlg.image.size").replace("{natural}", String(initial.naturalWidth))
-        : t("dlg.image.sizeNoHint");
-    fields.push({
-      label: naturalHint,
-      value: initial.width && initial.width > 0 ? String(initial.width) : "",
+    { label: t("dlg.image.alt"), value: initial?.alt ?? "" },
+    { label: t("dlg.image.caption"), value: initial?.caption ?? "" },
+    {
+      label: sizeLabel,
+      value: initial?.width && initial.width > 0 ? String(initial.width) : "",
       numeric: true,
-    });
-  }
+    },
+  ];
   const values = await promptFields({ title, fields });
   if (values === null) return null;
   const url = values[0].trim();
   if (url === "") return null;
-  const caption = values[1];
+  // 「|」は幅の区切りに使うため、代替テキストからは除く
+  const alt = values[1].replace(/\|/g, " ").trim();
+  const caption = values[2].trim();
 
-  if (!initial?.supportsWidth) {
-    return { src: url, caption };
-  }
-
-  const trimmed = values[2].trim();
+  const trimmed = values[3].trim();
   if (trimmed === "") {
-    // 空欄 → 自動 (= ratio をリセット)
-    return { src: url, caption, width: 0 };
+    // 空欄 → 自動（幅指定を外す）
+    return { src: url, alt, caption, width: 0 };
   }
   const widthVal = parseInt(trimmed, 10);
   if (!Number.isFinite(widthVal) || widthVal < 0) {
-    return { src: url, caption };
+    return { src: url, alt, caption };
   }
-  return { src: url, caption, width: widthVal };
+  return { src: url, alt, caption, width: widthVal };
 }
 
-/**
- * ノード種別ごとにキャプション系の attr 名が違うので吸収する。
- * - image: alt
- * - image-block: caption
- */
-function captionAttrName(node: ProseNode): string {
-  return node.type.name === "image-block" ? "caption" : "alt";
-}
-
-function readCaption(node: ProseNode): string {
-  return (node.attrs[captionAttrName(node)] ?? "") as string;
-}
-
-/** image-block の DOM から実 img 要素 (= naturalWidth が読める) を取得。 */
+/** 画像ノードの DOM から実 img 要素 (= naturalWidth が読める) を取得。 */
 function getImgDom(view: EditorView, pos: number): HTMLImageElement | null {
   const dom = view.nodeDOM(pos);
+  if (dom instanceof HTMLImageElement) return dom;
   if (!(dom instanceof HTMLElement)) return null;
   return dom.querySelector(
     'img[data-type="image-block"], img',
@@ -122,55 +110,74 @@ function getImgDom(view: EditorView, pos: number): HTMLImageElement | null {
 }
 
 /**
- * 指定位置の画像ノードの src/caption (+ image-block なら ratio) を更新する。
- * 既存の attrs（title 等）は維持する。
+ * 指定位置の画像ノードの src・代替テキスト・キャプション・幅を更新する。
+ * - インライン画像: alt に「代替テキスト|幅」、title にキャプションを入れる
+ * - 画像ブロック: caption と ratio（= 幅）を更新する。画像ブロックは代替テキストを
+ *   持てない（Crepe の仕様で読込時に捨てられる）ため、代替テキストが入力されたら
+ *   インライン画像へ変換してから設定する
  */
 export function applyImageEdit(
   view: EditorView,
   pos: number,
   next: PromptResult,
 ): void {
-  const node = view.state.doc.nodeAt(pos);
+  let node = view.state.doc.nodeAt(pos);
   if (!node || !isImageNode(node)) return;
-  const captionKey = captionAttrName(node);
-  const newAttrs: Record<string, unknown> = {
-    ...node.attrs,
-    src: next.src,
-    [captionKey]: next.caption,
-  };
-  // image-block の幅指定 (px)
-  if (node.type.name === "image-block" && next.width !== undefined) {
-    // 0 → 自動 (= デフォルトの ratio=1 = 閾値以下 = レガシー扱い)
-    // 正の整数 → そのまま ratio に格納してピクセル幅扱い
-    newAttrs.ratio = next.width > 0 ? next.width : 1;
+  if (node.type.name === "image-block" && next.alt !== "") {
+    const paraStart = convertImageBlockToInline(view, pos);
+    if (paraStart == null) return;
+    pos = paraStart + 1; // 段落の開きトークンの次がインライン image
+    node = view.state.doc.nodeAt(pos);
+    if (!node || node.type.name !== "image") return;
+  }
+  let newAttrs: Record<string, unknown>;
+  if (node.type.name === "image-block") {
+    newAttrs = { ...node.attrs, src: next.src, caption: next.caption };
+    if (next.width !== undefined) {
+      // 0 → 自動 (= デフォルトの ratio=1 = 閾値以下 = レガシー扱い)
+      // 正の整数 → そのまま ratio に格納してピクセル幅扱い
+      newAttrs.ratio = next.width > 0 ? next.width : 1;
+    }
+  } else {
+    const cur = parseImageAlt(node.attrs.alt as string);
+    const width = next.width === undefined ? cur.width : next.width;
+    newAttrs = {
+      ...node.attrs,
+      src: next.src,
+      alt: composeImageAlt(next.alt, width),
+      title: next.caption,
+    };
   }
   view.dispatch(
     view.state.tr.setNodeMarkup(pos, undefined, newAttrs).scrollIntoView(),
   );
 }
 
-/** image-block 用に PromptInput を組み立てる（natural サイズ取得など）。 */
+/** 既存の画像ノードからダイアログの初期値を組み立てる（natural サイズ取得など）。 */
 function buildPromptInputFor(
   view: EditorView,
   pos: number,
   node: ProseNode,
 ): PromptInput {
-  const isBlock = node.type.name === "image-block";
-  if (!isBlock) {
+  const img = getImgDom(view, pos);
+  const naturalWidth = img?.naturalWidth ?? 0;
+  if (node.type.name !== "image-block") {
+    const { text, width } = parseImageAlt(node.attrs.alt as string);
     return {
       src: (node.attrs.src ?? "") as string,
-      caption: readCaption(node),
-      supportsWidth: false,
+      alt: text,
+      caption: (node.attrs.title ?? "") as string,
+      width,
+      naturalWidth,
     };
   }
-  const img = getImgDom(view, pos);
   const ratio = Number(node.attrs.ratio) || 0;
   return {
     src: (node.attrs.src ?? "") as string,
-    caption: readCaption(node),
+    alt: "",
+    caption: (node.attrs.caption ?? "") as string,
     width: ratio > IMG_PX_THRESHOLD ? Math.round(ratio) : 0,
-    naturalWidth: img?.naturalWidth ?? 0,
-    supportsWidth: true,
+    naturalWidth,
   };
 }
 
@@ -185,6 +192,7 @@ export function insertImageBeside(
   view: EditorView,
   src: string,
   alt: string,
+  title = "",
 ): void {
   const schema = view.state.schema;
   const imageType = schema.nodes.image;
@@ -208,7 +216,7 @@ export function insertImageBeside(
     sel instanceof NodeSelection ? sel.to : view.state.selection.to;
 
   const space = schema.text(" ");
-  const img = imageType.create({ src, alt: alt ?? "" });
+  const img = imageType.create({ src, alt: alt ?? "", title });
   const tr = view.state.tr.insert(insertPos, [space, img]);
   // カーソルを追加画像の直後へ
   const after = insertPos + space.nodeSize + img.nodeSize;
@@ -248,19 +256,21 @@ export async function imageActionFromMenu(editor: Editor): Promise<void> {
   // 既存画像に係っている場合は「横に追加」、それ以外は新規挿入（従来どおり）
   const beside = isAtExistingImage(v);
   const result = await promptForImage(
-    { src: "", caption: "" },
+    { src: "", alt: "", caption: "" },
     t("dlg.image.titleInsert"),
   );
   if (!result) {
     v.focus();
     return;
   }
+  const alt = composeImageAlt(result.alt, result.width ?? 0);
   if (beside) {
-    insertImageBeside(v, result.src, result.caption);
+    insertImageBeside(v, result.src, alt, result.caption);
   } else {
     cmds.call(insertImageCommand.key, {
       src: result.src,
-      alt: result.caption,
+      alt,
+      title: result.caption,
     });
   }
   v.focus();
@@ -268,7 +278,7 @@ export async function imageActionFromMenu(editor: Editor): Promise<void> {
 
 /**
  * ProseMirror Plugin の handleDoubleClickOn から呼ぶ画像編集エントリ。
- * 選択を画像ノードに揃えてから 3 ステップ プロンプトを開く。
+ * 選択を画像ノードに揃えてから編集ダイアログを開く。
  */
 export async function editImageNodeAtPos(
   view: EditorView,

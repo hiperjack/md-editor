@@ -34,6 +34,7 @@ export function setupShortcuts(
   fileActions: Record<string, () => void>,
   find: FindReplaceController,
   macro: MacroController,
+  formatActions: Record<string, () => void> = {},
 ): void {
   window.addEventListener(
     "keydown",
@@ -191,6 +192,18 @@ export function setupShortcuts(
       if (k === "w") {
         e.preventDefault();
         fileActions.file_close?.();
+        return;
+      }
+      // リンク挿入（Ctrl+K。メニュー表記と対応）。本文（WYSIWYG）にフォーカスが
+      // あるときだけ反応し、チャット欄や入力ダイアログでの Ctrl+K は妨げない。
+      if (k === "k" && !e.shiftKey && !e.altKey) {
+        const active = document.activeElement as HTMLElement | null;
+        // コードブロック（本文内の CodeMirror）の中も対象外
+        if (!active?.closest(".ProseMirror") || active.closest(".cm-editor")) return;
+        if (document.querySelector(".modal-overlay")) return;
+        e.preventDefault();
+        e.stopPropagation();
+        formatActions.fmt_link?.();
         return;
       }
 

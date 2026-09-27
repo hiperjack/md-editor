@@ -982,7 +982,7 @@ async function bootstrap(): Promise<void> {
   settings.subscribe(syncPanelButtons);
 
   setupTitle();
-  setupShortcuts(editor, fileActions, find, macro);
+  setupShortcuts(editor, fileActions, find, macro, fmtActions);
 
   if (isTauriContext()) {
     // メニューは上で生成した HTML メニューバーを使う（ネイティブメニューは廃止）。
