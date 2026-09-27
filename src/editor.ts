@@ -3,6 +3,7 @@ import type { Editor } from "@milkdown/kit/core";
 import {
   commandsCtx,
   editorViewCtx,
+  parserCtx,
   prosePluginsCtx,
   remarkPluginsCtx,
   remarkStringifyOptionsCtx,
@@ -12,7 +13,7 @@ import { Plugin, TextSelection, NodeSelection, Selection } from "@milkdown/kit/p
 import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
 import { CellSelection } from "@milkdown/kit/prose/tables";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
-import { DOMParser as ProseDOMParser } from "@milkdown/kit/prose/model";
+import { DOMParser as ProseDOMParser, DOMSerializer } from "@milkdown/kit/prose/model";
 import { GapCursor } from "@milkdown/kit/prose/gapcursor";
 import { exitCode, joinBackward, lift } from "@milkdown/kit/prose/commands";
 import type { EditorView } from "@milkdown/kit/prose/view";
@@ -69,6 +70,7 @@ import { store, type Tab } from "./store";
 import { remarkBlankLines } from "./blank-lines";
 import { remarkFootnoteText } from "./remark-footnote-text";
 import { remarkTableBr } from "./remark-table-br";
+import { remarkKeepAltImagesInlinePlugin } from "./remark-image-alt";
 import { mergeTableCellBlocks } from "./table-paste";
 import { attachLineNumbers } from "./line-numbers";
 import { attachImageResolver, imageDirForMdPath } from "./image-resolver";
@@ -83,7 +85,11 @@ import { listFoldPlugin } from "./list-fold";
 import { fileTypeOfPath, wrapMermaidSource } from "./mmd";
 import { attachPreviewFold } from "./preview-fold";
 import { mountPresentation, forgetPresentationState } from "./presentation-lazy";
-import { ensureBlankLineBeforeTables } from "./md-normalize";
+import {
+  ensureBlankLineBeforeTables,
+  wrapSpacedLinkDestinations,
+  formatMarkdownDestination,
+} from "./md-normalize";
 import { mermaidCodePreview } from "./mermaid-renderer";
 import { docTheme } from "./theme";
 import { ensureDocumentStyles, setHljsThemeStyle } from "./doc-styles";
@@ -92,10 +98,20 @@ import { replaceAll } from "@milkdown/kit/utils";
 import { createSourcePane, type SourcePane } from "./source-mode";
 import {
   formatImageAlt,
+  parseImageAlt,
+  composeImageAlt,
   NBSP,
   INDENT_NBSP,
   countLeadingNbsp,
 } from "./image-row";
+
+/**
+ * Crepe に渡す直前の markdown 正規化。表の直前の空行補完と、リンク先に半角スペースを
+ * 含むリンクの `<>` 囲み（そのままだとリンクにならず、書き戻しで `]\(` と壊れる）。
+ */
+function normalizeForEditor(src: string): string {
+  return wrapSpacedLinkDestinations(ensureBlankLineBeforeTables(src));
+}
 
 // コードブロックの「プレビューのみ(隠す)」状態を出現順で取得する。
 // .cm-editor が非表示(offsetParent===null)＝「隠す」状態とみなす。
@@ -278,7 +294,7 @@ function isImageRowParagraph(node: ProseNode): boolean {
 }
 
 // image-block（ブロック画像）を「インライン image 1個を内容とする段落」へ変換する。
-// src と幅（ratio>閾値なら alt=幅）を引き継ぐ。変換後の段落の開始位置を返す（失敗時 null）。
+// src・幅（ratio>閾値なら alt=幅）・キャプション（title）を引き継ぐ。変換後の段落の開始位置を返す（失敗時 null）。
 export function convertImageBlockToInline(
   view: EditorView,
   pos: number,
@@ -290,8 +306,12 @@ export function convertImageBlockToInline(
   const imageType = schema.nodes.image;
   if (!paragraphType || !imageType) return null;
   const ratio = Number(node.attrs.ratio) || 0;
-  const alt = ratio > 10 ? String(Math.round(ratio)) : "";
-  const inlineImage = imageType.create({ src: node.attrs.src ?? "", alt });
+  const alt = composeImageAlt("", ratio);
+  const inlineImage = imageType.create({
+    src: node.attrs.src ?? "",
+    alt,
+    title: node.attrs.caption ?? "",
+  });
   const paragraph = paragraphType.create(null, inlineImage);
   view.dispatch(view.state.tr.replaceWith(pos, pos + node.nodeSize, paragraph));
   return pos; // 置換後、段落はこの位置から始まる
@@ -662,7 +682,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     // リスト/段落の直後に空行なしで置かれた表を remark が段落テキストとして
     // 取り込み（→ ソース往復で `|` が `\|` にエスケープされ崩れる）のを防ぐため、
     // 入力段階で表の直前に空行を補う。mmd ラップはフェンス内なので影響しない。
-    const initialValue = ensureBlankLineBeforeTables(
+    const initialValue = normalizeForEditor(
       override?.content ??
         (fileTypeOfPath(tab.filePath) === "mmd"
           ? wrapMermaidSource(tab.diskContent)
@@ -737,7 +757,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       props: {
         handleDoubleClickOn(view, _pos, node, nodePos) {
           if (!isImageNode(node)) return false;
-          editImageNodeAtPos(view, nodePos, node);
+          void editImageNodeAtPos(view, nodePos, node);
           return true;
         },
       },
@@ -878,7 +898,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
               ".milkdown-image-block",
             ) as HTMLElement | null;
             if (!blockEl) {
-              // インライン画像（横並び行の各画像）の拡縮: 幅は alt(数値) に保存
+              // インライン画像（横並び行の各画像）の拡縮: 幅は alt の「説明|幅」の幅部分に保存
               const coordsInline = view.posAtCoords({
                 left: event.clientX,
                 top: event.clientY,
@@ -895,7 +915,8 @@ export function createEditorHost(root: HTMLElement): EditorHost {
                   : idom instanceof HTMLElement
                     ? idom.querySelector("img")
                     : null;
-              const storedAlt = Number(inlineNode.attrs.alt) || 0;
+              const parsedAlt = parseImageAlt(inlineNode.attrs.alt as string);
+              const storedAlt = parsedAlt.width;
               const base =
                 storedAlt > IMG_PX_THRESHOLD
                   ? storedAlt
@@ -914,7 +935,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
               view.dispatch(
                 view.state.tr.setNodeMarkup(coordsInline.inside, undefined, {
                   ...inlineNode.attrs,
-                  alt: String(nextW),
+                  alt: composeImageAlt(parsedAlt.text, nextW),
                 }),
               );
               return true;
@@ -982,7 +1003,11 @@ export function createEditorHost(root: HTMLElement): EditorHost {
                     ? idom.querySelector("img")
                     : null;
               if (iimg) {
-                const w = Number(node.attrs.alt) || 0;
+                const parsed = parseImageAlt(node.attrs.alt as string);
+                const w = parsed.width;
+                // 読込失敗時に出る代替文字は「説明|300」ではなく「説明」だけにする
+                // （葉ノードの属性変更は ProseMirror の DOM 監視対象外）
+                if (iimg.getAttribute("alt") !== parsed.text) iimg.setAttribute("alt", parsed.text);
                 if (w > IMG_PX_THRESHOLD) {
                   iimg.style.width = `${w}px`;
                   iimg.style.height = "auto";
@@ -1111,6 +1136,42 @@ export function createEditorHost(root: HTMLElement): EditorHost {
             const files = Array.from(dt.files).filter((f) =>
               f.type.startsWith("image/"),
             );
+            /*
+              プレーンテキストの markdown 貼り付けで、リンク先に半角スペースを含む
+              `[a](my file.md)` があれば `<>` で囲んでから解析する。Milkdown 既定の
+              貼り付けは clipboardData を直接読むため差し替えられず、同じ手順
+              （markdown → doc → DOM → slice）をここで行う。コードブロック内は対象外。
+            */
+            if (files.length === 0 && !html) {
+              const text = dt.getData("text/plain");
+              const fixed = text ? wrapSpacedLinkDestinations(text) : text;
+              if (
+                fixed !== text &&
+                !view.state.selection.$from.parent.type.spec.code
+              ) {
+                try {
+                  let parsed: ProseNode | null = null;
+                  crepe.editor.action((ctx) => {
+                    parsed = ctx.get(parserCtx)(fixed) as ProseNode;
+                  });
+                  if (parsed) {
+                    const schema = view.state.schema;
+                    const wrap = document.createElement("div");
+                    wrap.appendChild(
+                      DOMSerializer.fromSchema(schema).serializeFragment(
+                        (parsed as ProseNode).content,
+                      ),
+                    );
+                    const slice = ProseDOMParser.fromSchema(schema).parseSlice(wrap);
+                    event.preventDefault();
+                    view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
+                    return true;
+                  }
+                } catch (e) {
+                  console.error("link paste normalize failed:", e);
+                }
+              }
+            }
             if (files.length === 0) return false;
             // インライン挿入はテキスト位置にのみ可能。それ以外は既定に委ねる。
             if (!(view.state.selection instanceof TextSelection)) return false;
@@ -1419,7 +1480,8 @@ export function createEditorHost(root: HTMLElement): EditorHost {
             };
             // 数値 alt は px 幅、その他はそのまま（インライン/ブロック共通規約）
             const safeAlt = formatImageAlt(n.alt).replace(/]/g, "\\]");
-            const url = n.url ?? "";
+            // スペースを含むパスは `<>` で囲む（そのままだと他の処理系で画像にならない）
+            const url = formatMarkdownDestination(n.url ?? "");
             const titlePart =
               n.title != null && n.title !== ""
                 ? ` "${String(n.title).replace(/"/g, '\\"')}"`
@@ -1468,6 +1530,10 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       }));
     });
 
+    // 代替テキスト付きの単独行画像を image-block にせずインライン画像で保持する。
+    // Crepe の remark-image-block より後に走る必要があるため、config の一覧ではなく
+    // Crepe の機能登録後に use する（$remark は登録順に remarkPluginsCtx へ追加される）。
+    crepe.editor.use(remarkKeepAltImagesInlinePlugin);
     await crepe.create();
 
     // Milkdown 既定の「空行保持」プラグインを外す。
@@ -1590,7 +1656,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
       if (!entry.crepe) return false;
       try {
         entry.crepe.editor.action(
-          replaceAll(ensureBlankLineBeforeTables(text)),
+          replaceAll(normalizeForEditor(text)),
         );
         return true;
       } catch (e) {
@@ -1756,7 +1822,7 @@ export function createEditorHost(root: HTMLElement): EditorHost {
         // 編集テキストを Crepe ドキュメントへ反映（markdownUpdated が dirty を再計算）
         try {
           entry.crepe.editor.action(
-            replaceAll(ensureBlankLineBeforeTables(text)),
+            replaceAll(normalizeForEditor(text)),
           );
         } catch (e) {
           console.error("replaceAll on source exit failed:", e);

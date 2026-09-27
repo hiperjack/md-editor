@@ -37,14 +37,9 @@ export async function embedLocalImages(
   for (const img of imgs) {
     const src = img.getAttribute("src") ?? "";
     if (!src || /^(data:|https?:\/\/)/i.test(src)) continue;
-    // markdown-it は src をURLエンコードして出力する（空白→%20等）ため戻す
-    let raw = src;
-    try {
-      raw = decodeURIComponent(src);
-    } catch {
-      // 不正なエンコードはそのまま扱う
-    }
-    for (const path of resolveImagePathCandidates(raw, mdFilePath)) {
+    // markdown-it は src をURLエンコードして出力する（空白→%20等）が、
+    // デコードは resolveImagePathCandidates が 1 回だけ行う（二重デコード防止）
+    for (const path of resolveImagePathCandidates(src, mdFilePath)) {
       try {
         const b64 = await invoke<string>("read_file_base64", { path });
         img.setAttribute("src", `data:${mimeOf(path)};base64,${b64}`);

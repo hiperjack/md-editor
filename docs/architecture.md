@@ -55,7 +55,7 @@ The menu bar is drawn in HTML rather than natively, so it supports mnemonic keyb
 - **Flexible image handling**:
   - Displays images by path relative to the md file (via the Tauri asset protocol)
   - Auto-resolves the conventional path `<mdDir>/img/<basename>/<file>` (falling back to a file next to the md)
-  - Double-click an image to edit URL → alt text → width (px) (the original size is hinted in the prompt)
+  - Double-click an image to edit its URL, alt text, caption and width (px) in a single dialog (the original size is hinted). Stored as `![alt text|width](URL "caption")` (Obsidian-compatible; the older `![320](URL)` is still read as a width)
   - `Alt+wheel` over an image resizes its pixel width in place (the size is preserved across save/reload)
   - On HTML export, local images are embedded as data URIs
 - **Editing key behavior**:
@@ -332,11 +332,15 @@ A tab's contents (including unsaved changes and the baseline; for preview tabs, 
 
 The `ratio` attribute of the `image-block` node is reinterpreted as "pixel width". When `> 10` it is an explicit pixel width; when `≤ 10` it is treated as automatic (natural fit). The ratio value is serialized into the markdown alt field, so it persists in the form `![320](img.png)`. If the alt is empty or non-numeric, it reverts to automatic.
 
+To keep both alt text and a width, the alt also accepts `description|320` (Obsidian-compatible). Parsing and composing live in `parseImageAlt` / `composeImageAlt` in `image-row.ts`, shared by inline width rendering, Alt+wheel, serialization and HTML export (`markdown-it-image-width.ts` splits it into the alt and width attributes). The caption goes into the title (`"…"`). Crepe's `image-block` reads the alt only as a numeric ratio and drops alt text, so `remark-image-alt.ts` keeps standalone images that have alt text as inline images. That remark plugin must run after Crepe's remark-image-block, so it is registered with `crepe.editor.use` rather than in the config list. Entering alt text for an image block converts it to an inline image first.
+
 ### Resolving relative-path images
 
 Tauri's `assetProtocol` is enabled, and `convertFileSrc()` converts paths into URLs the WebView can load. A MutationObserver watches `<img>` elements and rewrites the src to an asset URL while it equals the markdown value (relative / absolute / `file://`).
 
 A bare file name (no directory separator) tries `<mdDir>/img/<basename>/<file>` first and, if loading fails (`<img onerror>`), falls back to `<mdDir>/<file>` — a two-stage approach. On HTML export, `embed-images.ts` embeds the resolved images as data URIs.
+
+When a path contains URL encoding (`My%20Image.png`, `%E7%94%BB%E5%83%8F.png`, etc.), the decoded path is tried first and the path as written is tried after it (for files whose name really contains `%20`). Decoding happens exactly once in `resolveImagePathCandidates`, so it covers both the editor (Milkdown passes the Markdown value through unchanged) and HTML export (markdown-it encodes spaces as `%20` and `%` as `%25`). The Markdown text itself is never rewritten. Windows absolute paths (`C:\...` / `C:/...`) are checked first so the drive letter is not mistaken for a URL scheme.
 
 ### Find & replace approach
 
@@ -349,6 +353,12 @@ Rather than rewriting the DOM directly, find & replace operates on the ProseMirr
 ### HTML menu bar
 
 The menu is drawn in HTML by `menu-bar.ts`. In Tauri + WebView2, while the editor (webview) has focus, the Alt mnemonics of a native menu don't reach the menu, so the native menu was removed and replaced with a custom menu bar. The mnemonics of the top items and each entry are handled with a JS `keydown` (capture); `Alt+<letter>` opens a menu, and while open it is operated with the item's mnemonic letter, arrows, Enter, and Esc. Each action delegates to the existing frontend actions (File/Format/View/Help) and edit operations (`edit-ops.ts`). Recent files are fetched via the `list_recent_files` command and assembled dynamically.
+
+### Spaces in link destinations and input dialogs
+
+CommonMark does not allow a raw space in a link destination (it needs `<>` or `%20`). Parsed as is, `[a](my file.md)` is not a link, and remark escapes it as `]\(` on write-back, corrupting the file. `wrapSpacedLinkDestinations` in `md-normalize.ts` therefore rewrites it to `[a](<my file.md>)` right before parsing: on file load, on leaving source view, when applying a chat proposal, on plain-text paste (reproducing Milkdown's own markdown → doc → DOM → slice paste steps), and for HTML export. Titles (`"…"` / `'…'` / `(…)`) and code are left alone. On output, remark's standard handler wraps link destinations and the custom image handler wraps `src` via `formatMarkdownDestination`. The editor keeps href / src without `<>`, so the link popup never shows them.
+
+`window.prompt` / `alert` / `confirm` are not used because WebView2 fixes their title to "tauri.localhost says". Input goes through `promptFields` in `modal.ts` (titled, several fields in one dialog, Enter during IME composition ignored); confirmations and warnings inside the settings dialog use `ask` / `message` from `@tauri-apps/plugin-dialog` with a title. The settings dialog handles Esc/Enter in a document capture listener, so stacking an in-app modal on it would fire keys twice; an OS dialog avoids that. Callers such as the toolbar's `runOnActive` move focus back to the document right after the action, so `promptFields` refocuses its input on the next frame.
 
 ### Suppressing and reassigning browser default keys
 

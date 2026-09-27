@@ -55,7 +55,7 @@ mdedit は Tauri 2.x + Vite + TypeScript で構築された、複数ウィンド
 - **画像の柔軟な扱い**:
   - md ファイルとの相対パスで画像を表示（Tauri asset プロトコル経由）
   - 慣例パス `<mdDir>/img/<basename>/<file>` を自動解決（フォールバックとして md 隣のファイルも試行）
-  - 画像ダブルクリックで URL → 代替テキスト → 幅(px) を編集（元サイズもプロンプトでヒント表示）
+  - 画像ダブルクリックで URL・代替テキスト・キャプション・幅(px) を 1 枚のダイアログで編集（元サイズもヒント表示）。保存形式は `![代替テキスト|幅](URL "キャプション")`（Obsidian 互換。従来の `![320](URL)` も幅として読む）
   - 画像上で `Alt+ホイール` でピクセル幅をその場で拡縮（保存・再読込でサイズが維持される）
   - HTML 出力時はローカル画像を data URI として埋め込み
 - **編集時のキー挙動**:
@@ -332,11 +332,15 @@ HTML 出力と HTML プレビュータブは同一の `render-pipeline.ts` を�
 
 `image-block` ノードの `ratio` 属性を「ピクセル幅」として再解釈している。`> 10` のとき明示的なピクセル幅、`≤ 10` のとき自動（natural fit）扱い。ratio 値は markdown の alt フィールドにシリアライズされるので、`![320](img.png)` の形で永続化される。alt が空 / 数値でなければ自動扱いに復帰。
 
+代替テキストと幅を両立させるため、alt は `説明|320`（Obsidian 互換）も受け付ける。分解・組み立ては `image-row.ts` の `parseImageAlt` / `composeImageAlt` に集約し、インライン画像の幅反映・Alt+ホイール・書き出し・HTML 出力（`markdown-it-image-width.ts` が alt と width 属性に分ける）が共通で使う。キャプションは title（`"…"`）に入る。Crepe の `image-block` は alt を数値の ratio としてしか読まず代替テキストを捨てるため、`remark-image-alt.ts` が代替テキスト付きの単独行画像をインライン画像のまま残す。この remark プラグインは Crepe の remark-image-block より後に走る必要があり、config の一覧ではなく `crepe.editor.use` で登録する。画像ブロックに代替テキストを入力した場合は、インライン画像へ変換してから設定する。
+
 ### 相対パス画像の解決
 
 Tauri の `assetProtocol` を有効化し、`convertFileSrc()` で WebView から読み込める URL に変換する。MutationObserver で `<img>` 要素を監視し、src が markdown 上の値（相対 / 絶対 / `file://`）の間は asset URL に書き換える。
 
 ベアファイル名（ディレクトリ区切りなし）は `<mdDir>/img/<basename>/<file>` を優先試行し、`<img onerror>` でロード失敗したら `<mdDir>/<file>` にフォールバックする 2 段構え。HTML 出力時は `embed-images.ts` が解決済み画像を data URI として埋め込む。
+
+パスが URL エンコード（`My%20Image.png` や `%E7%94%BB%E5%83%8F.png` 等）を含む場合は、デコードしたパスを先に、元の表記のままのパスを後ろに試す（ファイル名に本当に `%20` を含むケースの救済）。デコードは `resolveImagePathCandidates` で 1 回だけ行い、エディタ（Milkdown は Markdown の値をそのまま渡す）と HTML 出力（markdown-it は空白を `%20`、`%` を `%25` にエンコードする）の双方に効く。Markdown 側の表記は書き換えない。Windows の絶対パス（`C:\...` / `C:/...`）はドライブレターを URL スキームと誤判定しないよう先に判定する。
 
 ### 検索・置換の方式
 
@@ -349,6 +353,12 @@ DOM を直接書き換えず、ProseMirror のドキュメントモデル上で�
 ### HTML メニューバー
 
 メニューは `menu-bar.ts` が HTML で描画する。Tauri + WebView2 では、エディタ（webview）にフォーカスがある間ネイティブメニューの Alt ニーモニックがメニュー側に届かないため、ネイティブメニューを廃止して自前のメニューバーに置き換えている。トップ項目・各項目のニーモニックは JS の `keydown`（capture）で処理し、`Alt+<文字>` でメニューを開き、開いている間は項目のニーモニック文字・矢印・Enter・Esc で操作する。各アクションは既存のフロント側アクション（ファイル/書式/表示/ヘルプ）と編集操作（`edit-ops.ts`）へ委譲する。最近のファイルは `list_recent_files` コマンドで取得して動的に組み立てる。
+
+### リンク先のスペースと入力ダイアログ
+
+CommonMark ではリンク先に半角スペースを直接書けない（`<>` 囲みか `%20` が必要）。`[a](my file.md)` のまま解釈するとリンクにならず、remark が書き戻しで `]\(` とエスケープしてファイルを壊すため、`md-normalize.ts` の `wrapSpacedLinkDestinations` が解釈の直前に `[a](<my file.md>)` へ補正する。適用箇所はファイル読込・ソース表示からの復帰・チャット提案の適用・プレーンテキストの貼り付け（Milkdown 既定の貼り付けと同じ markdown → doc → DOM → slice の手順を自前で行う）・HTML 出力。タイトル（`"…"` / `'…'` / `(…)`）とコード内は対象外。書き出し側は、リンクは remark 標準が、画像は独自ハンドラが `formatMarkdownDestination` で `<>` 囲みにする。エディタ内部の href / src は `<>` なしで保持するので、リンクのポップアップには `<>` は出ない。
+
+`window.prompt` / `alert` / `confirm` は WebView2 がタイトルを「tauri.localhost の内容」に固定するため使わない。入力は `modal.ts` の `promptFields`（タイトル付き・複数欄を 1 枚に集約・IME 変換中の Enter は無視）、設定画面内の確認と警告は `@tauri-apps/plugin-dialog` の `ask` / `message`（タイトル指定）を使う。設定画面は document の capture で Esc/Enter を処理しており、アプリ内モーダルを重ねるとキーが二重に効くため OS ダイアログにしている。呼び出し元（ツールバーの `runOnActive` 等）が直後に本文へフォーカスを戻すので、`promptFields` は次フレームで入力欄へフォーカスし直す。
 
 ### ブラウザ標準キーの抑止と再割り当て
 

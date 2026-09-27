@@ -1349,6 +1349,44 @@ body.is-resizing-chat {
   gap: 8px;
 }
 
+/* 入力ダイアログ（modal.ts の promptFields。window.prompt の置き換え） */
+.modal-prompt {
+  width: 460px;
+}
+
+.modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.modal-field:last-child {
+  margin-bottom: 0;
+}
+
+.modal-field-label {
+  font-size: 12px;
+  color: var(--fg-1);
+}
+
+.modal-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-0);
+  color: var(--fg-0);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.modal-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .modal-btn {
   padding: 6px 14px;
   border: 1px solid var(--border);

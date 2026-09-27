@@ -9,12 +9,14 @@ import { renderScheduleGanttSvg } from "./gantt-schedule";
 import {
   ensureBlankLineBeforeTables,
   ensureBlankLineBeforeFootnoteDefs,
+  wrapSpacedLinkDestinations,
 } from "./md-normalize";
 import { underlineTagPlugin } from "./markdown-it-underline";
 import { textColorTagPlugin } from "./markdown-it-text-color";
 import { highlightTagPlugin } from "./markdown-it-highlight";
 import { supSubTagPlugin } from "./markdown-it-supsub";
 import { mathPlugin } from "./markdown-it-math";
+import { imageAltWidthPlugin } from "./markdown-it-image-width";
 
 /**
  * 出力用レンダリングパイプライン（markdown → 文書HTML）。
@@ -175,6 +177,7 @@ function buildMarkdownIt(settings: DocSettings, hljs: Hljs | null): MarkdownIt {
   md.use(footnote);
   // 数式 $…$ / $$…$$（エディタの Crepe LaTeX 機能と同じ remark-math 記法）。
   mathPlugin(md);
+  imageAltWidthPlugin(md);
   underlineTagPlugin(md);
   textColorTagPlugin(md);
   highlightTagPlugin(md);
@@ -240,6 +243,8 @@ export async function renderDocumentBody(
   src = ensureBlankLineBeforeTables(src);
   // 段落の直後に空行なしで置かれた脚注定義（[^1]: …）も同様に補う。
   src = ensureBlankLineBeforeFootnoteDefs(src);
+  // リンク先に半角スペースを含むリンク（[a](my file.md)）をリンクとして描けるよう <> で囲む。
+  src = wrapSpacedLinkDestinations(src);
 
   // コードフェンスが存在するときだけhighlight.jsをロードする
   const needHljs = /(^|\n)\s*(`{3,}|~{3,})/.test(src);
