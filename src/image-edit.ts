@@ -1,4 +1,4 @@
-import { commandsCtx, editorViewCtx } from "@milkdown/kit/core";
+import { commandsCtx, editorViewCtx, type CommandManager } from "@milkdown/kit/core";
 import type { Editor } from "@milkdown/kit/core";
 import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
@@ -7,6 +7,7 @@ import { insertImageCommand } from "@milkdown/kit/preset/commonmark";
 
 import { t } from "./i18n";
 import { convertImageBlockToInline } from "./editor";
+import { promptFields, type PromptField } from "./modal";
 
 /**
  * Crepe で画像として扱われるノード名一覧。
@@ -52,34 +53,41 @@ type PromptResult = {
 };
 
 /**
- * 画像のURL → 代替コメント → サイズ (px) を順に尋ねるプロンプト。
- * 既存値があれば編集、無ければ挿入用として動作する。
- * URL がキャンセル / 空文字なら null を返す。
- * width プロンプトは supportsWidth=true のときだけ表示される。
+ * 画像のURL・代替テキスト・サイズ (px) を 1 枚のダイアログで尋ねる。
+ * 既存値があれば編集、無ければ挿入用として動作する（title で見出しを切り替える）。
+ * キャンセル、または URL が空なら null を返す。
+ * サイズ欄は supportsWidth=true のときだけ表示される。
  */
-export function promptForImage(initial?: PromptInput): PromptResult | null {
-  const url = window.prompt(t("dlg.image.url"), initial?.src ?? "");
-  if (url === null) return null;
+export async function promptForImage(
+  initial: PromptInput | undefined,
+  title: string,
+): Promise<PromptResult | null> {
+  const fields: PromptField[] = [
+    { label: t("dlg.image.url"), value: initial?.src ?? "" },
+    { label: t("dlg.image.alt"), value: initial?.caption ?? "" },
+  ];
+  if (initial?.supportsWidth) {
+    const naturalHint =
+      initial.naturalWidth && initial.naturalWidth > 0
+        ? t("dlg.image.size").replace("{natural}", String(initial.naturalWidth))
+        : t("dlg.image.sizeNoHint");
+    fields.push({
+      label: naturalHint,
+      value: initial.width && initial.width > 0 ? String(initial.width) : "",
+      numeric: true,
+    });
+  }
+  const values = await promptFields({ title, fields });
+  if (values === null) return null;
+  const url = values[0].trim();
   if (url === "") return null;
-  const caption =
-    window.prompt(t("dlg.image.alt"), initial?.caption ?? "") ?? "";
+  const caption = values[1];
 
   if (!initial?.supportsWidth) {
     return { src: url, caption };
   }
 
-  const naturalHint =
-    initial.naturalWidth && initial.naturalWidth > 0
-      ? t("dlg.image.size").replace("{natural}", String(initial.naturalWidth))
-      : t("dlg.image.sizeNoHint");
-  const initialWidth =
-    initial.width && initial.width > 0 ? String(initial.width) : "";
-  const widthRaw = window.prompt(naturalHint, initialWidth);
-  if (widthRaw === null) {
-    // 幅プロンプトでキャンセルされた場合: src/caption のみ返して幅は触らない
-    return { src: url, caption };
-  }
-  const trimmed = widthRaw.trim();
+  const trimmed = values[2].trim();
   if (trimmed === "") {
     // 空欄 → 自動 (= ratio をリセット)
     return { src: url, caption, width: 0 };
@@ -227,40 +235,57 @@ export function isAtExistingImage(view: EditorView): boolean {
  * 既存画像に係っている場合は「横に追加」、そうでなければ新規挿入。
  * 既存画像の「編集」はダブルクリック経由（editImageNodeAtPos）に集約。
  */
-export function imageActionFromMenu(editor: Editor): void {
+export async function imageActionFromMenu(editor: Editor): Promise<void> {
+  let view: EditorView | null = null;
+  let commands: CommandManager | null = null;
   editor.action((ctx) => {
-    const view = ctx.get(editorViewCtx);
-    // 既存画像に係っている場合は「横に追加」
-    if (isAtExistingImage(view)) {
-      const result = promptForImage({ src: "", caption: "" });
-      if (!result) return;
-      insertImageBeside(view, result.src, result.caption);
-      return;
-    }
-    // それ以外は新規挿入（従来どおり）
-    const result = promptForImage({ src: "", caption: "" });
-    if (!result) return;
-    ctx.get(commandsCtx).call(insertImageCommand.key, {
+    view = ctx.get(editorViewCtx);
+    commands = ctx.get(commandsCtx);
+  });
+  if (!view || !commands) return;
+  const v: EditorView = view;
+  const cmds: CommandManager = commands;
+  // 既存画像に係っている場合は「横に追加」、それ以外は新規挿入（従来どおり）
+  const beside = isAtExistingImage(v);
+  const result = await promptForImage(
+    { src: "", caption: "" },
+    t("dlg.image.titleInsert"),
+  );
+  if (!result) {
+    v.focus();
+    return;
+  }
+  if (beside) {
+    insertImageBeside(v, result.src, result.caption);
+  } else {
+    cmds.call(insertImageCommand.key, {
       src: result.src,
       alt: result.caption,
     });
-  });
+  }
+  v.focus();
 }
 
 /**
  * ProseMirror Plugin の handleDoubleClickOn から呼ぶ画像編集エントリ。
  * 選択を画像ノードに揃えてから 3 ステップ プロンプトを開く。
  */
-export function editImageNodeAtPos(
+export async function editImageNodeAtPos(
   view: EditorView,
   pos: number,
   node: ProseNode,
-): void {
+): Promise<void> {
   view.dispatch(
     view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)),
   );
   const input = buildPromptInputFor(view, pos, node);
-  const result = promptForImage(input);
-  if (!result) return;
+  const result = await promptForImage(input, t("dlg.image.titleEdit"));
+  // ダイアログ表示中に文書が変わって位置がずれていたら何もしない
+  const cur = view.state.doc.nodeAt(pos);
+  if (!result || !cur || cur.type !== node.type) {
+    view.focus();
+    return;
+  }
   applyImageEdit(view, pos, result);
+  view.focus();
 }

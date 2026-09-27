@@ -16,6 +16,7 @@ import { renderDocumentBody } from "./render-pipeline";
 import { ensureDocumentStyles, setHljsThemeStyle } from "./doc-styles";
 import { onLangChange, t } from "./i18n";
 import { invoke } from "@tauri-apps/api/core";
+import { ask, message } from "@tauri-apps/plugin-dialog";
 
 type SectionKey = "font" | "display" | "docTheme" | "language" | "associations";
 
@@ -891,7 +892,10 @@ export function openFontSettings(): Promise<void> {
           })
           .catch((e) => {
             console.error("register_file_associations failed:", e);
-            window.alert(t("settings.assoc.failed"));
+            void message(t("settings.assoc.failed"), {
+              title: t("settings.assoc.dialogTitle"),
+              kind: "error",
+            });
           })
           .finally(() => {
             registerBtn.disabled = false;
@@ -902,14 +906,20 @@ export function openFontSettings(): Promise<void> {
       unregisterBtn.type = "button";
       unregisterBtn.className = "modal-btn";
       unregisterBtn.textContent = t("settings.assoc.unregister");
-      unregisterBtn.addEventListener("click", () => {
+      unregisterBtn.addEventListener("click", async () => {
         const selected = EXTS.filter((ext) => checks.get(ext)?.checked);
         if (selected.length === 0) return;
         // 既定アプリになっている拡張子が含まれる場合は警告して確認を取る。
         const hasDefault = selected.some(
           (ext) => statuses.get(ext) === "default",
         );
-        if (hasDefault && !window.confirm(t("settings.assoc.unregisterDefaultWarn"))) {
+        if (
+          hasDefault &&
+          !(await ask(t("settings.assoc.unregisterDefaultWarn"), {
+            title: t("settings.assoc.dialogTitle"),
+            kind: "warning",
+          }))
+        ) {
           return;
         }
         unregisterBtn.disabled = true;
@@ -919,7 +929,10 @@ export function openFontSettings(): Promise<void> {
           })
           .catch((e) => {
             console.error("unregister_file_associations failed:", e);
-            window.alert(t("settings.assoc.failed"));
+            void message(t("settings.assoc.failed"), {
+              title: t("settings.assoc.dialogTitle"),
+              kind: "error",
+            });
           })
           .finally(() => {
             unregisterBtn.disabled = false;

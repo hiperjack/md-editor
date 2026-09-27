@@ -21,6 +21,7 @@ import type { EditorHost } from "./editor";
 import { store } from "./store";
 import { showProgress } from "./progress";
 import { t } from "./i18n";
+import { promptFields } from "./modal";
 
 export type MacroStep =
   | { type: "text"; text: string }
@@ -485,8 +486,12 @@ export function createMacroController(editor: EditorHost): MacroController {
     },
     async playRepeat() {
       if (playing || recording || steps.length === 0) return;
-      const raw = window.prompt(t("macro.repeatPrompt"), "10");
-      if (raw === null) return;
+      const values = await promptFields({
+        title: t("macro.repeatTitle"),
+        fields: [{ label: t("macro.repeatPrompt"), value: "10", numeric: true }],
+      });
+      if (values === null) return;
+      const raw = values[0];
       const n = Math.floor(Number(raw));
       if (!Number.isFinite(n) || n < 1 || n > 9999) {
         toast(t("macro.invalidCount"));

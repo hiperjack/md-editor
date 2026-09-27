@@ -9,6 +9,7 @@ import { renderScheduleGanttSvg } from "./gantt-schedule";
 import {
   ensureBlankLineBeforeTables,
   ensureBlankLineBeforeFootnoteDefs,
+  wrapSpacedLinkDestinations,
 } from "./md-normalize";
 import { underlineTagPlugin } from "./markdown-it-underline";
 import { textColorTagPlugin } from "./markdown-it-text-color";
@@ -240,6 +241,8 @@ export async function renderDocumentBody(
   src = ensureBlankLineBeforeTables(src);
   // 段落の直後に空行なしで置かれた脚注定義（[^1]: …）も同様に補う。
   src = ensureBlankLineBeforeFootnoteDefs(src);
+  // リンク先に半角スペースを含むリンク（[a](my file.md)）をリンクとして描けるよう <> で囲む。
+  src = wrapSpacedLinkDestinations(src);
 
   // コードフェンスが存在するときだけhighlight.jsをロードする
   const needHljs = /(^|\n)\s*(`{3,}|~{3,})/.test(src);

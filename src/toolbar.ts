@@ -44,6 +44,7 @@ import {
 } from "./context-menu";
 import { settings } from "./settings";
 import { t, onLangChange } from "./i18n";
+import { promptFields } from "./modal";
 
 type Action = () => void;
 
@@ -255,8 +256,14 @@ export function makeToolbarActions(editor: EditorHost): Record<string, Action> {
     });
   };
 
-  const promptLink = (cb: (href: string) => void) => {
-    const url = window.prompt("リンク先URLを入力してください", "https://");
+  // リンク先はそのまま href に入る。半角スペースを含む場合は保存時に remark が
+  // `<>` で囲んで書き出すため、ここで加工しない（ポップアップにも `<>` は出ない）。
+  const promptLink = async (cb: (href: string) => void) => {
+    const values = await promptFields({
+      title: t("dlg.link.title"),
+      fields: [{ label: t("dlg.link.url"), value: "https://" }],
+    });
+    const url = values?.[0]?.trim();
     if (!url) return;
     cb(url);
   };
@@ -324,11 +331,11 @@ export function makeToolbarActions(editor: EditorHost): Record<string, Action> {
       ),
     fmt_hr: () => run((c) => c.call(insertHrCommand.key)),
     fmt_link: () =>
-      promptLink((href) =>
+      void promptLink((href) =>
         run((c) => c.call(toggleLinkCommand.key, { href, title: "" })),
       ),
     // 画像ノードが選択中なら src/alt を編集、そうでなければ新規挿入。
-    fmt_image: () => editor.runOnActive(imageActionFromMenu),
+    fmt_image: () => editor.runOnActive((ed) => void imageActionFromMenu(ed)),
     // view_source（ソース表示トグル）は main.ts の viewActions 側で定義し、
     // ツールバーにはマージ済みアクションとして渡される。
   };
