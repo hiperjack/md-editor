@@ -179,6 +179,11 @@ export function forgetPresentationState(tabId: string): void {
   langUnsubByTab.delete(tabId);
 }
 
+/** 設定で出力に含めたプロパティ（frontmatter）の表（render-pipeline.ts が先頭に置く）。 */
+function isFrontmatterElement(el: Element): boolean {
+  return el.matches("table.frontmatter, pre.frontmatter");
+}
+
 function isHeading(el: Element): boolean {
   return /^H[1-6]$/.test(el.tagName);
 }
@@ -228,6 +233,12 @@ export function parseSlides(html: string): { template: HTMLElement; slides: Slid
       continue;
     }
     if (/^H[1-2]$/.test(el.tagName)) {
+      // プロパティ表（frontmatter）だけが溜まっている状態なら、見出しと同じ
+      // スライドに含める（表だけの 1 枚目を作らない）。
+      if (current.length === 1 && isFrontmatterElement(current[0])) {
+        current.push(el);
+        continue;
+      }
       if (current.length) groups.push(current);
       current = [el];
       continue;
@@ -259,6 +270,13 @@ export function parseSlides(html: string): { template: HTMLElement; slides: Slid
       let i = 0;
       let title: Element | null = null;
       let message: Element | null = null;
+      // 設定でプロパティ（frontmatter）を含めた場合、表は先頭スライドの冒頭に来る。
+      // タイトル/メッセージの判定を妨げないよう取り出し、本文の先頭へ置く。
+      let frontmatter: Element | null = null;
+      if (nodes[i] && isFrontmatterElement(nodes[i])) {
+        frontmatter = nodes[i];
+        i++;
+      }
       if (nodes[i] && isHeading(nodes[i])) {
         title = nodes[i];
         i++;
@@ -268,6 +286,7 @@ export function parseSlides(html: string): { template: HTMLElement; slides: Slid
         i++;
       }
       const body = nodes.slice(i);
+      if (frontmatter) body.unshift(frontmatter);
       return {
         title,
         message,

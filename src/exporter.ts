@@ -168,6 +168,7 @@ export async function exportActiveTabAsHtml(editor: EditorHost): Promise<void> {
         : await renderDocumentBody(markdown, settings, {
             onMermaidProgress,
             ganttStyle: appSettings.get().ganttStyleDocument,
+            frontmatter: appSettings.get().frontmatterInHtml ? "table" : "hide",
           });
 
     progress.update(t("export.rendering"));
@@ -199,6 +200,7 @@ export async function renderExportPreview(
   filePath: string | null,
   markdown: string,
   ganttStyle: "mermaid" | "ppt" = "mermaid",
+  frontmatter: "hide" | "table" = "hide",
 ): Promise<{ html: string; title: string }> {
   const settings = docTheme.get();
   const progress = showProgress(t("export.rendering"));
@@ -218,6 +220,7 @@ export async function renderExportPreview(
         : await renderDocumentBody(markdown, settings, {
             onMermaidProgress,
             ganttStyle,
+            frontmatter,
           });
 
     await embedLocalImages(body, filePath);
@@ -321,6 +324,7 @@ export async function openHtmlPreviewTab(editor: EditorHost): Promise<void> {
       src.filePath,
       src.markdown,
       appSettings.get().ganttStyleDocument,
+      appSettings.get().frontmatterInHtml ? "table" : "hide",
     );
     const existing = findExistingPreview(src.sourceTabId, src.filePath, "export");
     if (existing) {
@@ -372,6 +376,7 @@ export async function openPresentationPreviewTab(
       src.filePath,
       src.markdown,
       appSettings.get().ganttStyleSlide,
+      appSettings.get().frontmatterInSlides ? "table" : "hide",
     );
     const slideTitle = `${t("preview.slideTabPrefix")}${title.replace(t("preview.tabPrefix"), "")}`;
     const existing = findExistingPreview(
@@ -500,12 +505,14 @@ export async function refreshPreviewTab(
     }
     // export/slideshow どちらのプレビューも本関数で更新されるため、
     // タブの previewMode に応じて文脈別のガントスタイルを渡す。
+    const isSlides = tab.previewMode === "slideshow";
     const { html, title } = await renderExportPreview(
       filePath,
       markdown,
-      tab.previewMode === "slideshow"
-        ? appSettings.get().ganttStyleSlide
-        : appSettings.get().ganttStyleDocument,
+      isSlides ? appSettings.get().ganttStyleSlide : appSettings.get().ganttStyleDocument,
+      (isSlides ? appSettings.get().frontmatterInSlides : appSettings.get().frontmatterInHtml)
+        ? "table"
+        : "hide",
     );
     store.updatePreview(previewTabId, { html, title });
     await editor.refreshPreviewPane(previewTabId);

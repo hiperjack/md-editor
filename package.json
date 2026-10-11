@@ -30,7 +30,9 @@
     "markdown-it-toc-done-right": "^4.2.0",
     "mermaid": "^11.15.0",
     "remark-breaks": "^4.0.0",
-    "sortablejs": "^1.15.0"
+    "remark-frontmatter": "^5.0.0",
+    "sortablejs": "^1.15.0",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",

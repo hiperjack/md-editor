@@ -311,3 +311,37 @@
 .document .math-error {
   color: #d1242f;
 }
+
+/* プロパティ（frontmatter）の表。設定で出力に含めたときだけ文書先頭に出る。
+   本文の表より控えめに、キー列を薄い色で示す。 */
+.document table.frontmatter {
+  min-width: 0;
+  width: auto;
+  margin: 0 0 1.2em;
+  font-size: 0.9em;
+  border: 1px solid var(--doc-border-soft);
+}
+
+.document table.frontmatter th,
+.document table.frontmatter td {
+  border: none;
+  border-bottom: 1px solid var(--doc-border-soft);
+  padding: 0.3em 0.9em;
+  background: transparent;
+}
+
+.document table.frontmatter tr:last-child th,
+.document table.frontmatter tr:last-child td {
+  border-bottom: none;
+}
+
+.document table.frontmatter th {
+  color: var(--doc-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.document pre.frontmatter-raw {
+  margin: 0 0 1.2em;
+  font-size: 0.85em;
+}

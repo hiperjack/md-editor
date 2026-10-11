@@ -345,6 +345,18 @@ function walkBlockSrc(
   out: Entry[],
   offset: number,
 ): void {
+  if (isFrontmatterBlock(el)) {
+    // frontmatter はソースでは「--- + YAML 行 + ---」。ブロック 1 つに
+    // 「開始-終了」の併記で番号を付け、ソース行をその分だけ進める。
+    const start = ctx.srcIdx;
+    const yaml = el.getAttribute("data-value") ?? "";
+    const n = yaml === "" ? 0 : yaml.split("\n").length;
+    const end = start + n + 1;
+    pushAt(out, el, `${start + 1}-${end + 1}`, offset);
+    ctx.srcIdx = Math.min(end + 1, ctx.srcLines.length);
+    return;
+  }
+
   if (isCodeBlock(el)) {
     const openIdx = ctx.srcIdx;
     pushAt(out, el, openIdx + 1, offset); // 開きフェンス行
@@ -523,7 +535,7 @@ function flattenTopLevel(pm: HTMLElement): HTMLElement[] {
     const rect = el.getBoundingClientRect();
     if (rect.height === 0 && !el.closest(".folded-hidden")) return;
 
-    if (isCodeBlock(el)) {
+    if (isCodeBlock(el) || isFrontmatterBlock(el)) {
       out.push(el);
       return;
     }
@@ -771,6 +783,11 @@ function getFirstLineRect(el: HTMLElement): DOMRect | null {
     node = walker.nextNode();
   }
   return null;
+}
+
+/** frontmatter（プロパティ表）ブロック（frontmatter-view.ts）。 */
+function isFrontmatterBlock(el: HTMLElement): boolean {
+  return el.getAttribute("data-type") === "frontmatter";
 }
 
 function isCodeBlock(el: HTMLElement): boolean {

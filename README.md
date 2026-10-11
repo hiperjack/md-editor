@@ -24,6 +24,7 @@ A desktop app that lets you **edit Markdown in its finished, rendered form** ins
 - **Ask Claude about your document** — An optional chat panel talks to the [Claude Code CLI](https://claude.com/claude-code) with your existing subscription (no API key). Ask questions, get edits proposed as diffs you review and apply with one click, quote a selection from the right-click menu, and resume past conversations from the History menu.
 - **Present without leaving the editor** — Turn the same document into 16:9 slides and present full-screen, with a thumbnail deck, a grid overview, and a laser pointer (`Ctrl+Shift+P`). Slides split at `---` or headings. The chat panel's **To slides** button (or the bundled [Claude Code skill](./skills/presentation-md)) turns your notes into presentation-ready Markdown.
 - **Export what you see** — Export to HTML with the exact same look as the editor, and print to PDF.
+- **Obsidian notes stay intact** — Properties (frontmatter) at the top of a file are shown and edited as a table, just like in Obsidian, and saving keeps the original formatting. Whether they appear in HTML / PDF / slides is up to you in Settings.
 - **Light and fast** — Built with Tauri, so the installer is small and startup is quick.
 - **Bilingual** — Japanese and English UI, with switchable dark / light themes.
 

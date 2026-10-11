@@ -133,6 +133,7 @@ export async function printActiveTab(editor: EditorHost): Promise<void> {
           : await renderDocumentBody(markdown, settings, {
               onMermaidProgress,
               ganttStyle: appSettings.get().ganttStyleDocument,
+              frontmatter: appSettings.get().frontmatterInPdf ? "table" : "hide",
             });
 
       // iframe では相対パス画像を解決できないため data URI 化する。

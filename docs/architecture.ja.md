@@ -49,6 +49,11 @@ mdedit は Tauri 2.x + Vite + TypeScript で構築された、複数ウィンド
   - 列・行選択時の操作ポップアップは、表が文書の上端付近にあるとき自動でハンドルの下側に反転表示する（エディタ領域外への見切れ防止）
   - エディタ上の表は `table-layout: auto` で描画し、列幅はセル内の文字量に応じて配分する（prosemirror-tables 既定の `fixed` では全列が等分になる）。HTML 出力・プレビュー側と同じ見え方になる。GFM には列幅を表す構文がないため手動での列幅指定は不可
   - Excel / PowerPoint / Word からコピーした表（クリップボードの `text/html`）は、画像ではなく GFM の表として貼り付ける。先頭行はヘッダ行へ昇格し、PowerPoint / Word のようにセル内の各行が別々の `<p>` になっている場合は `<br>` 区切りの 1 段落へまとめてから解析する（`table-paste.ts`。まとめないと 2 行目以降が隣の列へ押し出される）
+- **プロパティ（frontmatter）**: ファイル先頭の `---` で囲まれた YAML（Obsidian のプロパティ）を、エディタでは Obsidian 風の「プロパティ」表として表示・編集する（`frontmatter-node.ts` / `frontmatter-view.ts` / `frontmatter.ts`）
+  - 読み込みは `remark-frontmatter` で mdast の `yaml` ノードにし、生の YAML 文字列を持つ atom ノードへ写す。保存は同じ文字列を `---` で挟んで書き戻すため、編集しなければ元の frontmatter がバイト単位で保たれる（従来は区切り線＋段落として解釈され、保存で `***` や `* a` に化けていた）
+  - 表はトップレベルのキーごとに 1 行。キー・値を直接編集でき、行の追加・削除、ヘッダークリックでの折りたたみに対応。値はスカラ（数値・真偽値は型を保つ）、リスト（カンマ区切りで編集、ブロック/フロー形式を保つ）、入れ子（フロー形式の YAML として編集）。`yaml` の Document を使い、触っていない行の引用符やコメントは保つ。YAML として読めないときは警告付きの生テキスト欄にして内容を失わせない。編集は `setNodeMarkup` のトランザクションなので Undo が効く
+  - 出力（HTML プレビュー・HTML 出力・PDF 印刷・プレゼン表示・スライド出力）では `render-pipeline.ts` が先頭の frontmatter を本文から切り出し、設定（表示 → プロパティ）に応じて「出さない（既定）」か「キーと値の 2 列表を文書先頭に出す」かを選ぶ。設定は HTML / PDF / スライドで独立。スライドで含めた場合は 1 枚目の本文ゾーンに載せる（区切り線と誤認して空の 1 枚目ができる現象も解消）
+  - 行番号オーバーレイはブロック全体を「開始-終了」の併記で示す
 - **国際化**: 日本語 / 英語 / システム言語連動の切替（メニューバー・設定UI・確認ダイアログがすべて連動）
 - **テーマ**: ダーク / ライト / システム連動。`prefers-color-scheme` の動的変更にも追従
 - **コンテキストメニュー**: エディタ上で独自の右クリックメニュー（切り取り/コピー/貼り付け/すべて選択、選択中は太字・斜体・リンク、画像上は画像編集、検索）。エディタ以外では標準メニューを抑止
@@ -75,7 +80,7 @@ mdedit は Tauri 2.x + Vite + TypeScript で構築された、複数ウィンド
 | デスクトップフレームワーク | Tauri 2.x（Rust） |
 | フロントエンドビルド | Vite + TypeScript |
 | エディタ | [@milkdown/crepe](https://www.npmjs.com/package/@milkdown/crepe)（ProseMirror 系 WYSIWYG） |
-| Markdown 拡張（編集） | `@milkdown/kit` の commonmark / gfm preset、`remark-breaks` |
+| Markdown 拡張（編集） | `@milkdown/kit` の commonmark / gfm preset、`remark-breaks`、`remark-frontmatter`（プロパティ）、`yaml` |
 | Markdown 拡張（出力） | `markdown-it`（anchor / toc / github-alerts / 自前タスクリスト）＋ `highlight.js` |
 | 図 | [Mermaid](https://mermaid.js.org/)（動的 import） |
 | ドラッグ並び替え | SortableJS（タブのドラッグは独自実装） |
@@ -235,6 +240,9 @@ md-editor/
 │   ├── editor.ts                # Milkdown Crepe 連携・タブ別エディタ管理・プレビュータブ生成
 │   ├── edit-ops.ts              # 編集メニューの実体（元に戻す/コピー/貼り付け等）
 │   ├── table-paste.ts           # 外部アプリの表貼り付け前処理（セル内複数段落を <br> 区切りの 1 段落へ）
+│   ├── frontmatter.ts           # frontmatter の純粋ロジック（切り出し・YAML↔表の行・出力用の表 HTML）
+│   ├── frontmatter-node.ts      # frontmatter の Milkdown ノード（remark-frontmatter・スキーマ・NodeView 登録）
+│   ├── frontmatter-view.ts      # プロパティ表の NodeView（表示・編集・折りたたみ）
 │   ├── heading-fold.ts          # 見出しの折りたたみ（ProseMirror Decoration）
 │   ├── store.ts                 # タブ状態管理
 │   ├── tabs.ts                  # タブバーUI（並び替え・切り離し・結合・右クリック）

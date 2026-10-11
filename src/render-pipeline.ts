@@ -17,6 +17,7 @@ import { highlightTagPlugin } from "./markdown-it-highlight";
 import { supSubTagPlugin } from "./markdown-it-supsub";
 import { mathPlugin } from "./markdown-it-math";
 import { imageAltWidthPlugin } from "./markdown-it-image-width";
+import { splitFrontmatter, frontmatterTableHtml } from "./frontmatter";
 
 /**
  * 出力用レンダリングパイプライン（markdown → 文書HTML）。
@@ -37,6 +38,12 @@ export type RenderOptions = {
   onMermaidProgress?: MermaidProgress;
   /** ガント表示スタイル（呼び出し経路が設定から解決して渡す）。既定 mermaid。 */
   ganttStyle?: "mermaid" | "ppt";
+  /**
+   * 先頭の frontmatter（--- YAML ---）の扱い。hide=出力しない（既定）、
+   * table=キーと値の 2 列表として文書先頭に出す。どちらでも本文からは取り除く
+   * （そのまま渡すと markdown-it が区切り線＋段落として描いてしまう）。
+   */
+  frontmatter?: "hide" | "table";
 };
 
 /** 見出しスラッグ。日本語等の非ASCII文字をそのまま残す（anchor/toc共用）。 */
@@ -236,6 +243,12 @@ export async function renderDocumentBody(
   opts: RenderOptions = {},
 ): Promise<HTMLDivElement> {
   let src = markdown;
+  let frontmatterHtml = "";
+  const fm = splitFrontmatter(src);
+  if (fm) {
+    src = fm.body;
+    if (opts.frontmatter === "table") frontmatterHtml = frontmatterTableHtml(fm.yaml);
+  }
   if (settings.decorations.autoToc && !hasTocMarker(src)) {
     src = `[[toc]]\n\n${src}`;
   }
@@ -254,7 +267,7 @@ export async function renderDocumentBody(
   const html = md.render(src);
 
   const container = document.createElement("div");
-  container.innerHTML = html;
+  container.innerHTML = frontmatterHtml + html;
   // Mermaid図は文書背景の明暗に合わせて配色する（白背景→ライト図）
   const scheme = isLightColor(settings.theme.bgColor) ? "light" : "dark";
   await resolveMermaidBlocks(
