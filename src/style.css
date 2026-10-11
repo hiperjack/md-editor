@@ -2363,3 +2363,169 @@ body.pres-window-boot #app {
 #macro-rec-indicator[hidden] {
   display: none;
 }
+
+/* ===== frontmatter（プロパティ表、frontmatter-view.ts） =====
+   Obsidian のプロパティに似た、ファイル先頭の YAML を表として見せる・編集するブロック。
+   通常のブロックより一段控えめな配色にし、本文の見出しより目立たないようにする。 */
+#editor-host .milkdown .ProseMirror .frontmatter-block {
+  margin: 0 0 0.5em;
+  border: 1px solid
+    color-mix(in srgb, var(--crepe-color-outline, var(--border)), transparent 50%);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--crepe-color-surface, var(--bg-1)), transparent 40%);
+  font-size: 0.92em;
+  user-select: none;
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-block.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.3em 0.7em;
+  cursor: pointer;
+  color: var(--crepe-color-on-surface-variant, var(--fg-2));
+  font-weight: 600;
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-header:hover {
+  color: var(--crepe-color-on-surface, var(--fg-0));
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-caret {
+  width: 1em;
+  text-align: center;
+  font-size: 0.9em;
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-count {
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-body {
+  padding: 0 0.7em 0.5em;
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-block table.frontmatter-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  font-size: 1em;
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-table th,
+#editor-host .milkdown .ProseMirror .frontmatter-table td {
+  border: none;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--crepe-color-outline, var(--border)), transparent 70%);
+  padding: 0;
+  vertical-align: middle;
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-table tr:last-child th,
+#editor-host .milkdown .ProseMirror .frontmatter-table tr:last-child td {
+  border-bottom: none;
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-table th {
+  width: 28%;
+  min-width: 7em;
+  font-weight: 500;
+  color: var(--crepe-color-on-surface-variant, var(--fg-2));
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-table td.frontmatter-actions {
+  width: 1.8em;
+  text-align: center;
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-table input,
+#editor-host .milkdown .ProseMirror .frontmatter-raw {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0.3em 0.4em;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.4;
+  user-select: text;
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-table th input {
+  color: inherit;
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-table input:hover,
+#editor-host .milkdown .ProseMirror .frontmatter-raw:hover {
+  background: color-mix(in srgb, var(--crepe-color-hover, var(--bg-2)), transparent 50%);
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-table input:focus,
+#editor-host .milkdown .ProseMirror .frontmatter-raw:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--crepe-color-background, var(--bg-0));
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-table input.frontmatter-value-list,
+#editor-host .milkdown .ProseMirror .frontmatter-table input.frontmatter-value-complex {
+  font-family: var(--editor-code-font-family);
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-delete,
+#editor-host .milkdown .ProseMirror .frontmatter-add {
+  border: none;
+  background: transparent;
+  color: var(--crepe-color-on-surface-variant, var(--fg-2));
+  cursor: pointer;
+  font: inherit;
+  border-radius: 4px;
+  padding: 0.1em 0.45em;
+  line-height: 1.4;
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-delete {
+  opacity: 0;
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-table tr:hover .frontmatter-delete,
+#editor-host .milkdown .ProseMirror .frontmatter-delete:focus {
+  opacity: 1;
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-delete:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger), transparent 85%);
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-add {
+  margin-top: 0.3em;
+  font-size: 0.92em;
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-add:hover {
+  color: var(--crepe-color-on-surface, var(--fg-0));
+  background: color-mix(in srgb, var(--crepe-color-hover, var(--bg-2)), transparent 50%);
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-warning {
+  color: var(--danger);
+  font-size: 0.9em;
+  margin: 0.2em 0 0.4em;
+}
+
+#editor-host .milkdown .ProseMirror .frontmatter-raw {
+  font-family: var(--editor-code-font-family);
+  white-space: pre;
+  resize: vertical;
+  border-color: color-mix(in srgb, var(--crepe-color-outline, var(--border)), transparent 50%);
+}

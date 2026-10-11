@@ -81,6 +81,12 @@ export type Settings = {
   ganttStyleDocument: "mermaid" | "ppt";
   /** ガント表示スタイル（スライド系: プレゼン・スライドHTML/PDF出力）。 */
   ganttStyleSlide: "mermaid" | "ppt";
+  /** 先頭の frontmatter（プロパティ）を HTML プレビュー・HTML 出力に表として含めるか。 */
+  frontmatterInHtml: boolean;
+  /** 同じく PDF 印刷に含めるか。 */
+  frontmatterInPdf: boolean;
+  /** 同じく プレゼン表示・スライド HTML/PDF 出力に含めるか。 */
+  frontmatterInSlides: boolean;
   /** 文字色ボタンが直近に適用した色（"#rrggbb"）。ボタン本体クリックで再適用する。 */
   lastTextColor: string;
   /** ハイライトボタンが直近に適用した色。"" は標準マーカー（属性なし <mark>）。 */
@@ -104,6 +110,9 @@ const DEFAULT_SETTINGS: Settings = {
   mermaidWidthMode: "fit",
   ganttStyleDocument: "mermaid",
   ganttStyleSlide: "mermaid",
+  frontmatterInHtml: false,
+  frontmatterInPdf: false,
+  frontmatterInSlides: false,
   lastTextColor: "#ff0000",
   lastHighlightColor: "",
 };
@@ -204,6 +213,18 @@ function loadFromStorage(): Settings {
         parsed.ganttStyleSlide === "mermaid" || parsed.ganttStyleSlide === "ppt"
           ? parsed.ganttStyleSlide
           : DEFAULT_SETTINGS.ganttStyleSlide,
+      frontmatterInHtml:
+        typeof parsed.frontmatterInHtml === "boolean"
+          ? parsed.frontmatterInHtml
+          : DEFAULT_SETTINGS.frontmatterInHtml,
+      frontmatterInPdf:
+        typeof parsed.frontmatterInPdf === "boolean"
+          ? parsed.frontmatterInPdf
+          : DEFAULT_SETTINGS.frontmatterInPdf,
+      frontmatterInSlides:
+        typeof parsed.frontmatterInSlides === "boolean"
+          ? parsed.frontmatterInSlides
+          : DEFAULT_SETTINGS.frontmatterInSlides,
       lastTextColor:
         typeof parsed.lastTextColor === "string" &&
         /^#[0-9a-fA-F]{6}$/.test(parsed.lastTextColor)
@@ -455,6 +476,20 @@ export const settings = {
   setGanttStyleSlide(v: "mermaid" | "ppt"): void {
     if (v === current.ganttStyleSlide) return;
     current = { ...current, ganttStyleSlide: v };
+    saveToStorage(current);
+    notify();
+  },
+
+  /** プロパティ（frontmatter）を各出力に含めるかを切り替える。 */
+  setFrontmatterOutput(target: "html" | "pdf" | "slides", v: boolean): void {
+    const key =
+      target === "html"
+        ? "frontmatterInHtml"
+        : target === "pdf"
+          ? "frontmatterInPdf"
+          : "frontmatterInSlides";
+    if (v === current[key]) return;
+    current = { ...current, [key]: v };
     saveToStorage(current);
     notify();
   },

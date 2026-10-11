@@ -36,6 +36,23 @@ const DICT: Record<Lang, Record<string, string>> = {
     "font.preset.cascadiaCode": "Cascadia Code（等幅）",
     "font.preset.consolas": "Consolas（等幅）",
     "settings.display.showRecent": "最近使ったファイルをメニューに表示",
+    // プロパティ（frontmatter）
+    "settings.frontmatter.section": "プロパティ（frontmatter）",
+    "settings.frontmatter.note":
+      "ファイル先頭の --- で囲まれた YAML（Obsidian のプロパティ）を、キーと値の表として出力に含めるかを選びます。エディタでは常に表として表示・編集できます。",
+    "settings.frontmatter.html": "HTML（プレビュー・HTML出力）に含める",
+    "settings.frontmatter.pdf": "PDF（印刷）に含める",
+    "settings.frontmatter.slides": "スライド（プレゼン・スライド出力）に含める",
+    "frontmatter.title": "プロパティ",
+    "frontmatter.toggle": "プロパティの表示/非表示",
+    "frontmatter.add": "＋ プロパティを追加",
+    "frontmatter.delete": "このプロパティを削除",
+    "frontmatter.keyPlaceholder": "キー",
+    "frontmatter.valuePlaceholder": "値",
+    "frontmatter.listHint": "リスト。カンマ区切りで編集します",
+    "frontmatter.complexHint": "入れ子の値。YAML（フロー形式）として編集します",
+    "frontmatter.invalid":
+      "YAML として解釈できないため、表にできません。そのままの内容を編集します。",
     "settings.language.select": "表示言語",
     "settings.language.system": "システムに合わせる",
     "settings.language.note":
@@ -430,6 +447,23 @@ const DICT: Record<Lang, Record<string, string>> = {
     "font.preset.cascadiaCode": "Cascadia Code (monospace)",
     "font.preset.consolas": "Consolas (monospace)",
     "settings.display.showRecent": "Show recent files in menu",
+    // Properties (frontmatter)
+    "settings.frontmatter.section": "Properties (frontmatter)",
+    "settings.frontmatter.note":
+      "Choose whether the YAML block at the top of the file (Obsidian properties) is included in the output as a key/value table. The editor always shows and edits it as a table.",
+    "settings.frontmatter.html": "Include in HTML (preview, HTML export)",
+    "settings.frontmatter.pdf": "Include in PDF (print)",
+    "settings.frontmatter.slides": "Include in slides (presentation, slide export)",
+    "frontmatter.title": "Properties",
+    "frontmatter.toggle": "Show/hide properties",
+    "frontmatter.add": "+ Add property",
+    "frontmatter.delete": "Remove this property",
+    "frontmatter.keyPlaceholder": "Key",
+    "frontmatter.valuePlaceholder": "Value",
+    "frontmatter.listHint": "List. Edit as comma-separated values",
+    "frontmatter.complexHint": "Nested value. Edit as YAML (flow style)",
+    "frontmatter.invalid":
+      "This block cannot be parsed as YAML, so it is not shown as a table. Edit the raw text instead.",
     "settings.language.select": "Language",
     "settings.language.system": "Match system",
     "settings.language.note":

@@ -50,6 +50,9 @@ export function openFontSettings(): Promise<void> {
       mermaidWidthMode: before.mermaidWidthMode,
       ganttStyleDocument: before.ganttStyleDocument,
       ganttStyleSlide: before.ganttStyleSlide,
+      frontmatterInHtml: before.frontmatterInHtml,
+      frontmatterInPdf: before.frontmatterInPdf,
+      frontmatterInSlides: before.frontmatterInSlides,
     };
     // 文書テーマ（HTML出力・印刷用）のドラフト。Applyで永続化、Cancelで破棄。
     const docDraft: DocSettings = docTheme.get();
@@ -533,6 +536,41 @@ export function openFontSettings(): Promise<void> {
       ganttSlideRow.appendChild(ganttSlideSelect);
       c.appendChild(ganttSlideRow);
 
+      // ── プロパティ（frontmatter）を出力に含めるか ──────────
+      const fmHeading = document.createElement("div");
+      fmHeading.className = "settings-subheading";
+      fmHeading.textContent = t("settings.frontmatter.section");
+      c.appendChild(fmHeading);
+      const fmNote = document.createElement("div");
+      fmNote.className = "settings-note";
+      fmNote.textContent = t("settings.frontmatter.note");
+      c.appendChild(fmNote);
+
+      const fmRows: {
+        key: "frontmatterInHtml" | "frontmatterInPdf" | "frontmatterInSlides";
+        labelKey: string;
+      }[] = [
+        { key: "frontmatterInHtml", labelKey: "settings.frontmatter.html" },
+        { key: "frontmatterInPdf", labelKey: "settings.frontmatter.pdf" },
+        { key: "frontmatterInSlides", labelKey: "settings.frontmatter.slides" },
+      ];
+      for (const fm of fmRows) {
+        const fmRow = document.createElement("label");
+        fmRow.className = "settings-row settings-row-checkbox";
+        const fmCheck = document.createElement("input");
+        fmCheck.type = "checkbox";
+        fmCheck.checked = draft[fm.key];
+        fmCheck.className = "settings-input";
+        fmCheck.addEventListener("change", () => {
+          draft[fm.key] = fmCheck.checked;
+        });
+        const fmText = document.createElement("span");
+        fmText.textContent = t(fm.labelKey);
+        fmRow.appendChild(fmCheck);
+        fmRow.appendChild(fmText);
+        c.appendChild(fmRow);
+      }
+
       return c;
     }
 
@@ -983,6 +1021,9 @@ export function openFontSettings(): Promise<void> {
       draft.mermaidWidthMode = "fit";
       draft.ganttStyleDocument = "mermaid";
       draft.ganttStyleSlide = "mermaid";
+      draft.frontmatterInHtml = false;
+      draft.frontmatterInPdf = false;
+      draft.frontmatterInSlides = false;
       const docDefaults = structuredClone(DEFAULT_DOC_SETTINGS);
       docDraft.theme = docDefaults.theme;
       docDraft.decorations = docDefaults.decorations;
@@ -1047,6 +1088,9 @@ export function openFontSettings(): Promise<void> {
       settings.setMermaidWidthMode(s.mermaidWidthMode);
       settings.setGanttStyleDocument(s.ganttStyleDocument);
       settings.setGanttStyleSlide(s.ganttStyleSlide);
+      settings.setFrontmatterOutput("html", s.frontmatterInHtml);
+      settings.setFrontmatterOutput("pdf", s.frontmatterInPdf);
+      settings.setFrontmatterOutput("slides", s.frontmatterInSlides);
     };
 
     /** Preview を1回でも押されたか。Cancel 時に before へ戻すかの判定に使う。 */
@@ -1072,6 +1116,9 @@ export function openFontSettings(): Promise<void> {
           mermaidWidthMode: before.mermaidWidthMode,
           ganttStyleDocument: before.ganttStyleDocument,
           ganttStyleSlide: before.ganttStyleSlide,
+          frontmatterInHtml: before.frontmatterInHtml,
+          frontmatterInPdf: before.frontmatterInPdf,
+          frontmatterInSlides: before.frontmatterInSlides,
         });
         // プレビューで反映した文書テーマ（Mermaid配色等）も元に戻す（保存しない）
         docTheme.previewLive(beforeDoc);

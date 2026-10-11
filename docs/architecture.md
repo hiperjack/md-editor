@@ -49,6 +49,11 @@ The menu bar is drawn in HTML rather than natively, so it supports mnemonic keyb
   - The column/row action popup flips below the handle automatically when the table sits near the top of the document, so it is never clipped by the editor viewport
   - Tables in the editor are rendered with `table-layout: auto`, so column widths follow the amount of text in each column (the prosemirror-tables default `fixed` layout splits all columns evenly). This matches the HTML export / preview rendering. GFM has no syntax for column widths, so widths cannot be set manually
   - Tables copied from Excel / PowerPoint / Word (clipboard `text/html`) are pasted as GFM tables rather than images. The first row is promoted to a header row, and when each line inside a cell is a separate `<p>` (as PowerPoint / Word emit), the blocks are merged into one `<br>`-separated paragraph before parsing (`table-paste.ts`; without this, the second line onward spills into the neighboring column)
+- **Properties (frontmatter)**: The YAML block delimited by `---` at the top of a file (Obsidian properties) is shown and edited in the editor as an Obsidian-style "Properties" table (`frontmatter-node.ts` / `frontmatter-view.ts` / `frontmatter.ts`).
+  - Parsing uses `remark-frontmatter` to produce an mdast `yaml` node, which is mapped to an atom node holding the raw YAML string. Saving writes the same string back between `---` lines, so an unedited frontmatter round-trips byte for byte (previously it was read as a rule plus paragraphs and rewritten as `***` / `* a` on save).
+  - One row per top-level key. Keys and values are edited in place, rows can be added or removed, and the header toggles collapse. Values are scalars (numbers and booleans keep their type), lists (edited comma-separated; block/flow style is preserved), or nested values (edited as flow-style YAML). The `yaml` Document API keeps quotes and comments on untouched lines. When the block is not valid YAML, a raw text area with a warning is shown instead so nothing is lost. Edits are `setNodeMarkup` transactions, so Undo works.
+  - For output (HTML preview, HTML export, PDF print, presentation, slide export) `render-pipeline.ts` strips the leading frontmatter from the body and, per the settings (Display → Properties), either omits it (default) or renders a two-column key/value table at the top. The setting is independent for HTML / PDF / slides. On slides the table goes into the body zone of the first slide (this also fixes the empty first slide caused by mistaking the delimiter for a rule).
+  - The line-number overlay labels the whole block as a "start-end" range.
 - **Internationalization**: Switch between Japanese / English / follow-system language (the menu bar, settings UI, and confirmation dialogs all switch together).
 - **Themes**: Dark / light / follow-system. Also tracks dynamic changes to `prefers-color-scheme`.
 - **Context menu**: A custom right-click menu on the editor (cut/copy/paste/select-all; bold/italic/link when text is selected; image editing over an image; find). Outside the editor, the default menu is suppressed.
@@ -75,7 +80,7 @@ The menu bar is drawn in HTML rather than natively, so it supports mnemonic keyb
 | Desktop framework | Tauri 2.x (Rust) |
 | Frontend build | Vite + TypeScript |
 | Editor | [@milkdown/crepe](https://www.npmjs.com/package/@milkdown/crepe) (ProseMirror-based WYSIWYG) |
-| Markdown extensions (editing) | `@milkdown/kit` commonmark / gfm preset, `remark-breaks` |
+| Markdown extensions (editing) | `@milkdown/kit` commonmark / gfm preset, `remark-breaks`, `remark-frontmatter` (properties), `yaml` |
 | Markdown extensions (output) | `markdown-it` (anchor / toc / github-alerts / custom task lists) + `highlight.js` |
 | Diagrams | [Mermaid](https://mermaid.js.org/) (dynamic import) |
 | Drag reordering | SortableJS (tab dragging is custom-built) |
@@ -235,6 +240,9 @@ md-editor/
 │   ├── editor.ts                # Milkdown Crepe integration, per-tab editor management, preview-tab creation
 │   ├── edit-ops.ts              # The actual Edit-menu operations (undo/copy/paste, etc.)
 │   ├── table-paste.ts           # Pre-processing for tables pasted from other apps (merge multi-paragraph cells into one <br>-separated paragraph)
+│   ├── frontmatter.ts           # Pure frontmatter logic (split, YAML <-> table rows, output table HTML)
+│   ├── frontmatter-node.ts      # Milkdown node for frontmatter (remark-frontmatter, schema, NodeView registration)
+│   ├── frontmatter-view.ts      # Properties table NodeView (display, editing, collapse)
 │   ├── heading-fold.ts          # Heading folding (ProseMirror Decoration)
 │   ├── store.ts                 # Tab state management
 │   ├── tabs.ts                  # Tab bar UI (reorder / detach / merge / right-click)

@@ -185,6 +185,7 @@ export async function exportPresentationPdf(editor: EditorHost): Promise<void> {
       filePath,
       markdown,
       appSettings.get().ganttStyleSlide,
+      appSettings.get().frontmatterInSlides ? "table" : "hide",
     );
     const progress = showProgress(t("presPdf.preparing"));
     try {
@@ -327,6 +328,7 @@ export async function exportPresentationAsHtml(
       filePath,
       markdown,
       appSettings.get().ganttStyleSlide,
+      appSettings.get().frontmatterInSlides ? "table" : "hide",
     );
     const progress = showProgress(t("export.rendering"));
     try {

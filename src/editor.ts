@@ -70,6 +70,7 @@ import { store, type Tab } from "./store";
 import { remarkBlankLines } from "./blank-lines";
 import { remarkFootnoteText } from "./remark-footnote-text";
 import { remarkTableBr } from "./remark-table-br";
+import { frontmatterPlugins } from "./frontmatter-node";
 import { remarkKeepAltImagesInlinePlugin } from "./remark-image-alt";
 import { mergeTableCellBlocks } from "./table-paste";
 import { attachLineNumbers } from "./line-numbers";
@@ -1534,6 +1535,8 @@ export function createEditorHost(root: HTMLElement): EditorHost {
     // Crepe の remark-image-block より後に走る必要があるため、config の一覧ではなく
     // Crepe の機能登録後に use する（$remark は登録順に remarkPluginsCtx へ追加される）。
     crepe.editor.use(remarkKeepAltImagesInlinePlugin);
+    // 先頭の frontmatter（--- YAML ---）をプロパティ表ブロックとして読む（frontmatter-node.ts）。
+    crepe.editor.use(frontmatterPlugins);
     await crepe.create();
 
     // Milkdown 既定の「空行保持」プラグインを外す。
